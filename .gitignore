@@ -1,0 +1,5 @@
+*.o
+*~
+*.sw[op]
+.libs/
+/one-video-app
