@@ -36,6 +36,9 @@ G_BEGIN_DECLS
 GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
+#define UDPCLIENT_AUDIO_PORT "5000"
+#define UDPCLIENT_VIDEO_PORT "5001"
+
 typedef struct _OneVideoLocalPeer OneVideoLocalPeer;
 typedef struct _OneVideoLocalPeerPriv OneVideoLocalPeerPriv;
 typedef enum _OneVideoLocalPeerState OneVideoLocalPeerState;
@@ -57,8 +60,6 @@ struct _OneVideoLocalPeer {
   GstElement *playback;
   /* Address we're listening on */
   GInetAddress *addr;
-  /* Array of GInetSocketAddresses: available remote peers */
-  GPtrArray *remotes;
 
   OneVideoLocalPeerState state;
 
@@ -69,11 +70,11 @@ struct _OneVideoLocalPeer {
 struct _OneVideoRemotePeer {
   OneVideoLocalPeer *local;
 
-  gchar *name;
   /* Receive pipeline */
   GstElement *receive;
   /* Address of remote peer */
-  GInetSocketAddress *addr;
+  GInetAddress *addr;
+  gchar *addr_s;
 
   OneVideoRemotePeerPriv *priv;
 };
@@ -82,11 +83,11 @@ OneVideoLocalPeer*  one_video_local_peer_new            (GInetAddress *addr);
 void                one_video_local_peer_free           (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop           (OneVideoLocalPeer *local);
 OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,
-                                                         GInetSocketAddress *addr);
+                                                         GInetAddress *addr);
 void                one_video_remote_peer_free          (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_stop          (OneVideoRemotePeer *remote);
 
-gboolean            one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
+GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
 
 gboolean            one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
 gboolean            one_video_local_peer_setup_receive  (OneVideoLocalPeer *local,

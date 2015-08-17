@@ -60,6 +60,7 @@ main (int   argc,
       char *argv[])
 {
   guint index = 0;
+  GPtrArray *remotes;
   OneVideoLocalPeer *local;
 
   gst_init (&argc, &argv);
@@ -67,30 +68,28 @@ main (int   argc,
 
   local = one_video_local_peer_new (NULL);
 
-  g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
+  g_timeout_add_seconds (5, (GSourceFunc) on_app_exit, local);
 
-  if (one_video_local_peer_find_remotes (local))
-    g_assert (one_video_local_peer_begin_transmit (local));
-  else {
+  remotes = one_video_local_peer_find_remotes (local);
+  if (remotes->len < 1) {
     GST_ERROR ("No remote peers found, exiting");
     return EXIT_FAILURE;
   }
 
-  for (index = 0; index < local->remotes->len; index++) {
+  for (index = 0; index < remotes->len; index++) {
     OneVideoRemotePeer *remote;
     remote = one_video_remote_peer_new (local,
-        g_ptr_array_index (local->remotes, index));
+        g_ptr_array_index (remotes, index));
     if (!one_video_local_peer_setup_receive (local, remote)) {
-      gchar *address = g_inet_address_to_string (
-          g_inet_socket_address_get_address (remote->addr));
-      GST_ERROR ("Unable to receive from remote peer %s:%i", address,
-          g_inet_socket_address_get_port (remote->addr));
+      gchar *address = g_inet_address_to_string (remote->addr);
+      GST_ERROR ("Unable to receive from remote peer %s", address);
       g_free (address);
       continue;
     }
     /* FIXME: Add the ability to specify a video sink */
     one_video_local_peer_setup_playback (local, remote);
   }
+  g_assert (one_video_local_peer_begin_transmit (local));
 
   one_video_local_peer_start_playback (local);
   GST_DEBUG ("Playing");
@@ -99,6 +98,7 @@ main (int   argc,
 
   g_clear_pointer (&local, one_video_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
+  g_ptr_array_free (remotes, TRUE);
 
   return EXIT_SUCCESS;
 }
