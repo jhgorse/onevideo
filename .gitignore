@@ -1,5 +1,29 @@
+# Temporary files
 *.o
 *~
 *.sw[op]
+*.log
+
+# Autotools
+Makefile
+Makefile.in
+/configure
+/aclocal.m4
+/autom4te.cache/
+/compile
+/config.*
+/depcomp
+/install-sh
+/missing
+/stamp-h1
+/INSTALL
+
+# Libtool
+*.l[ao]
 .libs/
-/one-video-app
+.deps/
+/ltmain.sh
+/libtool
+
+# Output binaries
+/src/one-video-app
