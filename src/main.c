@@ -68,7 +68,8 @@ main (int   argc,
 
   local = one_video_local_peer_new (NULL);
 
-  g_timeout_add_seconds (5, (GSourceFunc) on_app_exit, local);
+  //g_timeout_add_seconds (5, (GSourceFunc) on_app_exit, local);
+  g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
 
   remotes = one_video_local_peer_find_remotes (local);
   if (remotes->len < 1) {
@@ -80,18 +81,15 @@ main (int   argc,
     OneVideoRemotePeer *remote;
     remote = one_video_remote_peer_new (local,
         g_ptr_array_index (remotes, index));
-    if (!one_video_local_peer_setup_receive (local, remote)) {
+    if (!one_video_local_peer_setup_remote (local, remote)) {
       gchar *address = g_inet_address_to_string (remote->addr);
       GST_ERROR ("Unable to receive from remote peer %s", address);
       g_free (address);
       continue;
     }
-    /* FIXME: Add the ability to specify a video sink */
-    one_video_local_peer_setup_playback (local, remote);
   }
-  g_assert (one_video_local_peer_begin_transmit (local));
 
-  one_video_local_peer_start_playback (local);
+  one_video_local_peer_start (local);
   GST_DEBUG ("Playing");
 
   g_main_loop_run (loop);

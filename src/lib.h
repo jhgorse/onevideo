@@ -88,13 +88,9 @@ void                one_video_remote_peer_free          (OneVideoRemotePeer *rem
 void                one_video_remote_peer_stop          (OneVideoRemotePeer *remote);
 
 GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
-
-gboolean            one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
-gboolean            one_video_local_peer_setup_receive  (OneVideoLocalPeer *local,
+gboolean            one_video_local_peer_setup_remote   (OneVideoLocalPeer *local,
                                                          OneVideoRemotePeer *remote);
-gboolean            one_video_local_peer_setup_playback (OneVideoLocalPeer *local,
-                                                         OneVideoRemotePeer *remote);
-gboolean            one_video_local_peer_start_playback (OneVideoLocalPeer * local);
+gboolean            one_video_local_peer_start          (OneVideoLocalPeer * local);
 
 G_END_DECLS
 

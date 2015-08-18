@@ -66,6 +66,11 @@ struct _OneVideoRemotePeerPriv {
 static gboolean _setup_transmit_pipeline (OneVideoLocalPeer *local);
 static gboolean _setup_playback_pipeline (OneVideoLocalPeer *local);
 static void one_video_remote_peer_unlink (OneVideoRemotePeer *remote);
+static void one_video_local_peer_setup_remote_receive (OneVideoLocalPeer *local,
+    OneVideoRemotePeer *remote);
+static void one_video_local_peer_setup_remote_playback (OneVideoLocalPeer *local,
+    OneVideoRemotePeer *remote);
+static gboolean one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
 
 static void
 on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer data)
@@ -390,7 +395,7 @@ append_vclients (gpointer data, gpointer user_data)
   append_string (remote->addr_s, user_data, UDPCLIENT_VIDEO_PORT);
 }
 
-gboolean
+static gboolean
 one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
 {
   GstStateChangeReturn ret;
@@ -429,8 +434,8 @@ push_sample (GstElement *appsink, GstElement *appsrc)
   return ret;
 }
 
-gboolean
-one_video_local_peer_setup_receive (OneVideoLocalPeer * local,
+static void
+one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
   GstElement *asrc, *afilter, *asink, *vsrc, *vfilter, *vsink;
@@ -464,12 +469,10 @@ one_video_local_peer_setup_receive (OneVideoLocalPeer * local,
   /* XXX: We need to go to PLAYING very soon after this */
   gst_element_set_state (remote->receive, GST_STATE_READY);
   GST_DEBUG ("Setup pipeline to receive from remote local");
-
-  return TRUE;
 }
 
-gboolean
-one_video_local_peer_setup_playback (OneVideoLocalPeer * local,
+static void
+one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
   GstBus *bus;
@@ -540,16 +543,24 @@ one_video_local_peer_setup_playback (OneVideoLocalPeer * local,
   g_signal_connect (bus, "message::eos",
       G_CALLBACK (on_local_playback_eos), local);
   g_object_unref (bus);
-
-  return TRUE;
 }
 
 gboolean
-one_video_local_peer_start_playback (OneVideoLocalPeer * local)
+one_video_local_peer_setup_remote (OneVideoLocalPeer * local,
+    OneVideoRemotePeer * remote)
+{
+  one_video_local_peer_setup_remote_receive (local, remote);
+  one_video_local_peer_setup_remote_playback (local, remote);
+}
+
+gboolean
+one_video_local_peer_start (OneVideoLocalPeer * local)
 {
   guint index;
   GstStateChangeReturn ret;
   OneVideoRemotePeer *remote;
+
+  g_assert (one_video_local_peer_begin_transmit (local));
 
   for (index = 0; index < local->priv->remote_peers->len; index++) {
     remote = g_ptr_array_index (local->priv->remote_peers, index);
