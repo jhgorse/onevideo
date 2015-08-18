@@ -59,22 +59,42 @@ int
 main (int   argc,
       char *argv[])
 {
-  guint index = 0;
   GPtrArray *remotes;
   OneVideoLocalPeer *local;
+  GOptionContext *optctx;
+
+  guint index = 0;
+  GError *error = NULL;
+  guint exit_after = 0;
+  GOptionEntry entries[] = {
+    {"exit-after", 'x', 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
+          " seconds (default: never exit)", "SECONDS"},
+    {NULL}
+  };
 
   gst_init (&argc, &argv);
+  optctx = g_option_context_new (" - Peer-to-Peer low-latency high-bandwidth "
+      "VoIP application");
+  g_option_context_add_main_entries (optctx, entries, NULL);
+  g_option_context_add_group (optctx, gst_init_get_option_group ());
+  if (!g_option_context_parse (optctx, &argc, &argv, &error)) {
+    g_printerr ("Error parsing options: %s\n", error->message);
+    return -1;
+  }
+  g_option_context_free (optctx);
+
   loop = g_main_loop_new (NULL, FALSE);
 
   local = one_video_local_peer_new (NULL);
 
-  //g_timeout_add_seconds (5, (GSourceFunc) on_app_exit, local);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
+  if (exit_after > 0)
+    g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
 
   remotes = one_video_local_peer_find_remotes (local);
   if (remotes->len < 1) {
     GST_ERROR ("No remote peers found, exiting");
-    return EXIT_FAILURE;
+    return -2;
   }
 
   for (index = 0; index < remotes->len; index++) {
@@ -98,5 +118,5 @@ main (int   argc,
   g_clear_pointer (&loop, g_main_loop_unref);
   g_ptr_array_free (remotes, TRUE);
 
-  return EXIT_SUCCESS;
+  return 0;
 }
