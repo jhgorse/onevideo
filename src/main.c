@@ -1,6 +1,7 @@
 /*  vim: set sts=2 sw=2 et :
  *
  *  Copyright (C) 2015 Centricular Ltd
+ *  Author(s): Nirbheek Chauhan <nirbheek@centricular.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,6 +26,7 @@
  */
 
 #include "lib.h"
+#include "utils.h"
 
 #include <glib-unix.h>
 
@@ -55,20 +57,65 @@ on_app_exit (OneVideoLocalPeer * local)
   return FALSE;
 }
 
+static gboolean
+_parse_test_mode_ports (gchar * test_mode_ports, guint * audio_port,
+    guint * video_port)
+{
+  gchar **split;
+  gboolean ret = FALSE;
+
+  if (!test_mode_ports) {
+    *audio_port = *video_port = 0;
+    return TRUE;
+  }
+  
+  split = g_strsplit (test_mode_ports, ",", -1);
+  if (g_strv_length (split) != 2) {
+    g_printerr ("Invalid format for test_mode_ports: %s\n", test_mode_ports);
+    goto out;
+  }
+
+  *audio_port = g_ascii_strtoull (split[0], NULL, 10);
+  if (*audio_port == 0) {
+    g_printerr ("Invalid format for audio port: %s\n", split[0]);
+    goto out;
+  }
+
+  *video_port = g_ascii_strtoull (split[1], NULL, 10);
+  if (*video_port == 0) {
+    g_printerr ("Invalid format for video port: %s\n", split[1]);
+    goto out;
+  }
+
+  ret = TRUE;
+out:
+  g_strfreev (split);
+  return ret;
+}
+
 int
 main (int   argc,
       char *argv[])
 {
-  GPtrArray *remotes;
   OneVideoLocalPeer *local;
   GOptionContext *optctx;
-
-  guint index = 0;
+  GInetAddress *listen_addr = NULL;
   GError *error = NULL;
+  guint audio_port, video_port, index = 0;
+
   guint exit_after = 0;
+  gchar *iface_name = NULL;
+  gchar *test_mode_ports = NULL;
+  gchar *remotes[] = {"127.0.0.1", NULL};
   GOptionEntry entries[] = {
-    {"exit-after", 'x', 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
+    {"test-mode", 0, 0, G_OPTION_ARG_STRING, &test_mode_ports, "Run in test"
+          " mode on localhost with the given ports", "AUDIO_PORT,VIDEO_PORT"},
+    {"exit-after", 0, 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
           " seconds (default: never exit)", "SECONDS"},
+    {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
+          " to listen on (default: any)", "NAME"},
+    {"peer", 'p', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peer(s) to connect to"
+          ". Specify multiple times to connect to multiple peers.", "PEER"},
     {NULL}
   };
 
@@ -83,40 +130,37 @@ main (int   argc,
   }
   g_option_context_free (optctx);
 
+  if (!_parse_test_mode_ports (test_mode_ports, &audio_port, &video_port))
+    return -1;
+
   loop = g_main_loop_new (NULL, FALSE);
 
-  local = one_video_local_peer_new (NULL);
+  if (iface_name != NULL)
+    listen_addr = one_video_get_ip_for_interface (iface_name);
+  local = one_video_local_peer_new (listen_addr);
+
+  for (index = 0; index < g_strv_length (remotes); index++) {
+    OneVideoRemotePeer *remote;
+    remote = one_video_remote_peer_new (local, remotes[index], audio_port,
+        video_port);
+    if (!one_video_local_peer_setup_remote (local, remote)) {
+      GST_ERROR ("Unable to receive from remote peer %s", remote->addr_s);
+      continue;
+    }
+    GST_DEBUG ("Created and setup remote peer %s", remote->addr_s);
+  }
+
+  one_video_local_peer_start (local);
 
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
 
-  remotes = one_video_local_peer_find_remotes (local);
-  if (remotes->len < 1) {
-    GST_ERROR ("No remote peers found, exiting");
-    return -2;
-  }
-
-  for (index = 0; index < remotes->len; index++) {
-    OneVideoRemotePeer *remote;
-    remote = one_video_remote_peer_new (local,
-        g_ptr_array_index (remotes, index));
-    if (!one_video_local_peer_setup_remote (local, remote)) {
-      gchar *address = g_inet_address_to_string (remote->addr);
-      GST_ERROR ("Unable to receive from remote peer %s", address);
-      g_free (address);
-      continue;
-    }
-  }
-
-  one_video_local_peer_start (local);
-  GST_DEBUG ("Playing");
-
+  GST_DEBUG ("Running");
   g_main_loop_run (loop);
 
   g_clear_pointer (&local, one_video_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
-  g_ptr_array_free (remotes, TRUE);
 
   return 0;
 }

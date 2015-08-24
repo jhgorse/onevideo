@@ -1,6 +1,7 @@
 /*  vim: set sts=2 sw=2 et :
  *
  *  Copyright (C) 2015 Centricular Ltd
+ *  Author(s): Nirbheek Chauhan <nirbheek@centricular.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,8 +37,14 @@ G_BEGIN_DECLS
 GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-#define UDPCLIENT_AUDIO_PORT "5000"
-#define UDPCLIENT_VIDEO_PORT "5001"
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+#define UDPCLIENT_AUDIO_PORT 5000
+#define UDPCLIENT_VIDEO_PORT 5001
+
+#define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, encoding-name=OPUS"
+#define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, encoding-name=JPEG, framerate=30/1"
 
 typedef struct _OneVideoLocalPeer OneVideoLocalPeer;
 typedef struct _OneVideoLocalPeerPriv OneVideoLocalPeerPriv;
@@ -72,9 +79,10 @@ struct _OneVideoRemotePeer {
 
   /* Receive pipeline */
   GstElement *receive;
-  /* Address of remote peer */
-  GInetAddress *addr;
+  /* Address + media ports of remote peer */
   gchar *addr_s;
+  guint audio_port;
+  guint video_port;
 
   OneVideoRemotePeerPriv *priv;
 };
@@ -83,7 +91,9 @@ OneVideoLocalPeer*  one_video_local_peer_new            (GInetAddress *addr);
 void                one_video_local_peer_free           (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop           (OneVideoLocalPeer *local);
 OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,
-                                                         GInetAddress *addr);
+                                                         const gchar *addr_s,
+                                                         guint audio_port,
+                                                         guint video_port);
 void                one_video_remote_peer_free          (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_stop          (OneVideoRemotePeer *remote);
 
