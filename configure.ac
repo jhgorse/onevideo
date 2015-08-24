@@ -13,7 +13,7 @@ cflags_set=${CFLAGS:+set}
 AM_INIT_AUTOMAKE([-Wno-portability 1.14 no-dist-gzip dist-xz tar-ustar subdir-objects])
 
 GLIB_REQ=2.32.0
-GST_REQ=1.5.2.1
+GST_REQ=1.5.2
 
 # Checks for programs.
 AC_PROG_CC
