@@ -27,12 +27,12 @@ AC_ARG_ENABLE(debug,
 
 if test "x$enable_debug" = "xyes"; then
     if test "x$cflags_set" != "xset" ; then
-        CFLAGS="-O0 -ggdb "
+        CFLAGS="-O0 -ggdb -Wall"
     else
-        CFLAGS="$CFLAGS -g "
+        CFLAGS="$CFLAGS -g -Wall"
     fi
 else
-    CFLAGS="$CFLAGS -g "
+    CFLAGS="$CFLAGS -g -Wall"
 fi
 
 # Check for libraries
