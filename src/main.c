@@ -33,25 +33,10 @@
 static GMainLoop *loop = NULL;
 
 static gboolean
-check_do_app_quit (gpointer data)
-{
-  OneVideoLocalPeer *local = data;
-
-  if (local->state != ONE_VIDEO_STATE_NULL)
-    return TRUE;
-  GST_DEBUG ("All done, exiting");
-  g_main_loop_quit (loop);
-  return FALSE;
-}
-
-
-static gboolean
 on_app_exit (OneVideoLocalPeer * local)
 {
   one_video_local_peer_stop (local);
-  /* FIXME: Add a way for the app to get notified when the local source has
-   * finished cleanup */
-  g_idle_add (check_do_app_quit, local);
+  g_main_loop_quit (loop);
 
   /* Remove the source so it's not called again */
   return FALSE;

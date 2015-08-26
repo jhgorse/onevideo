@@ -94,8 +94,8 @@ OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *loca
                                                          const gchar *addr_s,
                                                          guint audio_port,
                                                          guint video_port);
+void                one_video_remote_peer_remove        (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_free          (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_stop          (OneVideoRemotePeer *remote);
 
 GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
 gboolean            one_video_local_peer_setup_remote   (OneVideoLocalPeer *local,
