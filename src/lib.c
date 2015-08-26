@@ -205,6 +205,77 @@ one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s,
   return remote;
 }
 
+void
+one_video_remote_peer_pause (OneVideoRemotePeer * remote)
+{
+  OneVideoLocalPeer *local = remote->local;
+
+  /* Pause receiving */
+  g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
+      == GST_STATE_CHANGE_SUCCESS);
+
+  if (remote->priv->audio_appsrc != NULL) {
+    GstPad *srcpad, *sinkpad;
+
+    srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
+    sinkpad = gst_pad_get_peer (srcpad);
+
+    gst_pad_unlink (srcpad, sinkpad);
+    gst_object_unref (srcpad);
+    GST_DEBUG ("Unlinked audio pads of %s", remote->addr_s);
+
+    gst_element_release_request_pad (local->priv->audiomixer, sinkpad);
+    gst_object_unref (sinkpad);
+    GST_DEBUG ("Released audiomixer sinkpad of %s", remote->addr_s);
+
+    g_assert (gst_element_set_state (remote->priv->aplayback, GST_STATE_PAUSED)
+        == GST_STATE_CHANGE_SUCCESS);
+    GST_DEBUG ("Paused audio of %s", remote->addr_s);
+  }
+
+  if (remote->priv->video_appsrc != NULL) {
+    g_assert (gst_element_set_state (remote->priv->vplayback, GST_STATE_PAUSED)
+        == GST_STATE_CHANGE_SUCCESS);
+    GST_DEBUG ("Paused video of %s", remote->addr_s);
+  }
+
+  GST_DEBUG ("Fully paused remote peer %s", remote->addr_s);
+}
+
+void
+one_video_remote_peer_resume (OneVideoRemotePeer * remote)
+{
+  OneVideoLocalPeer *local = remote->local;
+
+  if (remote->priv->audio_appsrc != NULL) {
+    GstPadLinkReturn ret;
+    GstPad *srcpad, *sinkpad;
+
+    sinkpad = gst_element_get_request_pad (local->priv->audiomixer, "sink_%u");
+    srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
+
+    ret = gst_pad_link (srcpad, sinkpad);
+    g_assert (ret == GST_PAD_LINK_OK);
+    gst_object_unref (sinkpad);
+    gst_object_unref (srcpad);
+
+    g_assert (gst_element_set_state (remote->priv->aplayback, GST_STATE_PLAYING)
+        == GST_STATE_CHANGE_SUCCESS);
+    GST_DEBUG ("Resumed audio of %s", remote->addr_s);
+  }
+
+  if (remote->priv->video_appsrc != NULL) {
+    g_assert (gst_element_set_state (remote->priv->vplayback, GST_STATE_PLAYING)
+        == GST_STATE_CHANGE_SUCCESS);
+    GST_DEBUG ("Resumed video of %s", remote->addr_s);
+  }
+
+  /* Resume receiving */
+  g_assert (gst_element_set_state (remote->receive, GST_STATE_PLAYING)
+      == GST_STATE_CHANGE_SUCCESS);
+  GST_DEBUG ("Fully resumed remote peer %s", remote->addr_s);
+}
+
 static void
 one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 {
