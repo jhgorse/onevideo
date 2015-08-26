@@ -209,6 +209,7 @@ static void
 one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 {
   gchar *tmp;
+  OneVideoLocalPeer *local = remote->local;
 
   /* Stop receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
@@ -226,7 +227,7 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
       gst_pad_unlink (srcpad, sinkpad);
       GST_DEBUG ("Unlinked audio pad of %s", remote->addr_s);
 
-      gst_element_release_request_pad (remote->local->priv->audiomixer,
+      gst_element_release_request_pad (local->priv->audiomixer,
           sinkpad);
       gst_object_unref (sinkpad);
       GST_DEBUG ("Released audiomixer sinkpad of %s", remote->addr_s);
@@ -237,7 +238,7 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 
     g_assert (gst_element_set_state (remote->priv->aplayback, GST_STATE_NULL)
         == GST_STATE_CHANGE_SUCCESS);
-    g_assert (gst_bin_remove (GST_BIN (remote->local->playback),
+    g_assert (gst_bin_remove (GST_BIN (local->playback),
           remote->priv->aplayback));
     GST_DEBUG ("Released audio playback bin of remote %s", remote->addr_s);
   }
@@ -245,7 +246,7 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
   if (remote->priv->video_appsrc != NULL) {
     g_assert (gst_element_set_state (remote->priv->vplayback, GST_STATE_NULL)
         == GST_STATE_CHANGE_SUCCESS);
-    g_assert (gst_bin_remove (GST_BIN (remote->local->playback),
+    g_assert (gst_bin_remove (GST_BIN (local->playback),
           remote->priv->vplayback));
     GST_DEBUG ("Released video playback bin of remote %s", remote->addr_s);
   }
