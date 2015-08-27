@@ -33,6 +33,15 @@
 static GMainLoop *loop = NULL;
 
 static gboolean
+kill_remote_peer (OneVideoRemotePeer * remote)
+{
+  one_video_remote_peer_remove (remote);
+  g_main_loop_quit (loop);
+
+  return FALSE;
+}
+
+static gboolean
 on_app_exit (OneVideoLocalPeer * local)
 {
   one_video_local_peer_stop (local);
@@ -83,6 +92,7 @@ main (int   argc,
       char *argv[])
 {
   OneVideoLocalPeer *local;
+  OneVideoRemotePeer *remote;
   GOptionContext *optctx;
   GInetAddress *listen_addr = NULL;
   GError *error = NULL;
@@ -125,7 +135,6 @@ main (int   argc,
   local = one_video_local_peer_new (listen_addr);
 
   for (index = 0; index < g_strv_length (remotes); index++) {
-    OneVideoRemotePeer *remote;
     remote = one_video_remote_peer_new (local, remotes[index], audio_port,
         video_port);
     if (!one_video_local_peer_setup_remote (local, remote)) {
