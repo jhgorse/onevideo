@@ -7,6 +7,7 @@
 # Autotools
 Makefile
 Makefile.in
+.dirstamp
 /configure
 /aclocal.m4
 /autom4te.cache/
@@ -26,4 +27,4 @@ Makefile.in
 /libtool
 
 # Output binaries
-/src/one-video-app
+/app/one-video-app

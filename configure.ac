@@ -48,6 +48,5 @@ AC_SUBST(ONE_VIDEO_LT_LDFLAGS)
 
 AC_CONFIG_FILES(
 Makefile
-src/Makefile
 )
 AC_OUTPUT
