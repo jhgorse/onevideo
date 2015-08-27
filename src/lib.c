@@ -210,6 +210,12 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 {
   OneVideoLocalPeer *local = remote->local;
 
+  /* Stop transmitting */
+  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
+      remote->audio_port);
+  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
+      remote->video_port);
+
   /* Pause receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
       == GST_STATE_CHANGE_SUCCESS);
@@ -276,11 +282,19 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
   GST_DEBUG ("Fully resumed remote peer %s", remote->addr_s);
 }
 
+/* Does not do any operations that involve taking the OneVideoLocalPeer lock.
+ * See: one_video_remote_peer_remove() */
 static void
 one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 {
   gchar *tmp;
   OneVideoLocalPeer *local = remote->local;
+
+  /* Stop transmitting */
+  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
+      remote->audio_port);
+  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
+      remote->video_port);
 
   /* Stop receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
