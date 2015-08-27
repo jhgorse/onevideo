@@ -32,7 +32,7 @@ GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
 /* FIXME: Need to force formats everywhere because of appsrc/appsink.
- * Fix by replacing with intervideosink/src */
+ * Fix by replacing with the new intersink/src written by slomo */
 #define RAW_AUDIO_CAPS_STR "audio/x-raw, format=S16LE, channels=2, rate=48000, layout=interleaved"
 #define VIDEO_CAPS_STR "width=1280, height=720, framerate=30/1"
 #define RAW_VIDEO_CAPS_STR "video/x-raw, " VIDEO_CAPS_STR ", format=I420"
