@@ -35,6 +35,14 @@ else
     CFLAGS="$CFLAGS -g -Wall"
 fi
 
+dnl set the plugindir where plugins should be installed (for src/Makefile.am)
+if test "x${prefix}" = "x$HOME"; then
+  plugindir="$HOME/.gstreamer-1.0/plugins"
+else
+  plugindir="\$(libdir)/gstreamer-1.0"
+fi
+AC_SUBST(plugindir)
+
 # Check for libraries
 PKG_CHECK_MODULES(GLIB, glib-2.0 >= $GLIB_REQ gio-2.0 >= GLIB_REQ)
 PKG_CHECK_MODULES(GST, gstreamer-1.0 >= $GST_REQ)
