@@ -31,8 +31,8 @@
 GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-/* FIXME: Need to force formats everywhere because of appsrc/appsink.
- * Fix by replacing with the new intersink/src written by slomo */
+/* We force the same audio formats everywhere for now, till we can do
+ * peer format negotiation */
 #define RAW_AUDIO_CAPS_STR "audio/x-raw, format=S16LE, channels=2, rate=48000, layout=interleaved"
 #define VIDEO_CAPS_STR "width=1280, height=720, framerate=30/1"
 #define RAW_VIDEO_CAPS_STR "video/x-raw, " VIDEO_CAPS_STR ", format=I420"
@@ -56,16 +56,16 @@ struct _OneVideoLocalPeerPriv {
 };
 
 struct _OneVideoRemotePeerPriv {
-  /* Audio/Video appsinks inside the receive pipeline */
-  GstElement *audio_appsink;
-  GstElement *video_appsink;
+  /* Audio/Video proxysinks inside the receive pipeline */
+  GstElement *audio_proxysink;
+  GstElement *video_proxysink;
 
   /* playback bins; are inside the playback pipeline in OneVideoLocalPeer */
   GstElement *aplayback;
   GstElement *vplayback;
-  /* Audio/Video appsrcs inside the playback pipelines; aplayback/vplayback */
-  GstElement *audio_appsrc;
-  GstElement *video_appsrc;
+  /* Audio/Video proxysrcs inside the playback pipelines; aplayback/vplayback */
+  GstElement *audio_proxysrc;
+  GstElement *video_proxysrc;
 };
 
 static gboolean _setup_transmit_pipeline (OneVideoLocalPeer *local);
@@ -220,7 +220,7 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
       == GST_STATE_CHANGE_SUCCESS);
 
-  if (remote->priv->audio_appsrc != NULL) {
+  if (remote->priv->audio_proxysrc != NULL) {
     GstPad *srcpad, *sinkpad;
 
     srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
@@ -239,7 +239,7 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
     GST_DEBUG ("Paused audio of %s", remote->addr_s);
   }
 
-  if (remote->priv->video_appsrc != NULL) {
+  if (remote->priv->video_proxysrc != NULL) {
     g_assert (gst_element_set_state (remote->priv->vplayback, GST_STATE_PAUSED)
         == GST_STATE_CHANGE_SUCCESS);
     GST_DEBUG ("Paused video of %s", remote->addr_s);
@@ -253,7 +253,7 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
 {
   OneVideoLocalPeer *local = remote->local;
 
-  if (remote->priv->audio_appsrc != NULL) {
+  if (remote->priv->audio_proxysrc != NULL) {
     GstPadLinkReturn ret;
     GstPad *srcpad, *sinkpad;
 
@@ -270,7 +270,7 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
     GST_DEBUG ("Resumed audio of %s", remote->addr_s);
   }
 
-  if (remote->priv->video_appsrc != NULL) {
+  if (remote->priv->video_proxysrc != NULL) {
     g_assert (gst_element_set_state (remote->priv->vplayback, GST_STATE_PLAYING)
         == GST_STATE_CHANGE_SUCCESS);
     GST_DEBUG ("Resumed video of %s", remote->addr_s);
@@ -302,7 +302,7 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
   gst_object_unref (remote->receive);
   remote->receive = NULL;
 
-  if (remote->priv->audio_appsrc != NULL) {
+  if (remote->priv->audio_proxysrc != NULL) {
     GstPad *srcpad, *sinkpad;
 
     srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
@@ -328,7 +328,7 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
     GST_DEBUG ("Released audio playback bin of remote %s", remote->addr_s);
   }
 
-  if (remote->priv->video_appsrc != NULL) {
+  if (remote->priv->video_proxysrc != NULL) {
     g_assert (gst_element_set_state (remote->priv->vplayback, GST_STATE_NULL)
         == GST_STATE_CHANGE_SUCCESS);
     g_assert (gst_bin_remove (GST_BIN (local->playback),
@@ -517,31 +517,13 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
   return ret != GST_STATE_CHANGE_FAILURE;
 }
 
-static GstFlowReturn
-push_sample (GstElement *appsink, GstElement *appsrc)
-{
-  GstFlowReturn ret;
-  GstSample *sample;
-  GstBuffer *buffer;
-
-  g_print (".");
-  g_signal_emit_by_name (appsink, "pull-sample", &sample);
-  g_assert (sample != NULL);
-
-  buffer = gst_sample_get_buffer (sample);
-  g_signal_emit_by_name (appsrc, "push-buffer", buffer, &ret);
-  gst_sample_unref (sample);
-
-  return ret;
-}
-
 static void
 one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
   GstCaps *rtp_caps;
-  GstElement *asrc, *adepay, *adecode, *afilter, *asink;
-  GstElement *vsrc, *vdepay, *vdecode, *vconvert, *vrate, *vfilter, *vsink;
+  GstElement *asrc, *adepay, *adecode, *asink;
+  GstElement *vsrc, *vdepay, *vdecode, *vconvert, *vsink;
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote local */
   /* FIXME: Fetch and set udpsrc caps using RTCP or similar */
@@ -553,14 +535,11 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   /* audiomixer does not do audio conversion, so we need to do it ourselves */
   adepay = gst_element_factory_make ("rtpopusdepay", NULL);
   adecode = gst_element_factory_make ("opusdec", NULL);
-  afilter = gst_element_factory_make ("capsfilter", "audio-receive-caps-%u");
-  g_object_set (afilter, "caps", raw_audio_caps, NULL);
-  asink = gst_element_factory_make ("appsink", "audio-appsink-%u");
-  g_object_set (asink, "emit-signals", TRUE, NULL);
+  asink = gst_element_factory_make ("proxysink", "audio-proxysink-%u");
+  g_assert (asink != NULL);
   gst_bin_add_many (GST_BIN (remote->receive), asrc, adepay, adecode,
-      afilter, asink, NULL);
-  g_assert (gst_element_link_many (asrc, adepay, adecode, afilter,
-        asink, NULL));
+      asink, NULL);
+  g_assert (gst_element_link_many (asrc, adepay, adecode, asink, NULL));
 
   vsrc = gst_element_factory_make ("udpsrc", "video-receive-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_VIDEO_CAPS_STR);
@@ -572,32 +551,22 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   /* We need this despite setting caps everywhere because the jpeg might have
    * been encoded by the webcam, in which case it could be in any raw format */
   vconvert = gst_element_factory_make ("videoconvert", NULL);
-  /* XXX: REMOVE ME WHEN WE MOVE TO INTERVIDEO. THIS IS ONLY NEEDED FOR CAPS
-   * NEGOTIATION. IS NOT NEEDED WITH INTERVIDEO. */
-  vrate = gst_element_factory_make ("videorate", NULL);
-  vfilter = gst_element_factory_make ("capsfilter", "video-receive-caps-%u");
-  g_object_set (vfilter, "caps", raw_video_caps, NULL);
-  /* FIXME: When implementing format negotiation between peers, we have to
-   * either use intervideosink or set the caps on the corresponding appsrc.
-   * This works right now because we have fixed video caps everywhere. */
-  vsink = gst_element_factory_make ("appsink", "video-appsink-%u");
-  g_object_set (vsink, "emit-signals", TRUE, NULL);
+  vsink = gst_element_factory_make ("proxysink", "video-proxysink-%u");
+  g_assert (vsink != NULL);
   gst_bin_add_many (GST_BIN (remote->receive), vsrc, vdepay, vdecode, vconvert,
-      vrate, vfilter, vsink, NULL);
-  g_assert (gst_element_link_many (vsrc, vdepay, vdecode, vconvert, vrate,
-        vfilter, vsink, NULL));
+      vsink, NULL);
+  g_assert (gst_element_link_many (vsrc, vdepay, vdecode, vconvert, vsink,
+        NULL));
 
   /* This is what exposes video/audio data from this remote local */
-  remote->priv->audio_appsink = asink;
-  remote->priv->video_appsink = vsink;
+  remote->priv->audio_proxysink = asink;
+  remote->priv->video_proxysink = vsink;
 
   /* Add to our list of remote peers */
   g_mutex_lock (&local->priv->lock);
   g_ptr_array_add (local->priv->remote_peers, remote);
   g_mutex_unlock (&local->priv->lock);
 
-  /* XXX: We need to go to PLAYING very soon after this */
-  gst_element_set_state (remote->receive, GST_STATE_READY);
   GST_DEBUG ("Setup pipeline to receive from remote local");
 }
 
@@ -605,62 +574,60 @@ static void
 one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
-  GstElement *filter;
   GstPad *ghostpad, *srcpad, *sinkpad;
   GstPadLinkReturn ret;
 
-  /* Setup pipeline (local->playback) to aggregate audio from all remote peers to
-   * audiomixer and then render using the provided audio sink
-   *  [ appsrc ! capsfilter ] ! audiomixer */
-  if (remote->priv->audio_appsink) {
-    remote->priv->audio_appsrc = gst_element_factory_make ("appsrc",
-        "audio-appsrc-%u");
-    g_object_set (remote->priv->audio_appsrc, "format", GST_FORMAT_TIME,
-        "is-live", TRUE, "emit-signals", FALSE, NULL);
-    filter = gst_element_factory_make ("capsfilter", "audio-sink-caps-%u");
-    g_object_set (filter, "caps", raw_audio_caps, NULL);
+  /* Setup pipeline (local->playback) to aggregate audio from all remote peers
+   * to audiomixer and then render using the provided audio sink
+   *  [ proxysrc ! audiomixer ] */
+  if (remote->priv->audio_proxysink) {
+    remote->priv->audio_proxysrc =
+      gst_element_factory_make ("proxysrc", "audio-proxysrc-%u");
+    g_assert (remote->priv->audio_proxysrc != NULL);
+
+    /* Link the two pipelines */
+    g_object_set (remote->priv->audio_proxysrc, "proxysink",
+        remote->priv->audio_proxysink, NULL);
+    g_object_set (remote->priv->audio_proxysink, "proxysrc",
+        remote->priv->audio_proxysrc, NULL);
 
     sinkpad = gst_element_get_request_pad (local->priv->audiomixer, "sink_%u");
 
     gst_bin_add_many (GST_BIN (remote->priv->aplayback),
-        remote->priv->audio_appsrc, filter, NULL);
+        remote->priv->audio_proxysrc, NULL);
     g_assert (gst_bin_add (GST_BIN (local->playback), remote->priv->aplayback));
 
-    srcpad = gst_element_get_static_pad (filter, "src");
+    srcpad = gst_element_get_static_pad (remote->priv->audio_proxysrc, "src");
     ghostpad = gst_ghost_pad_new ("audiopad", srcpad);
     g_assert (gst_pad_set_active (ghostpad, TRUE));
     g_assert (gst_element_add_pad (remote->priv->aplayback, ghostpad));
     gst_object_unref (srcpad);
 
-    g_assert (gst_element_link (remote->priv->audio_appsrc, filter));
     ret = gst_pad_link (ghostpad, sinkpad);
     g_assert (ret == GST_PAD_LINK_OK);
     gst_object_unref (sinkpad);
-
-    g_signal_connect (remote->priv->audio_appsink, "new-sample",
-        G_CALLBACK (push_sample), remote->priv->audio_appsrc);
   }
 
   /* Setup pipeline (local->playback) to render video from each local to the
    * provided video sink */
-  if (remote->priv->video_appsink) {
+  if (remote->priv->video_proxysink) {
     GstElement *sink;
 
-    remote->priv->video_appsrc = gst_element_factory_make ("appsrc",
-        "video-appsrc-%u");
-    g_object_set (remote->priv->video_appsrc, "format", GST_FORMAT_TIME,
-        "is-live", TRUE, "emit-signals", FALSE, NULL);
-    filter = gst_element_factory_make ("capsfilter", "video-sink-caps-%u");
-    g_object_set (filter, "caps", raw_video_caps, NULL);
+    remote->priv->video_proxysrc = 
+      gst_element_factory_make ("proxysrc", "video-proxysrc-%u");
+    g_assert (remote->priv->video_proxysrc != NULL);
+
+    /* Link the two pipelines */
+    g_object_set (remote->priv->video_proxysrc, "proxysink",
+        remote->priv->video_proxysink, NULL);
+    g_object_set (remote->priv->video_proxysink, "proxysrc",
+        remote->priv->video_proxysrc, NULL);
+
     sink = gst_element_factory_make ("xvimagesink", NULL);
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
-        remote->priv->video_appsrc, filter, sink, NULL);
+        remote->priv->video_proxysrc, sink, NULL);
     g_assert (gst_bin_add (GST_BIN (local->playback), remote->priv->vplayback));
-    g_assert (gst_element_link_many (remote->priv->video_appsrc, filter, sink,
-          NULL));
-
-    g_signal_connect (remote->priv->video_appsink, "new-sample",
-        G_CALLBACK (push_sample), remote->priv->video_appsrc);
+    g_assert (gst_element_link_many (remote->priv->video_proxysrc, sink, NULL));
   }
 
   GST_DEBUG ("Setup pipeline to playback remote local");
