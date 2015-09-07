@@ -1,4 +1,4 @@
 Steps:
 1) Attach a webcam and microphone
 2) Compile ./autogen.sh && make
-3) Run ./src/one-video-app
+3) Run ./one-video-app.sh
