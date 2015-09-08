@@ -337,5 +337,7 @@ gst_proxy_sink_sink_chain_list (GstPad * pad, GstObject * parent,
 GstPad *
 gst_proxy_sink_get_internal_sinkpad (GstProxySink * self)
 {
+  /* This function is only used internally, so it should never be passed NULL */
+  g_return_val_if_fail (self, NULL);
   return gst_object_ref (self->priv->sinkpad);
 }
