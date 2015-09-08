@@ -588,8 +588,6 @@ one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
     /* Link the two pipelines */
     g_object_set (remote->priv->audio_proxysrc, "proxysink",
         remote->priv->audio_proxysink, NULL);
-    g_object_set (remote->priv->audio_proxysink, "proxysrc",
-        remote->priv->audio_proxysrc, NULL);
 
     sinkpad = gst_element_get_request_pad (local->priv->audiomixer, "sink_%u");
 
@@ -620,8 +618,6 @@ one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
     /* Link the two pipelines */
     g_object_set (remote->priv->video_proxysrc, "proxysink",
         remote->priv->video_proxysink, NULL);
-    g_object_set (remote->priv->video_proxysink, "proxysrc",
-        remote->priv->video_proxysrc, NULL);
 
     sink = gst_element_factory_make ("xvimagesink", NULL);
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
