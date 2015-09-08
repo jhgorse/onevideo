@@ -28,7 +28,11 @@
 #ifndef __GST_PROXY_SINK_PRIV_H__
 #define __GST_PROXY_SINK_PRIV_H__
 
+#include "gstproxysrc.h"
+
 G_BEGIN_DECLS
+
+void gst_proxy_sink_set_proxysrc (GstProxySink *sink, GstProxySrc *src);
 
 GstPad* gst_proxy_sink_get_internal_sinkpad (GstProxySink *sink);
 

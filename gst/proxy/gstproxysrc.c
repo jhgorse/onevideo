@@ -111,10 +111,17 @@ gst_proxy_src_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * spec)
 {
   GstProxySrc *self = GST_PROXY_SRC (object);
+  GstProxySink *sink;
 
   switch (prop_id) {
     case PROP_PROXYSINK:
-      g_weak_ref_set (&self->priv->proxysink, g_value_get_object (value));
+      sink = g_value_get_object (value);
+      if (sink == NULL)
+        gst_proxy_sink_set_proxysrc (g_weak_ref_get (&self->priv->proxysink),
+            NULL);
+      else
+        gst_proxy_sink_set_proxysrc (sink, self);
+      g_weak_ref_set (&self->priv->proxysink, sink);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, spec);

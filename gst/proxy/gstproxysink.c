@@ -52,12 +52,6 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
   GST_STATIC_CAPS_ANY
 );
 
-enum
-{
-  PROP_0,
-  PROP_PROXYSRC,
-};
-
 struct _GstProxySinkPrivate
 {
   GstPad *sinkpad;
@@ -87,38 +81,6 @@ static GstStateChangeReturn gst_proxy_sink_change_state (GstElement *element,
     GstStateChange transition);
 
 static void
-gst_proxy_sink_get_property (GObject * object,
-    guint prop_id, GValue * value, GParamSpec * spec)
-{
-  GstProxySink *self = GST_PROXY_SINK (object);
-
-  switch (prop_id) {
-    case PROP_PROXYSRC:
-      g_value_set_object (value, g_weak_ref_get (&self->priv->proxysrc));
-      break;
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, spec);
-      break;
-  }
-}
-
-static void
-gst_proxy_sink_set_property (GObject * object,
-    guint prop_id, const GValue * value, GParamSpec * spec)
-{
-  GstProxySink *self = GST_PROXY_SINK (object);
-
-  switch (prop_id) {
-    case PROP_PROXYSRC:
-      g_weak_ref_set (&self->priv->proxysrc, g_value_get_object (value));
-      break;
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, spec);
-      break;
-  }
-}
-
-static void
 gst_proxy_sink_class_init (GstProxySinkClass * klass)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
@@ -128,14 +90,7 @@ gst_proxy_sink_class_init (GstProxySinkClass * klass)
 
   g_type_class_add_private (klass, sizeof (GstProxySinkPrivate));
 
-  gobject_class->get_property = gst_proxy_sink_get_property;
-  gobject_class->set_property = gst_proxy_sink_set_property;
-
   gstelement_class->change_state = gst_proxy_sink_change_state;
-
-  g_object_class_install_property (gobject_class, PROP_PROXYSRC,
-      g_param_spec_object ("proxysrc", "Proxysrc", "Matching proxysrc",
-        GST_TYPE_PROXY_SRC, G_PARAM_READWRITE));
 
   gst_element_class_add_pad_template (gstelement_class,
     gst_static_pad_template_get (&sink_template));
@@ -340,4 +295,12 @@ gst_proxy_sink_get_internal_sinkpad (GstProxySink * self)
   /* This function is only used internally, so it should never be passed NULL */
   g_return_val_if_fail (self, NULL);
   return gst_object_ref (self->priv->sinkpad);
+}
+
+void
+gst_proxy_sink_set_proxysrc (GstProxySink * self, GstProxySrc * src)
+{
+  /* This function is given user-supplied arguments, and self can be NULL */
+  if (self != NULL)
+    g_weak_ref_set (&self->priv->proxysrc, src);
 }
