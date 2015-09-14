@@ -41,13 +41,18 @@ static GstCaps *raw_audio_caps = NULL;
 static GstCaps *raw_video_caps = NULL;
 
 struct _OneVideoLocalPeerPriv {
+  /* Transmit GstRtpBin */
+  GstElement *rtpbin;
+
   /* primary audio playback elements */
   GstElement *audiomixer;
   GstElement *audiosink;
 
-  /* udpsinks transmitting RTP media */
+  /* udpsinks transmitting RTP and RTCP */
   GstElement *audpsink;
+  GstElement *artcpudpsink;
   GstElement *vudpsink;
+  GstElement *vrtcpudpsink;
 
   /* Array of OneVideoRemotePeers: peers we want to connect to */
   GPtrArray *remote_peers;
@@ -211,8 +216,12 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
       UDPCLIENT_ADATA_PORT);
+  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", remote->addr_s,
+      UDPCLIENT_ARTCP_PORT);
   g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
       UDPCLIENT_VDATA_PORT);
+  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", remote->addr_s,
+      UDPCLIENT_VRTCP_PORT);
 
   /* Pause receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
@@ -291,8 +300,12 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
       UDPCLIENT_ADATA_PORT);
+  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", remote->addr_s,
+      UDPCLIENT_ARTCP_PORT);
   g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
       UDPCLIENT_VDATA_PORT);
+  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", remote->addr_s,
+      UDPCLIENT_VRTCP_PORT);
 
   /* Stop receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
@@ -417,22 +430,25 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
 {
   GstBus *bus;
   GstCaps *jpeg_video_caps;
-  GstElement *asrc, *afilter, *aencode, *apay, *asink;
-  GstElement *vsrc, *vfilter, *vpay, *vsink;
+  GstElement *asrc, *afilter, *aencode, *apay, *asink, *artcpsink;
+  GstElement *vsrc, *vfilter, *vpay, *vsink, *vrtcpsink;
+  GstPad *srcpad, *sinkpad;
 
   if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit))
     /* Already setup */
     return TRUE;
 
-  local->transmit = gst_pipeline_new ("transmit-%u");
+  local->transmit = gst_pipeline_new ("transmit-pipeline");
+  local->priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
+  g_object_set (local->priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
 
   asrc = gst_element_factory_make ("pulsesrc", NULL);
-  afilter = gst_element_factory_make ("capsfilter", "audio-transmit-caps-%u");
+  afilter = gst_element_factory_make ("capsfilter", "audio-transmit-caps");
   g_object_set (afilter, "caps", raw_audio_caps, NULL);
   aencode = gst_element_factory_make ("opusenc", NULL);
   apay = gst_element_factory_make ("rtpopuspay", NULL);
   asink = gst_element_factory_make ("udpsink", "audio-transmit-udpsink");
-  local->priv->audpsink = asink;
+  artcpsink = gst_element_factory_make ("udpsink", "audio-transmit-rtcpsink");
 
   /* FIXME: Use GstDevice* instead of a device path string
    * FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
@@ -440,18 +456,64 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   vsrc = gst_element_factory_make ("v4l2src", NULL);
   if (v4l2_device_path != NULL)
     g_object_set (vsrc, "device", v4l2_device_path, NULL);
-  vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps-%u");
+  vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
   jpeg_video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
   g_object_set (vfilter, "caps", jpeg_video_caps, NULL);
   gst_caps_unref (jpeg_video_caps);
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
-  vsink = gst_element_factory_make ("udpsink", "video-transmit");
-  local->priv->vudpsink = vsink;
+  vsink = gst_element_factory_make ("udpsink", "video-transmit-udpsink");
+  vrtcpsink = gst_element_factory_make ("udpsink", "video-transmit-rtcpsink");
 
-  gst_bin_add_many (GST_BIN (local->transmit), asrc, afilter, aencode, apay,
-      asink, vsrc, vfilter, vpay, vsink, NULL);
-  g_assert (gst_element_link_many (asrc, afilter, aencode, apay, asink, NULL));
-  g_assert (gst_element_link_many (vsrc, vfilter, vpay, vsink, NULL));
+  gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
+      afilter, aencode, apay, asink, vsrc, vfilter, vpay, vsink, NULL);
+
+  /* Link audio branch */
+  g_assert (gst_element_link_many (asrc, afilter, aencode, apay, NULL));
+
+  srcpad = gst_element_get_static_pad (apay, "src");
+  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_0");
+  gst_pad_link (srcpad, sinkpad);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  srcpad = gst_element_get_static_pad (local->priv->rtpbin, "send_rtp_src_0");
+  sinkpad = gst_element_get_static_pad (asink, "sink");
+  gst_pad_link (srcpad, sinkpad);
+  local->priv->audpsink = asink;
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_0");
+  sinkpad = gst_element_get_static_pad (artcpsink, "sink");
+  gst_pad_link (srcpad, sinkpad);
+  local->priv->artcpudpsink = artcpsink;
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  /* Link video branch */
+  g_assert (gst_element_link_many (vsrc, vfilter, vpay, NULL));
+
+  srcpad = gst_element_get_static_pad (vpay, "src");
+  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_1");
+  gst_pad_link (srcpad, sinkpad);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  srcpad = gst_element_get_static_pad (local->priv->rtpbin, "send_rtp_src_1");
+  sinkpad = gst_element_get_static_pad (vsink, "sink");
+  gst_pad_link (srcpad, sinkpad);
+  local->priv->vudpsink = vsink;
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_1");
+  sinkpad = gst_element_get_static_pad (vrtcpsink, "sink");
+  gst_pad_link (srcpad, sinkpad);
+  local->priv->vrtcpudpsink = vrtcpsink;
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  /* All done */
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (local->transmit));
   gst_bus_add_signal_watch (bus);
@@ -465,51 +527,51 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
 }
 
 static void
-append_string (GString * clients, gchar * addr_s, guint port)
-{
-  gchar *client;
-
-  client = g_strdup_printf ("%s:%u,", addr_s, port);
-  g_string_append (clients, client);
-  g_free (client);
-}
-
-static void
-append_aclients (gpointer data, gpointer user_data)
+append_clients (gpointer data, gpointer user_data)
 {
   OneVideoRemotePeer *remote = data;
-  append_string (user_data, remote->addr_s, UDPCLIENT_ADATA_PORT);
-}
+  GString **clients = user_data;
 
-static void
-append_vclients (gpointer data, gpointer user_data)
-{
-  OneVideoRemotePeer *remote = data;
-  append_string (user_data, remote->addr_s, UDPCLIENT_VDATA_PORT);
+  g_string_append_printf (clients[0], "%s:%u,", remote->addr_s,
+      UDPCLIENT_ADATA_PORT);
+  g_string_append_printf (clients[1], "%s:%u,", remote->addr_s,
+      UDPCLIENT_ARTCP_PORT);
+  g_string_append_printf (clients[2], "%s:%u,", remote->addr_s,
+      UDPCLIENT_VDATA_PORT);
+  g_string_append_printf (clients[3], "%s:%u,", remote->addr_s,
+      UDPCLIENT_VRTCP_PORT);
 }
 
 static gboolean
 one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
 {
+  GString **clients;
   GstStateChangeReturn ret;
-  GString *aclients, *vclients;
 
-  aclients = g_string_new ("");
-  vclients = g_string_new ("");
+  /* {audio RTP, audio RTCP, video RTP, video RTCP} */
+  clients = g_malloc0_n (sizeof (GString*), 4);
+  clients[0] = g_string_new ("");
+  clients[1] = g_string_new ("");
+  clients[2] = g_string_new ("");
+  clients[3] = g_string_new ("");
   
   g_mutex_lock (&local->priv->lock);
-  g_ptr_array_foreach (local->priv->remote_peers, append_aclients, aclients);
-  g_ptr_array_foreach (local->priv->remote_peers, append_vclients, vclients);
-  g_object_set (local->priv->audpsink, "clients", aclients->str, NULL);
-  g_object_set (local->priv->vudpsink, "clients", vclients->str, NULL);
+  g_ptr_array_foreach (local->priv->remote_peers, append_clients, clients);
+  g_object_set (local->priv->audpsink, "clients", clients[0]->str, NULL);
+  g_object_set (local->priv->artcpudpsink, "clients", clients[1]->str, NULL);
+  g_object_set (local->priv->vudpsink, "clients", clients[2]->str, NULL);
+  g_object_set (local->priv->vrtcpudpsink, "clients", clients[3]->str, NULL);
   g_mutex_unlock (&local->priv->lock);
 
   ret = gst_element_set_state (local->transmit, GST_STATE_PLAYING);
   GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
-      aclients->str, vclients->str);
+      clients[0]->str, clients[2]->str);
 
-  g_string_free (aclients, TRUE);
-  g_string_free (vclients, TRUE);
+  g_string_free (clients[0], TRUE);
+  g_string_free (clients[1], TRUE);
+  g_string_free (clients[2], TRUE);
+  g_string_free (clients[3], TRUE);
+  g_free (clients);
 
   return ret != GST_STATE_CHANGE_FAILURE;
 }

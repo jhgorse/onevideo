@@ -41,7 +41,11 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define STR(x) STR_HELPER(x)
 
 #define UDPCLIENT_ADATA_PORT 5000
+#define UDPCLIENT_ARTCP_PORT 5001
 #define UDPCLIENT_VDATA_PORT 5002
+#define UDPCLIENT_VRTCP_PORT 5003
+
+#define RTP_DEFAULT_LATENCY_MS 10
 
 #define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, encoding-name=OPUS"
 #define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, encoding-name=JPEG, framerate=30/1"
