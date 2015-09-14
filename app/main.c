@@ -153,6 +153,7 @@ main (int   argc,
 
   guint exit_after = 0;
   gchar *iface_name = NULL;
+  gchar *v4l2_device_path = NULL;
   gchar *recv_ports = NULL;
   gchar **remotes = NULL;
   GOptionEntry entries[] = {
@@ -165,6 +166,8 @@ main (int   argc,
     {"peer", 'p', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers to connect to"
           "; specify multiple times to connect to several peers"
           " (Ex: 192.168.1.4:5024,5023)", "PEER:AUDIO_PORT,VIDEO_PORT"},
+    {"device", 'd', 0, G_OPTION_ARG_STRING, &v4l2_device_path, "Path to the"
+          " V4L2 (camera) device (Ex: /dev/video0)", "PATH"},
     {NULL}
   };
 
@@ -194,7 +197,7 @@ main (int   argc,
 
   if (iface_name != NULL)
     listen_addr = one_video_get_ip_for_interface (iface_name);
-  local = one_video_local_peer_new (listen_addr);
+  local = one_video_local_peer_new (listen_addr, v4l2_device_path);
 
   for (index = 0; index < g_strv_length (remotes); index++) {
     gchar *addr_s;

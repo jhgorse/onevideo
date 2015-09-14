@@ -68,7 +68,8 @@ struct _OneVideoRemotePeerPriv {
   GstElement *video_proxysrc;
 };
 
-static gboolean _setup_transmit_pipeline (OneVideoLocalPeer *local);
+static gboolean _setup_transmit_pipeline (OneVideoLocalPeer *local,
+    gchar *v4l2_device_path);
 static gboolean _setup_playback_pipeline (OneVideoLocalPeer *local);
 static void one_video_remote_peer_remove_nolock (OneVideoRemotePeer *remote);
 static void one_video_local_peer_setup_remote_receive (OneVideoLocalPeer *local,
@@ -120,7 +121,7 @@ one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 }
 
 OneVideoLocalPeer *
-one_video_local_peer_new (GInetAddress *addr)
+one_video_local_peer_new (GInetAddress * addr, gchar * v4l2_device_path)
 {
   OneVideoLocalPeer *local;
 
@@ -141,7 +142,7 @@ one_video_local_peer_new (GInetAddress *addr)
   g_mutex_init (&local->priv->lock);
 
   /* Initialize transmit pipeline */
-  g_assert (_setup_transmit_pipeline (local));
+  g_assert (_setup_transmit_pipeline (local, v4l2_device_path));
 
   /* Setup components of the playback pipeline */
   g_assert (_setup_playback_pipeline (local));
@@ -425,7 +426,7 @@ _setup_playback_pipeline (OneVideoLocalPeer * local)
 }
 
 static gboolean
-_setup_transmit_pipeline (OneVideoLocalPeer * local)
+_setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
 {
   GstBus *bus;
   GstCaps *jpeg_video_caps;
@@ -446,10 +447,12 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local)
   asink = gst_element_factory_make ("udpsink", "audio-transmit-udpsink");
   local->priv->audpsink = asink;
 
-  /* FIXME: Make this configurable (use GstDevice*)
+  /* FIXME: Use GstDevice* instead of a device path string
    * FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
    * FIXME: Select the best format based on formats available on the camera */
   vsrc = gst_element_factory_make ("v4l2src", NULL);
+  if (v4l2_device_path != NULL)
+    g_object_set (vsrc, "device", v4l2_device_path, NULL);
   vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps-%u");
   jpeg_video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
   g_object_set (vfilter, "caps", jpeg_video_caps, NULL);

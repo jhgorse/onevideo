@@ -91,7 +91,8 @@ struct _OneVideoRemotePeer {
   OneVideoRemotePeerPriv *priv;
 };
 
-OneVideoLocalPeer*  one_video_local_peer_new            (GInetAddress *addr);
+OneVideoLocalPeer*  one_video_local_peer_new            (GInetAddress *addr,
+                                                         gchar *v4l2_device_path);
 void                one_video_local_peer_free           (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop           (OneVideoLocalPeer *local);
 
