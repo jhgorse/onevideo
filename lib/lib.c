@@ -174,13 +174,8 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   g_free (local);
 }
 
-/* arecv_port, vrecv_port are local ports on which audio/video data is received
- * from peer
- * apeer_port, vpeer_port are peer-side ports to which audio/video data is
- * transmitted */
 OneVideoRemotePeer *
-one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s,
-    guint apeer_port, guint vpeer_port, guint arecv_port, guint vrecv_port)
+one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s)
 {
   gchar *name;
   GstBus *bus;
@@ -190,10 +185,6 @@ one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s,
   remote->receive = gst_pipeline_new ("receive-%u");
   remote->local = local;
   remote->addr_s = g_strdup (addr_s);
-  remote->apeer_port = apeer_port ? apeer_port : UDPCLIENT_AUDIO_PORT;
-  remote->vpeer_port = vpeer_port ? vpeer_port : UDPCLIENT_VIDEO_PORT;
-  remote->arecv_port = arecv_port ? arecv_port : UDPCLIENT_AUDIO_PORT;
-  remote->vrecv_port = vrecv_port ? vrecv_port : UDPCLIENT_VIDEO_PORT;
 
   remote->priv = g_new0 (OneVideoRemotePeerPriv, 1);
   name = g_strdup_printf ("audio-playback-bin-%s", remote->addr_s);
@@ -219,9 +210,9 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->apeer_port);
-  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->vpeer_port);
+      UDPCLIENT_ADATA_PORT);
+  g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
+      UDPCLIENT_VDATA_PORT);
 
   /* Pause receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
@@ -299,9 +290,9 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->apeer_port);
-  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->vpeer_port);
+      UDPCLIENT_ADATA_PORT);
+  g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
+      UDPCLIENT_VDATA_PORT);
 
   /* Stop receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
@@ -487,14 +478,14 @@ static void
 append_aclients (gpointer data, gpointer user_data)
 {
   OneVideoRemotePeer *remote = data;
-  append_string (user_data, remote->addr_s, remote->apeer_port);
+  append_string (user_data, remote->addr_s, UDPCLIENT_ADATA_PORT);
 }
 
 static void
 append_vclients (gpointer data, gpointer user_data)
 {
   OneVideoRemotePeer *remote = data;
-  append_string (user_data, remote->addr_s, remote->vpeer_port);
+  append_string (user_data, remote->addr_s, UDPCLIENT_VDATA_PORT);
 }
 
 static gboolean
@@ -538,7 +529,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   /* FIXME: Fetch and set udpsrc caps using RTCP or similar */
   asrc = gst_element_factory_make ("udpsrc", "audio-receive-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
-  g_object_set (asrc, "address", local_addr_s, "port", remote->arecv_port,
+  g_object_set (asrc, "address", local_addr_s, "port", UDPCLIENT_ADATA_PORT,
       "caps", rtp_caps, NULL);
   gst_caps_unref (rtp_caps);
   /* audiomixer does not do audio conversion, so we need to do it ourselves */
@@ -552,7 +543,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
 
   vsrc = gst_element_factory_make ("udpsrc", "video-receive-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_VIDEO_CAPS_STR);
-  g_object_set (vsrc, "address", local_addr_s, "port", remote->vrecv_port,
+  g_object_set (vsrc, "address", local_addr_s, "port", UDPCLIENT_VDATA_PORT,
       "caps", rtp_caps, NULL);
   gst_caps_unref (rtp_caps);
   vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);

@@ -40,8 +40,8 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-#define UDPCLIENT_AUDIO_PORT 5000
-#define UDPCLIENT_VIDEO_PORT 5001
+#define UDPCLIENT_ADATA_PORT 5000
+#define UDPCLIENT_VDATA_PORT 5002
 
 #define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, encoding-name=OPUS"
 #define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, encoding-name=JPEG, framerate=30/1"
@@ -81,12 +81,6 @@ struct _OneVideoRemotePeer {
   GstElement *receive;
   /* Address of remote peer */
   gchar *addr_s;
-  /* Peer-side ports to which audio/video data is transmitted */
-  guint apeer_port;
-  guint vpeer_port;
-  /* Local ports on which audio/video data is received from peer */
-  guint arecv_port;
-  guint vrecv_port;
 
   OneVideoRemotePeerPriv *priv;
 };
@@ -97,11 +91,7 @@ void                one_video_local_peer_free           (OneVideoLocalPeer *loca
 void                one_video_local_peer_stop           (OneVideoLocalPeer *local);
 
 OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,
-                                                         const gchar *addr_s,
-                                                         guint apeer_port,
-                                                         guint vpeer_port,
-                                                         guint arecv_port,
-                                                         guint vrecv_port);
+                                                         const gchar *addr_s);
 void                one_video_remote_peer_pause         (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_resume        (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_remove        (OneVideoRemotePeer *remote);
