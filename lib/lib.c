@@ -173,9 +173,13 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   g_free (local);
 }
 
+/* arecv_port, vrecv_port are local ports on which audio/video data is received
+ * from peer
+ * apeer_port, vpeer_port are peer-side ports to which audio/video data is
+ * transmitted */
 OneVideoRemotePeer *
 one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s,
-    guint audio_port, guint video_port)
+    guint apeer_port, guint vpeer_port, guint arecv_port, guint vrecv_port)
 {
   gchar *name;
   GstBus *bus;
@@ -185,8 +189,10 @@ one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s,
   remote->receive = gst_pipeline_new ("receive-%u");
   remote->local = local;
   remote->addr_s = g_strdup (addr_s);
-  remote->audio_port = audio_port ? audio_port : UDPCLIENT_AUDIO_PORT;
-  remote->video_port = video_port ? video_port : UDPCLIENT_VIDEO_PORT;
+  remote->apeer_port = apeer_port ? apeer_port : UDPCLIENT_AUDIO_PORT;
+  remote->vpeer_port = vpeer_port ? vpeer_port : UDPCLIENT_VIDEO_PORT;
+  remote->arecv_port = arecv_port ? arecv_port : UDPCLIENT_AUDIO_PORT;
+  remote->vrecv_port = vrecv_port ? vrecv_port : UDPCLIENT_VIDEO_PORT;
 
   remote->priv = g_new0 (OneVideoRemotePeerPriv, 1);
   name = g_strdup_printf ("audio-playback-bin-%s", remote->addr_s);
@@ -212,9 +218,9 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->audio_port);
+      remote->apeer_port);
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->video_port);
+      remote->vpeer_port);
 
   /* Pause receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
@@ -292,9 +298,9 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->audio_port);
+      remote->apeer_port);
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->video_port);
+      remote->vpeer_port);
 
   /* Stop receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
@@ -469,11 +475,11 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local)
 }
 
 static void
-append_string (gchar * addr_s, GString * clients, const gchar * port)
+append_string (GString * clients, gchar * addr_s, guint port)
 {
   gchar *client;
 
-  client = g_strdup_printf ("%s:%s,", addr_s, port);
+  client = g_strdup_printf ("%s:%u,", addr_s, port);
   g_string_append (clients, client);
   g_free (client);
 }
@@ -482,14 +488,14 @@ static void
 append_aclients (gpointer data, gpointer user_data)
 {
   OneVideoRemotePeer *remote = data;
-  append_string (remote->addr_s, user_data, STR(UDPCLIENT_AUDIO_PORT));
+  append_string (user_data, remote->addr_s, remote->apeer_port);
 }
 
 static void
 append_vclients (gpointer data, gpointer user_data)
 {
   OneVideoRemotePeer *remote = data;
-  append_string (remote->addr_s, user_data, STR(UDPCLIENT_VIDEO_PORT));
+  append_string (user_data, remote->addr_s, remote->vpeer_port);
 }
 
 static gboolean
@@ -508,11 +514,12 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
   g_object_set (local->priv->vudpsink, "clients", vclients->str, NULL);
   g_mutex_unlock (&local->priv->lock);
 
+  ret = gst_element_set_state (local->transmit, GST_STATE_PLAYING);
+  GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
+      aclients->str, vclients->str);
+
   g_string_free (aclients, TRUE);
   g_string_free (vclients, TRUE);
-
-  ret = gst_element_set_state (local->transmit, GST_STATE_PLAYING);
-  GST_DEBUG ("Transmitting to remote peers");
 
   return ret != GST_STATE_CHANGE_FAILURE;
 }
@@ -521,15 +528,18 @@ static void
 one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
+  gchar *local_addr_s;
   GstCaps *rtp_caps;
   GstElement *asrc, *adepay, *adecode, *asink;
   GstElement *vsrc, *vdepay, *vdecode, *vconvert, *vsink;
+
+  local_addr_s = local->addr ? g_inet_address_to_string (local->addr) : NULL;
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote local */
   /* FIXME: Fetch and set udpsrc caps using RTCP or similar */
   asrc = gst_element_factory_make ("udpsrc", "audio-receive-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
-  g_object_set (asrc, "address", remote->addr_s, "port", remote->audio_port,
+  g_object_set (asrc, "address", local_addr_s, "port", remote->arecv_port,
       "caps", rtp_caps, NULL);
   gst_caps_unref (rtp_caps);
   /* audiomixer does not do audio conversion, so we need to do it ourselves */
@@ -543,7 +553,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
 
   vsrc = gst_element_factory_make ("udpsrc", "video-receive-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_VIDEO_CAPS_STR);
-  g_object_set (vsrc, "address", remote->addr_s, "port", remote->video_port,
+  g_object_set (vsrc, "address", local_addr_s, "port", remote->vrecv_port,
       "caps", rtp_caps, NULL);
   gst_caps_unref (rtp_caps);
   vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
@@ -567,7 +577,8 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   g_ptr_array_add (local->priv->remote_peers, remote);
   g_mutex_unlock (&local->priv->lock);
 
-  GST_DEBUG ("Setup pipeline to receive from remote local");
+  GST_DEBUG ("Setup pipeline to receive from remote");
+  g_free (local_addr_s);
 }
 
 static void

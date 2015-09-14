@@ -79,10 +79,14 @@ struct _OneVideoRemotePeer {
 
   /* Receive pipeline */
   GstElement *receive;
-  /* Address + media ports of remote peer */
+  /* Address of remote peer */
   gchar *addr_s;
-  guint audio_port;
-  guint video_port;
+  /* Peer-side ports to which audio/video data is transmitted */
+  guint apeer_port;
+  guint vpeer_port;
+  /* Local ports on which audio/video data is received from peer */
+  guint arecv_port;
+  guint vrecv_port;
 
   OneVideoRemotePeerPriv *priv;
 };
@@ -90,10 +94,13 @@ struct _OneVideoRemotePeer {
 OneVideoLocalPeer*  one_video_local_peer_new            (GInetAddress *addr);
 void                one_video_local_peer_free           (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop           (OneVideoLocalPeer *local);
+
 OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,
                                                          const gchar *addr_s,
-                                                         guint audio_port,
-                                                         guint video_port);
+                                                         guint apeer_port,
+                                                         guint vpeer_port,
+                                                         guint arecv_port,
+                                                         guint vrecv_port);
 void                one_video_remote_peer_pause         (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_resume        (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_remove        (OneVideoRemotePeer *remote);

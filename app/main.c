@@ -52,37 +52,90 @@ on_app_exit (OneVideoLocalPeer * local)
 }
 
 static gboolean
-_parse_test_mode_ports (gchar * test_mode_ports, guint * audio_port,
-    guint * video_port)
+_parse_arg_ports (gchar * arg_ports, guint * arecv_port,
+    guint * vrecv_port)
 {
   gchar **split;
   gboolean ret = FALSE;
 
-  if (!test_mode_ports) {
-    *audio_port = *video_port = 0;
+  if (!arg_ports) {
+    *arecv_port = *vrecv_port = 0;
     return TRUE;
   }
   
-  split = g_strsplit (test_mode_ports, ",", -1);
+  split = g_strsplit (arg_ports, ",", -1);
   if (g_strv_length (split) != 2) {
-    g_printerr ("Invalid format for test_mode_ports: %s\n", test_mode_ports);
+    g_printerr ("Invalid format for recv ports: %s\n", arg_ports);
     goto out;
   }
 
-  *audio_port = g_ascii_strtoull (split[0], NULL, 10);
-  if (*audio_port == 0) {
-    g_printerr ("Invalid format for audio port: %s\n", split[0]);
+  *arecv_port = g_ascii_strtoull (split[0], NULL, 10);
+  if (*arecv_port == 0) {
+    g_printerr ("Invalid format for audio recv port: %s\n", split[0]);
     goto out;
   }
 
-  *video_port = g_ascii_strtoull (split[1], NULL, 10);
-  if (*video_port == 0) {
-    g_printerr ("Invalid format for video port: %s\n", split[1]);
+  *vrecv_port = g_ascii_strtoull (split[1], NULL, 10);
+  if (*vrecv_port == 0) {
+    g_printerr ("Invalid format for video recv port: %s\n", split[1]);
     goto out;
   }
 
   ret = TRUE;
 out:
+  g_strfreev (split);
+  return ret;
+}
+
+static gboolean
+_parse_remote_peer (gchar * peer, gchar ** addr_s, guint * apeer_port,
+    guint * vpeer_port)
+{
+  gchar **split = NULL;
+  gchar **ports = NULL;
+  gboolean ret = FALSE;
+
+  if (!peer)
+    return FALSE;
+
+  split = g_strsplit (peer, ":", -1);
+  switch (g_strv_length (split)) {
+    case 1:
+      *apeer_port = *vpeer_port = 0;
+      *addr_s = g_strdup (peer);
+      ret = TRUE;
+      goto out;
+
+    case 2:
+      *addr_s = g_strdup (split[0]);
+      break;
+
+    default:
+      g_printerr ("Invalid format for remote peer: %s\n", peer);
+      goto out;
+  }
+
+  ports = g_strsplit (split[1], ",", -1);
+  if (g_strv_length (ports) != 2) {
+    g_printerr ("Invalid format for ports of remote peer: %s\n", peer);
+    goto out;
+  }
+
+  *apeer_port = g_ascii_strtoull (ports[0], NULL, 10);
+  if (*apeer_port == 0) {
+    g_printerr ("Invalid format for peer's audio port: %s\n", ports[0]);
+    goto out;
+  }
+
+  *vpeer_port = g_ascii_strtoull (ports[1], NULL, 10);
+  if (*vpeer_port == 0) {
+    g_printerr ("Invalid format for peer's video port: %s\n", ports[0]);
+    goto out;
+  }
+
+  ret = TRUE;
+out:
+  g_strfreev (ports);
   g_strfreev (split);
   return ret;
 }
@@ -96,21 +149,22 @@ main (int   argc,
   GOptionContext *optctx;
   GInetAddress *listen_addr = NULL;
   GError *error = NULL;
-  guint audio_port, video_port, index = 0;
+  guint arecv_port, vrecv_port, index = 0;
 
   guint exit_after = 0;
   gchar *iface_name = NULL;
-  gchar *test_mode_ports = NULL;
-  gchar *remotes[] = {"127.0.0.1", NULL};
+  gchar *recv_ports = NULL;
+  gchar **remotes = NULL;
   GOptionEntry entries[] = {
-    {"test-mode", 0, 0, G_OPTION_ARG_STRING, &test_mode_ports, "Run in test"
-          " mode on localhost with the given ports", "AUDIO_PORT,VIDEO_PORT"},
+    {"recv-ports", 0, 0, G_OPTION_ARG_STRING, &recv_ports, "Receive audio/video"
+          " data on these ports (default: 5000/5001)", "AUDIO_PORT,VIDEO_PORT"},
     {"exit-after", 0, 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
           " seconds (default: never exit)", "SECONDS"},
     {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
           " to listen on (default: any)", "NAME"},
-    {"peer", 'p', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peer(s) to connect to"
-          ". Specify multiple times to connect to multiple peers.", "PEER"},
+    {"peer", 'p', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers to connect to"
+          "; specify multiple times to connect to several peers"
+          " (Ex: 192.168.1.4:5024,5023)", "PEER:AUDIO_PORT,VIDEO_PORT"},
     {NULL}
   };
 
@@ -125,8 +179,16 @@ main (int   argc,
   }
   g_option_context_free (optctx);
 
-  if (!_parse_test_mode_ports (test_mode_ports, &audio_port, &video_port))
+  if (!_parse_arg_ports (recv_ports, &arecv_port, &vrecv_port)) {
+    g_printerr ("Error parsing --recv-ports argument: %s\n", recv_ports);
     return -1;
+  }
+
+  if (remotes == NULL) {
+    g_printerr ("No remotes specified; running in loopback mode\n");
+    remotes = g_malloc0_n (sizeof (gchar*), 2);
+    remotes[0] = g_strdup ("127.0.0.1");
+  }
 
   loop = g_main_loop_new (NULL, FALSE);
 
@@ -135,13 +197,23 @@ main (int   argc,
   local = one_video_local_peer_new (listen_addr);
 
   for (index = 0; index < g_strv_length (remotes); index++) {
-    remote = one_video_remote_peer_new (local, remotes[index], audio_port,
-        video_port);
+    gchar *addr_s;
+    guint apeer_port, vpeer_port;
+
+    if (!_parse_remote_peer (remotes[index], &addr_s, &apeer_port,
+          &vpeer_port)) {
+      GST_ERROR ("Unable to parse remote peer '%s', exiting", remotes[index]);
+      return -1;
+    }
+
+    remote = one_video_remote_peer_new (local, addr_s, apeer_port, vpeer_port,
+        arecv_port, vrecv_port);
     if (!one_video_local_peer_setup_remote (local, remote)) {
       GST_ERROR ("Unable to receive from remote peer %s", remote->addr_s);
       continue;
     }
     GST_DEBUG ("Created and setup remote peer %s", remote->addr_s);
+    g_free (addr_s);
   }
 
   one_video_local_peer_start (local);
@@ -155,6 +227,7 @@ main (int   argc,
 
   g_clear_pointer (&local, one_video_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
+  g_strfreev (remotes);
 
   return 0;
 }
