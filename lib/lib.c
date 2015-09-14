@@ -386,7 +386,7 @@ static gboolean
 _setup_playback_pipeline (OneVideoLocalPeer * local)
 {
   GstBus *bus;
-  GstElement *filter, *aconvert, *audiovis, *convert;
+  GstElement *filter;
 
   if (local->playback != NULL && GST_IS_PIPELINE (local->playback))
     /* Already setup */
@@ -398,19 +398,15 @@ _setup_playback_pipeline (OneVideoLocalPeer * local)
   local->priv->audiomixer = gst_element_factory_make ("audiomixer", NULL);
   filter = gst_element_factory_make ("capsfilter", "audiomixer-capsfilter");
   g_object_set (filter, "caps", raw_audio_caps, NULL);
-  /* XXX: aconvert isn't needed without wavescope */
-  aconvert = gst_element_factory_make ("audioconvert", NULL);
-  audiovis = gst_element_factory_make ("wavescope", NULL);
-  convert = gst_element_factory_make ("videoconvert", NULL);
-  local->priv->audiosink = gst_element_factory_make ("xvimagesink", NULL);
+  local->priv->audiosink = gst_element_factory_make ("pulsesink", NULL);
 
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
    * basesink. Fix this by only plugging a sink if audio is present. */
   gst_bin_add_many (GST_BIN (local->playback), local->priv->audiomixer,
-      filter, aconvert, audiovis, convert, local->priv->audiosink, NULL);
-  g_assert (gst_element_link_many (local->priv->audiomixer, filter, aconvert,
-        audiovis, convert, local->priv->audiosink, NULL));
+      filter, local->priv->audiosink, NULL);
+  g_assert (gst_element_link_many (local->priv->audiomixer, filter,
+        local->priv->audiosink, NULL));
 
   /* Video bits are setup by each local */
 
