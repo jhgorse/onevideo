@@ -47,8 +47,8 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
-#define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, encoding-name=OPUS"
-#define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, encoding-name=JPEG, framerate=30/1"
+#define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, clock-rate=48000, encoding-name=OPUS"
+#define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG, framerate=30/1"
 
 typedef struct _OneVideoLocalPeer OneVideoLocalPeer;
 typedef struct _OneVideoLocalPeerPriv OneVideoLocalPeerPriv;
