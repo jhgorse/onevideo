@@ -41,7 +41,7 @@
 #ifdef G_OS_UNIX
 
 GInetAddress *
-one_video_get_ip_for_interface (gchar * interface_name)
+one_video_get_inet_addr_for_iface (gchar * iface_name)
 {
   struct ifreq ifr = {0};
   union {
@@ -50,10 +50,10 @@ one_video_get_ip_for_interface (gchar * interface_name)
   } sa;
   gint sockfd;
 
-  g_return_val_if_fail (interface_name != NULL, NULL);
+  g_return_val_if_fail (iface_name != NULL, NULL);
 
   ifr.ifr_addr.sa_family = AF_INET;
-  g_strlcpy (ifr.ifr_name, interface_name, sizeof (ifr.ifr_name));
+  g_strlcpy (ifr.ifr_name, iface_name, sizeof (ifr.ifr_name));
 
   if ((sockfd = socket (AF_INET, SOCK_DGRAM, IPPROTO_IP)) < 0) {
     GST_ERROR ("Cannot open socket to retreive interface list");
@@ -61,14 +61,14 @@ one_video_get_ip_for_interface (gchar * interface_name)
   }
 
   if (ioctl (sockfd, SIOCGIFADDR, &ifr) < 0) {
-    GST_ERROR ("Unable to get IP information for interface %s", interface_name);
+    GST_ERROR ("Unable to get IP information for interface %s", iface_name);
     g_close (sockfd, NULL);
     return NULL;
   }
 
   g_close (sockfd, NULL);
   sa.addr = &ifr.ifr_addr;
-  GST_DEBUG ("Address for %s: %s", interface_name, inet_ntoa (sa.in->sin_addr));
+  GST_DEBUG ("Address for %s: %s", iface_name, inet_ntoa (sa.in->sin_addr));
 
   return g_inet_address_new_from_string (inet_ntoa (sa.in->sin_addr));
 }
@@ -92,7 +92,7 @@ one_video_get_ip_for_interface (gchar * interface_name)
 #endif
 
 GInetAddress *
-nice_interfaces_get_ip_for_interface (gchar * interface_name)
+one_video_get_inet_addr_for_iface (gchar * iface_name)
 {
   DWORD i;
   ULONG size = 0;
@@ -114,8 +114,8 @@ nice_interfaces_get_ip_for_interface (gchar * interface_name)
     tmp_str = g_utf16_to_utf8 (
         if_table->table[i].wszName, MAX_INTERFACE_NAME_LEN,
         NULL, NULL, NULL);
-    if (strlen (interface_name) == strlen (tmp_str) &&
-        g_ascii_strncasecmp (interface_name, tmp_str, strlen (interface_name)) == 0) {
+    if (strlen (iface_name) == strlen (tmp_str) &&
+        g_ascii_strncasecmp (iface_name, tmp_str, strlen (iface_name)) == 0) {
       ret = win32_get_ip_for_interface (if_table->table[i].dwIndex);
       g_free (tmp_str);
       break;
@@ -123,7 +123,7 @@ nice_interfaces_get_ip_for_interface (gchar * interface_name)
     g_free (tmp_str);
   }
 
-  ip = g_inet_address_new_from_string (ret);
+  ip = g_inet_socket_address_new_from_string (ret);
   g_free (ret);
 
 out:

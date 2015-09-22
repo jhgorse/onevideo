@@ -70,6 +70,9 @@ struct _OneVideoRemotePeerPriv {
   /* Audio/Video proxysinks */
   GstElement *audio_proxysink;
   GstElement *video_proxysink;
+  /* Receive udpsrc ports in order:
+   * {audio, audio_rtcp, video, video_rtcp} */
+  guint recv_ports[4];
 
   /*-- Playback pipeline --*/
   /* playback bins */
@@ -133,9 +136,12 @@ one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 }
 
 OneVideoLocalPeer *
-one_video_local_peer_new (GInetAddress * addr, gchar * v4l2_device_path)
+one_video_local_peer_new (GInetSocketAddress * listen_addr,
+    gchar * v4l2_device_path)
 {
   OneVideoLocalPeer *local;
+
+  g_return_val_if_fail (listen_addr != NULL, NULL);
 
   if (onevideo_debug == NULL)
     GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
@@ -147,7 +153,8 @@ one_video_local_peer_new (GInetAddress * addr, gchar * v4l2_device_path)
 
   local = g_new0 (OneVideoLocalPeer, 1);
   local->state = ONE_VIDEO_STATE_NULL;
-  local->addr = addr;
+  local->addr = listen_addr;
+  g_object_ref (local->addr);
   local->priv = g_new0 (OneVideoLocalPeerPriv, 1);
   /* XXX: GPtrArray is not thread-safe, you must lock accesses to it */
   local->priv->remote_peers = g_ptr_array_new ();
@@ -176,14 +183,62 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
 {
   g_object_unref (local->transmit);
   g_object_unref (local->playback);
-  if (local->addr)
-    g_object_unref (local->addr);
+  g_object_unref (local->addr);
 
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   g_mutex_clear (&local->priv->lock);
   g_free (local->priv);
 
   g_free (local);
+}
+
+static gint
+compare_ints (const void * a, const void * b)
+{
+  return (*(const unsigned int*)a - *(const unsigned int*)b);
+}
+
+/* Called with the lock TAKEN */
+static gboolean
+set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
+{
+  guint ii, jj, start, nmemb;
+  guint *used_ports;
+
+  /* Start from the port right after the configured TCP communication port */
+  start = 1 + g_inet_socket_address_get_port (local->addr);
+  if (local->priv->remote_peers->len < 1)
+    goto done;
+
+  /* Variable-sized statically-allocated arrays aren't supported by msvc */
+  nmemb = 4 * local->priv->remote_peers->len;
+  used_ports = g_malloc0 (nmemb * sizeof (guint));
+
+  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
+    OneVideoRemotePeer *remote;
+    remote = g_ptr_array_index (local->priv->remote_peers, ii);
+    for (jj = 0; jj < sizeof (remote->priv->recv_ports); jj++)
+      used_ports[4 * ii + jj] = remote->priv->recv_ports[jj];
+  }
+
+  qsort (used_ports, nmemb, sizeof (guint), compare_ints);
+
+  /* Ports are always in sets of 4, so if we find a hole in the sorted list of
+   * used ports, it definitely has 4 ports in it */
+  for (ii = 0; ii < nmemb; ii++)
+    if (used_ports[ii] == start)
+      start++;
+
+  /* TODO: Check whether these ports are actually available on the system */
+
+  g_free (used_ports);
+
+done:
+  (*recv_ports)[0] = start;
+  (*recv_ports)[1] = start + 1;
+  (*recv_ports)[2] = start + 2;
+  (*recv_ports)[3] = start + 3;
+  return TRUE;
 }
 
 OneVideoRemotePeer *
@@ -206,6 +261,12 @@ one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s)
   remote->priv->vplayback = gst_bin_new (name);
   g_free (name);
 
+  g_mutex_lock (&local->priv->lock);
+  g_assert (set_free_recv_ports (local, &remote->priv->recv_ports));
+  /* Add to our list of remote peers */
+  g_ptr_array_add (local->priv->remote_peers, remote);
+  g_mutex_unlock (&local->priv->lock);
+
   bus = gst_pipeline_get_bus (GST_PIPELINE (remote->receive));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::error",
@@ -222,13 +283,13 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      UDPCLIENT_ADATA_PORT);
+      remote->priv->recv_ports[0]);
   g_signal_emit_by_name (local->priv->artcpudpsink, "remove", remote->addr_s,
-      UDPCLIENT_ARTCP_PORT);
+      remote->priv->recv_ports[1]);
   g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
-      UDPCLIENT_VDATA_PORT);
+      remote->priv->recv_ports[2]);
   g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", remote->addr_s,
-      UDPCLIENT_VRTCP_PORT);
+      remote->priv->recv_ports[3]);
 
   /* Pause receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
@@ -266,6 +327,16 @@ void
 one_video_remote_peer_resume (OneVideoRemotePeer * remote)
 {
   OneVideoLocalPeer *local = remote->local;
+
+  /* Start transmitting */
+  g_signal_emit_by_name (local->priv->audpsink, "add", remote->addr_s,
+      remote->priv->recv_ports[0]);
+  g_signal_emit_by_name (local->priv->artcpudpsink, "add", remote->addr_s,
+      remote->priv->recv_ports[1]);
+  g_signal_emit_by_name (local->priv->vudpsink, "add", remote->addr_s,
+      remote->priv->recv_ports[2]);
+  g_signal_emit_by_name (local->priv->vrtcpudpsink, "add", remote->addr_s,
+      remote->priv->recv_ports[3]);
 
   if (remote->priv->audio_proxysrc != NULL) {
     GstPadLinkReturn ret;
@@ -306,20 +377,15 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
 
   /* Stop transmitting */
   g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      UDPCLIENT_ADATA_PORT);
+      remote->priv->recv_ports[0]);
   g_signal_emit_by_name (local->priv->artcpudpsink, "remove", remote->addr_s,
-      UDPCLIENT_ARTCP_PORT);
+      remote->priv->recv_ports[1]);
   g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
-      UDPCLIENT_VDATA_PORT);
+      remote->priv->recv_ports[2]);
   g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", remote->addr_s,
-      UDPCLIENT_VRTCP_PORT);
+      remote->priv->recv_ports[3]);
 
-  /* Stop receiving */
-  g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
-      == GST_STATE_CHANGE_SUCCESS);
-  gst_object_unref (remote->receive);
-  remote->receive = NULL;
-
+  /* Release all requested pads and relevant playback bins */
   if (remote->priv->audio_proxysrc != NULL) {
     GstPad *srcpad, *sinkpad;
 
@@ -353,6 +419,13 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
           remote->priv->vplayback));
     GST_DEBUG ("Released video playback bin of remote %s", remote->addr_s);
   }
+
+  /* Stop receiving */
+  g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
+      == GST_STATE_CHANGE_SUCCESS);
+  gst_object_unref (remote->receive);
+  remote->receive = NULL;
+  remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
 
   tmp = g_strdup (remote->addr_s);
   one_video_remote_peer_free (remote);
@@ -540,13 +613,13 @@ append_clients (gpointer data, gpointer user_data)
   GString **clients = user_data;
 
   g_string_append_printf (clients[0], "%s:%u,", remote->addr_s,
-      UDPCLIENT_ADATA_PORT);
+      remote->priv->recv_ports[0]);
   g_string_append_printf (clients[1], "%s:%u,", remote->addr_s,
-      UDPCLIENT_ARTCP_PORT);
+      remote->priv->recv_ports[1]);
   g_string_append_printf (clients[2], "%s:%u,", remote->addr_s,
-      UDPCLIENT_VDATA_PORT);
+      remote->priv->recv_ports[2]);
   g_string_append_printf (clients[3], "%s:%u,", remote->addr_s,
-      UDPCLIENT_VRTCP_PORT);
+      remote->priv->recv_ports[3]);
 }
 
 static gboolean
@@ -617,7 +690,8 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink;
   GstPad *srcpad, *sinkpad;
 
-  local_addr_s = local->addr ? g_inet_address_to_string (local->addr) : NULL;
+  local_addr_s =
+    g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote peer */
 
@@ -629,12 +703,12 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
    * FIXME: Both audio and video should be optional once we have negotiation */
   asrc = gst_element_factory_make ("udpsrc", "adata-recv-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
-  g_object_set (asrc, "address", local_addr_s, "port", UDPCLIENT_ADATA_PORT,
-      "caps", rtp_caps, NULL);
+  g_object_set (asrc, "address", local_addr_s, "port",
+      remote->priv->recv_ports[0], "caps", rtp_caps, NULL);
   gst_caps_unref (rtp_caps);
   artcpsrc = gst_element_factory_make ("udpsrc", "artcp-recv-udpsrc-%u");
-  g_object_set (artcpsrc, "address", local_addr_s, "port", UDPCLIENT_ARTCP_PORT,
-      NULL);
+  g_object_set (artcpsrc, "address", local_addr_s, "port",
+      remote->priv->recv_ports[1], NULL);
   remote->priv->adepay = gst_element_factory_make ("rtpopusdepay", NULL);
   adecode = gst_element_factory_make ("opusdec", NULL);
   asink = gst_element_factory_make ("proxysink", "audio-proxysink-%u");
@@ -642,12 +716,12 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
 
   vsrc = gst_element_factory_make ("udpsrc", "vdata-recv-udpsrc-%u");
   rtp_caps = gst_caps_from_string (RTP_VIDEO_CAPS_STR);
-  g_object_set (vsrc, "address", local_addr_s, "port", UDPCLIENT_VDATA_PORT,
-      "caps", rtp_caps, NULL);
+  g_object_set (vsrc, "address", local_addr_s, "port",
+      remote->priv->recv_ports[2], "caps", rtp_caps, NULL);
   gst_caps_unref (rtp_caps);
   vrtcpsrc = gst_element_factory_make ("udpsrc", "vrtcp-recv-udpsrc-%u");
-  g_object_set (vrtcpsrc, "address", local_addr_s, "port", UDPCLIENT_ARTCP_PORT,
-      NULL);
+  g_object_set (vrtcpsrc, "address", local_addr_s, "port",
+      remote->priv->recv_ports[3], NULL);
   remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
   vdecode = gst_element_factory_make ("jpegdec", NULL);
   /* We need this despite setting caps everywhere because the jpeg might have
@@ -704,11 +778,6 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   /* This is what exposes video/audio data from this remote peer */
   remote->priv->audio_proxysink = asink;
   remote->priv->video_proxysink = vsink;
-
-  /* Add to our list of remote peers */
-  g_mutex_lock (&local->priv->lock);
-  g_ptr_array_add (local->priv->remote_peers, remote);
-  g_mutex_unlock (&local->priv->lock);
 
   GST_DEBUG ("Setup pipeline to receive from remote");
   g_free (local_addr_s);

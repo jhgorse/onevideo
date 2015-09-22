@@ -34,7 +34,7 @@
 G_BEGIN_DECLS
 
 #if defined(G_OS_UNIX) || defined (G_OS_WIN32)
-GInetAddress* one_video_get_ip_for_interface (gchar *interface_name);
+GInetAddress* one_video_get_inet_addr_for_iface (gchar *iface_name);
 #endif
 
 G_END_DECLS

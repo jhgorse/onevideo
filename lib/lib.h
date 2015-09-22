@@ -40,10 +40,7 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-#define UDPCLIENT_ADATA_PORT 5000
-#define UDPCLIENT_ARTCP_PORT 5001
-#define UDPCLIENT_VDATA_PORT 5002
-#define UDPCLIENT_VRTCP_PORT 5003
+#define ONEVIDEO_DEFAULT_COMM_PORT 5000
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
@@ -70,7 +67,7 @@ struct _OneVideoLocalPeer {
   /* Playback pipeline */
   GstElement *playback;
   /* Address we're listening on */
-  GInetAddress *addr;
+  GInetSocketAddress *addr;
 
   OneVideoLocalPeerState state;
 
@@ -86,10 +83,12 @@ struct _OneVideoRemotePeer {
   /* Address of remote peer */
   gchar *addr_s;
 
+  OneVideoRemotePeerState state;
+
   OneVideoRemotePeerPriv *priv;
 };
 
-OneVideoLocalPeer*  one_video_local_peer_new            (GInetAddress *addr,
+OneVideoLocalPeer*  one_video_local_peer_new            (GInetSocketAddress *listen_addr,
                                                          gchar *v4l2_device_path);
 void                one_video_local_peer_free           (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop           (OneVideoLocalPeer *local);

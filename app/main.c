@@ -58,11 +58,13 @@ main (int   argc,
   OneVideoLocalPeer *local;
   OneVideoRemotePeer *remote;
   GOptionContext *optctx;
-  GInetAddress *listen_addr = NULL;
+  GInetAddress *inet_addr = NULL;
+  GSocketAddress *listen_addr;
   GError *error = NULL;
   guint index = 0;
 
   guint exit_after = 0;
+  guint iface_port = ONEVIDEO_DEFAULT_COMM_PORT;
   gchar *iface_name = NULL;
   gchar *v4l2_device_path = NULL;
   gchar **remotes = NULL;
@@ -71,7 +73,10 @@ main (int   argc,
           " seconds (default: never exit)", "SECONDS"},
     {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
           " to listen on (default: any)", "NAME"},
-    {"peer", 'p', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers to connect to"
+    {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "TCP port to listen on"
+          " for incoming connections (default: " STR(ONEVIDEO_DEFAULT_COMM_PORT)
+          ")", "PORT"},
+    {"peer", 'c', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers to connect to"
           "; specify multiple times to connect to several peers", "PEER"},
     {"device", 'd', 0, G_OPTION_ARG_STRING, &v4l2_device_path, "Path to the"
           " V4L2 (camera) device (Ex: /dev/video0)", "PATH"},
@@ -98,8 +103,16 @@ main (int   argc,
   loop = g_main_loop_new (NULL, FALSE);
 
   if (iface_name != NULL)
-    listen_addr = one_video_get_ip_for_interface (iface_name);
-  local = one_video_local_peer_new (listen_addr, v4l2_device_path);
+    inet_addr = one_video_get_inet_addr_for_iface (iface_name);
+  else
+    inet_addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
+
+  listen_addr = g_inet_socket_address_new (inet_addr, iface_port);
+  g_object_unref (inet_addr);
+
+  local = one_video_local_peer_new (G_INET_SOCKET_ADDRESS (listen_addr),
+      v4l2_device_path);
+  g_object_unref (listen_addr);
 
   for (index = 0; index < g_strv_length (remotes); index++) {
     remote = one_video_remote_peer_new (local, remotes[index]);
