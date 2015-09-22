@@ -268,6 +268,12 @@ one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s)
   g_ptr_array_add (local->priv->remote_peers, remote);
   g_mutex_unlock (&local->priv->lock);
 
+  /* Use the system clock and explicitly reset the base/start times to ensure
+   * that all the pipelines started by us have the same base/start times */
+  gst_pipeline_use_clock (GST_PIPELINE (remote->receive),
+      gst_system_clock_obtain());
+  gst_element_set_base_time (remote->receive, 0);
+
   bus = gst_pipeline_get_bus (GST_PIPELINE (remote->receive));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::error",
@@ -501,6 +507,12 @@ _setup_playback_pipeline (OneVideoLocalPeer * local)
 
   /* Video bits are setup by each local */
 
+  /* Use the system clock and explicitly reset the base/start times to ensure
+   * that all the pipelines started by us have the same base/start times */
+  gst_pipeline_use_clock (GST_PIPELINE (local->playback),
+      gst_system_clock_obtain());
+  gst_element_set_base_time (local->playback, 0);
+
   bus = gst_pipeline_get_bus (GST_PIPELINE (local->playback));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::error",
@@ -601,6 +613,12 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   gst_object_unref (srcpad);
 
   /* All done */
+
+  /* Use the system clock and explicitly reset the base/start times to ensure
+   * that all the pipelines started by us have the same base/start times */
+  gst_pipeline_use_clock (GST_PIPELINE (local->transmit),
+      gst_system_clock_obtain());
+  gst_element_set_base_time (local->transmit, 0);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (local->transmit));
   gst_bus_add_signal_watch (bus);
