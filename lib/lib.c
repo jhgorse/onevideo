@@ -550,6 +550,7 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   afilter = gst_element_factory_make ("capsfilter", "audio-transmit-caps");
   g_object_set (afilter, "caps", raw_audio_caps, NULL);
   aencode = gst_element_factory_make ("opusenc", NULL);
+  g_object_set (aencode, "frame-size", 2, NULL);
   apay = gst_element_factory_make ("rtpopuspay", NULL);
   asink = gst_element_factory_make ("udpsink", "adata-transmit-udpsink");
   artcpsink = gst_element_factory_make ("udpsink", "artcp-transmit-udpsink");
