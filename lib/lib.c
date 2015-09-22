@@ -533,7 +533,7 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   GstBus *bus;
   GstCaps *jpeg_video_caps;
   GstElement *asrc, *afilter, *aencode, *apay, *asink, *artcpsink;
-  GstElement *vsrc, *vfilter, *vpay, *vsink, *vrtcpsink;
+  GstElement *vsrc, *vfilter, *vqueue, *vpay, *vsink, *vrtcpsink;
   GstPad *srcpad, *sinkpad;
 
   if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit))
@@ -564,12 +564,13 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   jpeg_video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
   g_object_set (vfilter, "caps", jpeg_video_caps, NULL);
   gst_caps_unref (jpeg_video_caps);
+  vqueue = gst_element_factory_make ("queue", "v4l2-queue");
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   vsink = gst_element_factory_make ("udpsink", "vdata-transmit-udpsink");
   vrtcpsink = gst_element_factory_make ("udpsink", "vrtcp-transmit-udpsink");
 
   gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
-      afilter, aencode, apay, asink, vsrc, vfilter, vpay, vsink, NULL);
+      afilter, aencode, apay, asink, vsrc, vfilter, vqueue, vpay, vsink, NULL);
 
   /* Link audio branch */
   g_assert (gst_element_link_many (asrc, afilter, aencode, apay, NULL));
@@ -595,7 +596,7 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   gst_object_unref (srcpad);
 
   /* Link video branch */
-  g_assert (gst_element_link_many (vsrc, vfilter, vpay, NULL));
+  g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vpay, NULL));
 
   srcpad = gst_element_get_static_pad (vpay, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_1");
