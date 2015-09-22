@@ -53,11 +53,20 @@ typedef enum _OneVideoLocalPeerState OneVideoLocalPeerState;
 
 typedef struct _OneVideoRemotePeer OneVideoRemotePeer;
 typedef struct _OneVideoRemotePeerPriv OneVideoRemotePeerPriv;
+typedef enum _OneVideoRemotePeerState OneVideoRemotePeerState;
 
 enum _OneVideoLocalPeerState {
-  ONE_VIDEO_STATE_NULL,
-  ONE_VIDEO_STATE_READY,
-  ONE_VIDEO_STATE_PLAYING,
+  ONE_VIDEO_LOCAL_STATE_NULL,
+  ONE_VIDEO_LOCAL_STATE_SETUP,
+  ONE_VIDEO_LOCAL_STATE_PLAYING,
+  ONE_VIDEO_LOCAL_STATE_PAUSED,
+};
+
+enum _OneVideoRemotePeerState {
+  ONE_VIDEO_REMOTE_STATE_NULL,
+  ONE_VIDEO_REMOTE_STATE_SETUP,
+  ONE_VIDEO_REMOTE_STATE_PLAYING,
+  ONE_VIDEO_REMOTE_STATE_PAUSED,
 };
 
 /* Represents us; the library and the client implementing this local */
