@@ -496,7 +496,10 @@ _setup_playback_pipeline (OneVideoLocalPeer * local)
   filter = gst_element_factory_make ("capsfilter", "audiomixer-capsfilter");
   g_object_set (filter, "caps", raw_audio_caps, NULL);
   local->priv->audiosink = gst_element_factory_make ("pulsesink", NULL);
-
+  /* These values give the lowest audio latency with the least chance of audio
+   * artefacting. Setting buffer-time less than 50ms gives audio artefacts. */
+  g_object_set (local->priv->audiosink, "buffer-time", 50000, NULL);
+    
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
    * basesink. Fix this by only plugging a sink if audio is present. */
@@ -542,6 +545,8 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   g_object_set (local->priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
 
   asrc = gst_element_factory_make ("pulsesrc", NULL);
+  /* latency-time to 5 ms, we use the system clock */
+  g_object_set (asrc, "latency-time", 5000, "provide-clock", FALSE, NULL);
   afilter = gst_element_factory_make ("capsfilter", "audio-transmit-caps");
   g_object_set (afilter, "caps", raw_audio_caps, NULL);
   aencode = gst_element_factory_make ("opusenc", NULL);
