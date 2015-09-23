@@ -571,7 +571,8 @@ _setup_transmit_pipeline (OneVideoLocalPeer * local, gchar * v4l2_device_path)
   vrtcpsink = gst_element_factory_make ("udpsink", "vrtcp-transmit-udpsink");
 
   gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
-      afilter, aencode, apay, asink, vsrc, vfilter, vqueue, vpay, vsink, NULL);
+      afilter, aencode, apay, asink, artcpsink, vsrc, vfilter, vqueue, vpay,
+      vsink, vrtcpsink, NULL);
 
   /* Link audio branch */
   g_assert (gst_element_link_many (asrc, afilter, aencode, apay, NULL));
