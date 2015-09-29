@@ -37,4 +37,5 @@ app_one_video_app_SOURCES = app/main.c
 app_one_video_app_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I$(top_srcdir)/lib
 app_one_video_app_LDADD = \
 	$(top_srcdir)/lib/libonevideo.la \
-	$(top_srcdir)/gst/proxy/libgstproxy.la
+	$(top_srcdir)/gst/proxy/libgstproxy.la \
+	$(GLIB_LIBS) $(GST_LIBS)
