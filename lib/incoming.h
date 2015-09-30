@@ -25,23 +25,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_UTILS_H__
-#define __ONE_VIDEO_UTILS_H__
+#ifndef __ONE_VIDEO_INCOMING_H__
+#define __ONE_VIDEO_INCOMING_H__
 
-#include <glib.h>
 #include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-GInetSocketAddress* one_video_inet_socket_address_from_string (const gchar *addr_s);
-gchar*              one_video_inet_socket_address_to_string   (const GInetSocketAddress *addr);
-gboolean            one_video_inet_socket_address_equal       (GInetSocketAddress *addr1,
-                                                               GInetSocketAddress *addr2);
-
-#if defined(G_OS_UNIX) || defined (G_OS_WIN32)
-GInetAddress* one_video_get_inet_addr_for_iface (const gchar *iface_name);
-#endif
+gboolean on_incoming_peer_tcp_connection (GSocketService *service,
+                                          GSocketConnection *connection,
+                                          GObject *source_object,
+                                          OneVideoLocalPeer *local);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_UTILS_H__ */
+#endif /* __ONE_VIDEO_INCOMING_H__ */

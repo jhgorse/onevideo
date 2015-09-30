@@ -28,24 +28,17 @@
 #ifndef __ONE_VIDEO_LIB_H__
 #define __ONE_VIDEO_LIB_H__
 
-#include <stdlib.h>
 #include <gst/gst.h>
 #include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
-#define GST_CAT_DEFAULT onevideo_debug
-
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
-
-#define ONEVIDEO_DEFAULT_COMM_PORT 5000
+#define ONE_VIDEO_DEFAULT_COMM_PORT 5000
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
 #define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, clock-rate=48000, encoding-name=OPUS"
-#define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG, framerate=30/1"
+#define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG"
 
 typedef struct _OneVideoLocalPeer OneVideoLocalPeer;
 typedef struct _OneVideoLocalPeerPriv OneVideoLocalPeerPriv;
@@ -57,16 +50,22 @@ typedef enum _OneVideoRemotePeerState OneVideoRemotePeerState;
 
 enum _OneVideoLocalPeerState {
   ONE_VIDEO_LOCAL_STATE_NULL,
+  ONE_VIDEO_LOCAL_STATE_INITIALISED,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATING,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATED,
   ONE_VIDEO_LOCAL_STATE_SETUP,
   ONE_VIDEO_LOCAL_STATE_PLAYING,
   ONE_VIDEO_LOCAL_STATE_PAUSED,
+  ONE_VIDEO_LOCAL_STATE_FAILED,
 };
 
 enum _OneVideoRemotePeerState {
   ONE_VIDEO_REMOTE_STATE_NULL,
+  ONE_VIDEO_REMOTE_STATE_ALLOCATED,
   ONE_VIDEO_REMOTE_STATE_SETUP,
   ONE_VIDEO_REMOTE_STATE_PLAYING,
   ONE_VIDEO_REMOTE_STATE_PAUSED,
+  ONE_VIDEO_REMOTE_STATE_FAILED,
 };
 
 /* Represents us; the library and the client implementing this local */
@@ -77,6 +76,8 @@ struct _OneVideoLocalPeer {
   GstElement *playback;
   /* Address we're listening on */
   GInetSocketAddress *addr;
+  /* String representation */
+  gchar *addr_s;
 
   OneVideoLocalPeerState state;
 
@@ -90,6 +91,8 @@ struct _OneVideoRemotePeer {
   /* Receive pipeline */
   GstElement *receive;
   /* Address of remote peer */
+  GInetSocketAddress *addr;
+  /* String representation */
   gchar *addr_s;
 
   OneVideoRemotePeerState state;
@@ -97,22 +100,36 @@ struct _OneVideoRemotePeer {
   OneVideoRemotePeerPriv *priv;
 };
 
-OneVideoLocalPeer*  one_video_local_peer_new            (GInetSocketAddress *listen_addr,
-                                                         gchar *v4l2_device_path);
-void                one_video_local_peer_free           (OneVideoLocalPeer *local);
-void                one_video_local_peer_stop           (OneVideoLocalPeer *local);
+/* Local peer (us) */
+OneVideoLocalPeer*  one_video_local_peer_new              (GInetSocketAddress *addr,
+                                                           gchar *v4l2_device_path);
+void                one_video_local_peer_free             (OneVideoLocalPeer *local);
+void                one_video_local_peer_add_remote       (OneVideoLocalPeer *local,
+                                                           OneVideoRemotePeer *remote);
+/* Asynchronously negotiate with all setup remote peers */
+gboolean            one_video_local_peer_negotiate_async  (OneVideoLocalPeer *local,
+                                                           GCancellable *cancellable,
+                                                           GAsyncReadyCallback callback,
+                                                           gpointer callback_data);
+gboolean            one_video_local_peer_negotiate_finish (OneVideoLocalPeer *local,
+                                                           GAsyncResult *result,
+                                                           GError **error);
+gboolean            one_video_local_peer_start            (OneVideoLocalPeer *local);
+void                one_video_local_peer_stop             (OneVideoLocalPeer *local);
 
+/* Peer discovery */
+GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
+
+/* Remote peers */
 OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,
                                                          const gchar *addr_s);
+void                one_video_remote_peer_free          (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_pause         (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_resume        (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_remove        (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_free          (OneVideoRemotePeer *remote);
 
-GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
-gboolean            one_video_local_peer_setup_remote   (OneVideoLocalPeer *local,
-                                                         OneVideoRemotePeer *remote);
-gboolean            one_video_local_peer_start          (OneVideoLocalPeer * local);
+OneVideoRemotePeer* one_video_local_peer_get_remote_by_addr_s (OneVideoLocalPeer *local,
+                                                                const gchar * addr_s);
 
 G_END_DECLS
 

@@ -26,6 +26,7 @@
  */
 
 #include "lib.h"
+#include "lib-priv.h"
 #include "utils.h"
 
 #include <net/if.h>
@@ -35,13 +36,70 @@
 
 #include <glib/gstdio.h>
 
+GInetSocketAddress *
+one_video_inet_socket_address_from_string (const gchar * addr_s)
+{
+  guint port;
+  gchar **split;
+  GSocketAddress *addr = NULL;
+
+  split = g_strsplit (addr_s, ":", 2);
+
+  if (g_strv_length (split) == 1) {
+    port = ONE_VIDEO_DEFAULT_COMM_PORT;
+  } else {
+    port = g_ascii_strtoull (split[1], NULL, 10);
+    if (!port) {
+      GST_ERROR ("Invalid port: %s", split[1]);
+      goto out;
+    }
+  }
+
+  /* Special-case the string 'localhost' */
+  if (g_strcmp0 (split[0], "localhost") == 0)
+    addr = g_inet_socket_address_new_from_string ("127.0.0.1", port);
+  else
+    addr = g_inet_socket_address_new_from_string (split[0], port);
+  g_assert (addr != NULL);
+
+out:
+  g_strfreev (split);
+  return G_INET_SOCKET_ADDRESS (addr);
+}
+
+gchar *
+one_video_inet_socket_address_to_string (const GInetSocketAddress * addr)
+{
+  gchar *addr_s, *inet_addr_s;
+
+  inet_addr_s = g_inet_address_to_string (
+      g_inet_socket_address_get_address ((GInetSocketAddress*)addr));
+  addr_s = g_strdup_printf ("%s:%u", inet_addr_s,
+      g_inet_socket_address_get_port ((GInetSocketAddress*)addr));
+  g_free (inet_addr_s);
+
+  return addr_s;
+}
+
+gboolean
+one_video_inet_socket_address_equal (GInetSocketAddress * addr1,
+    GInetSocketAddress * addr2)
+{
+  if (g_inet_socket_address_get_port (addr1) ==
+      g_inet_socket_address_get_port (addr2) &&
+      g_inet_address_equal (g_inet_socket_address_get_address (addr1),
+        g_inet_socket_address_get_address (addr2)))
+    return TRUE;
+  return FALSE;
+}
+
 /* BEGIN: Copy of nice_interfaces_get_ip_for_interface() from libnice.
  * Replace with that if/when we use libnice */
 
 #ifdef G_OS_UNIX
 
 GInetAddress *
-one_video_get_inet_addr_for_iface (gchar * iface_name)
+one_video_get_inet_addr_for_iface (const gchar * iface_name)
 {
   struct ifreq ifr = {0};
   union {
@@ -92,7 +150,7 @@ one_video_get_inet_addr_for_iface (gchar * iface_name)
 #endif
 
 GInetAddress *
-one_video_get_inet_addr_for_iface (gchar * iface_name)
+one_video_get_inet_addr_for_iface (const gchar * iface_name)
 {
   DWORD i;
   ULONG size = 0;

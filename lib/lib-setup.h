@@ -25,23 +25,26 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_UTILS_H__
-#define __ONE_VIDEO_UTILS_H__
+#ifndef __ONE_VIDEO_LIB_SETUP_H__
+#define __ONE_VIDEO_LIB_SETUP_H__
 
-#include <glib.h>
-#include <gio/gio.h>
+#include "lib-priv.h"
 
 G_BEGIN_DECLS
 
-GInetSocketAddress* one_video_inet_socket_address_from_string (const gchar *addr_s);
-gchar*              one_video_inet_socket_address_to_string   (const GInetSocketAddress *addr);
-gboolean            one_video_inet_socket_address_equal       (GInetSocketAddress *addr1,
-                                                               GInetSocketAddress *addr2);
+void      one_video_on_gst_bus_error                     (GstBus *bus,
+                                                          GstMessage *msg,
+                                                          gpointer user_data);
 
-#if defined(G_OS_UNIX) || defined (G_OS_WIN32)
-GInetAddress* one_video_get_inet_addr_for_iface (const gchar *iface_name);
-#endif
+gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local);
+gboolean  one_video_local_peer_setup_playback_pipeline   (OneVideoLocalPeer *local);
+gboolean  one_video_local_peer_setup_tcp_comms           (OneVideoLocalPeer *local);
+
+void      one_video_local_peer_setup_remote_receive      (OneVideoLocalPeer *local,
+                                                          OneVideoRemotePeer *remote);
+void      one_video_local_peer_setup_remote_playback     (OneVideoLocalPeer *local,
+                                                          OneVideoRemotePeer *remote);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_UTILS_H__ */
+#endif /* __ONE_VIDEO_LIB_SETUP_H__ */

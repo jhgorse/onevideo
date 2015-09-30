@@ -28,6 +28,9 @@
 #include "lib.h"
 #include "utils.h"
 
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
 #include <glib-unix.h>
 
 static GMainLoop *loop = NULL;
@@ -51,20 +54,53 @@ on_app_exit (OneVideoLocalPeer * local)
   return FALSE;
 }
 
+static void
+on_negotiate_done (GObject * source_object, GAsyncResult * res,
+    gpointer user_data)
+{
+  gboolean ret;
+  OneVideoLocalPeer *local;
+  GError *error = NULL;
+
+  local = g_task_get_task_data (G_TASK (res));
+  ret = one_video_local_peer_negotiate_finish (local, res, &error);
+  g_clear_error (&error);
+  if (ret) {
+    g_print ("All remotes have replied.\n");
+    one_video_local_peer_start (local);
+    return;
+  }
+}
+
+static void
+dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
+{
+  guint index;
+
+  for (index = 0; index < g_strv_length (remotes); index++) {
+    OneVideoRemotePeer *remote;
+
+    remote = one_video_remote_peer_new (local, remotes[index]);
+    one_video_local_peer_add_remote (local, remote);
+
+    GST_DEBUG ("Created and added remote peer %s", remote->addr_s);
+  }
+
+  one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
+}
+
 int
 main (int   argc,
       char *argv[])
 {
   OneVideoLocalPeer *local;
-  OneVideoRemotePeer *remote;
   GOptionContext *optctx;
   GInetAddress *inet_addr = NULL;
   GSocketAddress *listen_addr;
   GError *error = NULL;
-  guint index = 0;
 
   guint exit_after = 0;
-  guint iface_port = ONEVIDEO_DEFAULT_COMM_PORT;
+  guint iface_port = ONE_VIDEO_DEFAULT_COMM_PORT;
   gchar *iface_name = NULL;
   gchar *v4l2_device_path = NULL;
   gchar **remotes = NULL;
@@ -74,10 +110,11 @@ main (int   argc,
     {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
           " to listen on (default: any)", "NAME"},
     {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "TCP port to listen on"
-          " for incoming connections (default: " STR(ONEVIDEO_DEFAULT_COMM_PORT)
+          " for incoming connections (default: " STR(ONE_VIDEO_DEFAULT_COMM_PORT)
           ")", "PORT"},
-    {"peer", 'c', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers to connect to"
-          "; specify multiple times to connect to several peers", "PEER"},
+    {"peer", 'c', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers with an"
+          " optional port to connect to. Specify multiple times to connect to"
+          " several peers.", "PEER:PORT"},
     {"device", 'd', 0, G_OPTION_ARG_STRING, &v4l2_device_path, "Path to the"
           " V4L2 (camera) device (Ex: /dev/video0)", "PATH"},
     {NULL}
@@ -94,12 +131,6 @@ main (int   argc,
   }
   g_option_context_free (optctx);
 
-  if (remotes == NULL) {
-    g_printerr ("No remotes specified; running in loopback mode\n");
-    remotes = g_malloc0_n (sizeof (gchar*), 2);
-    remotes[0] = g_strdup ("127.0.0.1");
-  }
-
   loop = g_main_loop_new (NULL, FALSE);
 
   if (iface_name != NULL)
@@ -114,27 +145,25 @@ main (int   argc,
       v4l2_device_path);
   g_object_unref (listen_addr);
 
-  for (index = 0; index < g_strv_length (remotes); index++) {
-    remote = one_video_remote_peer_new (local, remotes[index]);
-    if (!one_video_local_peer_setup_remote (local, remote)) {
-      GST_ERROR ("Unable to receive from remote peer %s", remote->addr_s);
-      continue;
-    }
-    GST_DEBUG ("Created and setup remote peer %s", remote->addr_s);
+  if (remotes == NULL)
+    g_print ("No remotes specified; listening for incoming connections\n");
+  else {
+    g_print ("Dialling remotes...\n");
+    dial_remotes (local, remotes);
+    g_print ("Waiting for remotes to reply...\n");
   }
-
-  one_video_local_peer_start (local);
 
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
 
-  GST_DEBUG ("Running");
   g_main_loop_run (loop);
 
   g_clear_pointer (&local, one_video_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
   g_strfreev (remotes);
+  g_free (iface_name);
+  g_free (v4l2_device_path);
 
   return 0;
 }

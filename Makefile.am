@@ -6,10 +6,18 @@ lib_LTLIBRARIES = lib/libonevideo.la
 plugin_LTLIBRARIES = gst/proxy/libgstproxy.la
 
 noinst_HEADERS = \
+	lib/lib-priv.h \
+	lib/lib-setup.h \
 	gst/proxy/gstproxysink-priv.h \
 	gst/proxy/gstproxysrc-priv.h
 
-lib_libonevideo_la_SOURCES = lib/lib.c lib/lib.h lib/utils.c lib/utils.h
+lib_libonevideo_la_SOURCES = \
+	lib/lib.c lib/lib-priv.h lib/lib.h \
+	lib/lib-setup.c lib/lib-setup.h \
+	lib/outgoing.c lib/outgoing.h \
+	lib/incoming.c lib/incoming.h \
+	lib/utils.c lib/utils.h \
+	lib/comms.c lib/comms.h
 lib_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS)
 lib_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS)
 lib_libonevideo_la_LDFLAGS = $(ONE_VIDEO_LT_LDFLAGS) -no-undefined
