@@ -529,7 +529,7 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED;
 
   /* Start the call
-   * FIXME: Do this in one_video_local_start() */
+   * FIXME: Do this in one_video_local_start() ? */
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
