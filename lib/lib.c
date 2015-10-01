@@ -37,7 +37,7 @@
 GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-static void one_video_remote_peer_remove_nolock (OneVideoRemotePeer *remote);
+static void one_video_remote_peer_remove_unlocked   (OneVideoRemotePeer *remote);
 static void one_video_remote_peer_free_unlocked     (OneVideoRemotePeer *remote);
 static gboolean one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
 
@@ -56,7 +56,7 @@ one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 {
   g_mutex_lock (&local->priv->lock);
   g_ptr_array_foreach (local->priv->remote_peers,
-      (GFunc) one_video_remote_peer_remove_nolock, NULL);
+      (GFunc) one_video_remote_peer_remove_unlocked, NULL);
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   local->priv->remote_peers = g_ptr_array_new ();
   g_mutex_unlock (&local->priv->lock);
@@ -379,7 +379,7 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
 /* Does not do any operations that involve taking the OneVideoLocalPeer lock.
  * See: one_video_remote_peer_remove() */
 static void
-one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
+one_video_remote_peer_remove_unlocked (OneVideoRemotePeer * remote)
 {
   gchar *tmp;
   OneVideoLocalPeer *local = remote->local;
