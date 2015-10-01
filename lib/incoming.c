@@ -47,7 +47,7 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
     reply = one_video_tcp_msg_new_error (call_id, "Busy");
-    goto send_reply;
+    goto send_reply_nolock;
   }
 
   g_mutex_lock (&local->priv->lock);
@@ -55,7 +55,6 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
   /* Technically, this is covered by the local->state check, but can't hurt */
   if (local->priv->negotiate != NULL) {
     reply = one_video_tcp_msg_new_error (call_id, "Already negotiating");
-    g_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
@@ -68,10 +67,11 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
   reply = one_video_tcp_msg_new_ack (msg->id);
 
-  g_mutex_unlock (&local->priv->lock);
   ret = TRUE;
 
 send_reply:
+  g_mutex_unlock (&local->priv->lock);
+send_reply_nolock:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
@@ -273,7 +273,7 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
     reply = one_video_tcp_msg_new_error (call_id, "Busy");
-    goto send_reply;
+    goto send_reply_nolock;
   }
 
   g_mutex_lock (&local->priv->lock);
@@ -281,22 +281,21 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid call id");
-    g_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
   /* Set call details */
   if (!set_call_details (local, msg)) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid call details");
-    g_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
   reply = one_video_tcp_msg_new_ack (msg->id);
-  g_mutex_unlock (&local->priv->lock);
   ret = TRUE;
 
 send_reply:
+  g_mutex_unlock (&local->priv->lock);
+send_reply_nolock:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
