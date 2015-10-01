@@ -38,6 +38,7 @@ GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
 static void one_video_remote_peer_remove_nolock (OneVideoRemotePeer *remote);
+static void one_video_remote_peer_free_unlocked     (OneVideoRemotePeer *remote);
 static gboolean one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
 
 #define on_remote_receive_error one_video_on_gst_bus_error
@@ -436,7 +437,7 @@ one_video_remote_peer_remove_nolock (OneVideoRemotePeer * remote)
   remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
 
   tmp = g_strdup (remote->addr_s);
-  one_video_remote_peer_free (remote);
+  one_video_remote_peer_free_unlocked (remote);
   GST_DEBUG ("Freed everything for remote peer %s", tmp);
   g_free (tmp);
 }
@@ -449,28 +450,35 @@ one_video_remote_peer_remove (OneVideoRemotePeer * remote)
   g_ptr_array_remove (remote->local->priv->remote_peers, remote);
   g_mutex_unlock (&remote->local->priv->lock);
 
-  one_video_remote_peer_remove_nolock (remote);
+  one_video_remote_peer_remove_unlocked (remote);
 }
 
-void
-one_video_remote_peer_free (OneVideoRemotePeer * remote)
+static void
+one_video_remote_peer_free_unlocked (OneVideoRemotePeer * remote)
 {
   guint ii;
   OneVideoLocalPeer *local = remote->local;
 
-  g_mutex_lock (&local->priv->lock);
   for (ii = 0; ii < local->priv->used_ports->len; ii++)
     /* Port numbers are unique, sorted, and contiguous. So if we find the first
      * port, we've found all of them. */
     if (g_array_index (local->priv->used_ports, guint, ii) ==
         remote->priv->recv_ports[0])
       g_array_remove_range (local->priv->used_ports, ii, 4);
-  g_mutex_unlock (&local->priv->lock);
 
   g_object_unref (remote->addr);
   g_free (remote->addr_s);
   g_free (remote->priv);
   g_free (remote);
+}
+
+void
+one_video_remote_peer_free (OneVideoRemotePeer * remote)
+{
+  OneVideoLocalPeer *local = remote->local;
+  g_mutex_lock (&local->priv->lock);
+  one_video_remote_peer_free_unlocked (remote);
+  g_mutex_unlock (&local->priv->lock);
 }
 
 /*
