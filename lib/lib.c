@@ -466,6 +466,8 @@ one_video_remote_peer_free_unlocked (OneVideoRemotePeer * remote)
         remote->priv->recv_ports[0])
       g_array_remove_range (local->priv->used_ports, ii, 4);
 
+  gst_caps_unref (remote->priv->recv_acaps);
+  gst_caps_unref (remote->priv->recv_vcaps);
   g_object_unref (remote->addr);
   g_free (remote->addr_s);
   g_free (remote->priv);

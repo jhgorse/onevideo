@@ -344,6 +344,7 @@ one_video_tcp_msg_read_body_from_stream (GInputStream * input,
   variant = g_variant_new_from_bytes (G_VARIANT_TYPE (variant_type), bytes,
       FALSE);
   g_variant_ref_sink (variant);
+  g_bytes_unref (bytes);
 
   /* Network data is always big endian */
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN

@@ -93,6 +93,7 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
 
 out:
   g_io_stream_close (G_IO_STREAM (conn), NULL, NULL);
+  g_object_unref (conn);
 no_conn:
   g_object_unref (client);
   return reply;
@@ -247,6 +248,7 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
      * the caps it will send to us */
     remote->priv->recv_acaps = gst_caps_from_string (send_acaps);
     remote->priv->recv_vcaps = gst_caps_from_string (send_vcaps);
+    g_free (send_acaps); g_free (send_vcaps);
 
     while (g_variant_iter_loop (iter, "(suuuu)", &addr_s, &ports[0],
           &ports[1], &ports[2], &ports[3])) {
@@ -261,6 +263,7 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
       g_free (addr_s);
       break;
     }
+    g_variant_iter_free (iter);
   }
 
   local->priv->send_acaps = gst_caps_ref (local->priv->supported_send_acaps);
