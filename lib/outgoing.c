@@ -549,6 +549,9 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     }
   }
 
+  /* TODO: Unset this when the call ends (we can't end calls currently) */
+  local->priv->active_call_id = call_id;
+
   g_hash_table_unref (out);
 
   g_task_return_boolean (task, TRUE);
