@@ -383,7 +383,8 @@ one_video_tcp_msg_read_from_stream (GInputStream * input,
   ret = one_video_tcp_msg_read_header_from_stream (input, msg, cancellable,
       error);
   if (ret != TRUE) {
-    GST_ERROR ("Unable to read message length prefix: %s", (*error)->message);
+    GST_ERROR ("Unable to read message length prefix: %s",
+        error ? (*error)->message : "Unknown error");
     goto err_no_body;
   }
 
