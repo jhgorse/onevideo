@@ -202,10 +202,17 @@ gboolean
 one_video_tcp_msg_write_to_stream (GOutputStream * output,
     OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
 {
+  gchar *tmp;
   gboolean ret;
   guint32 tmp1;
   guint64 tmp2;
   GVariant *variant;
+
+  tmp = one_video_tcp_msg_print (msg);
+  GST_DEBUG ("Writing msg type %s to the network; contents: %s",
+      one_video_tcp_msg_type_to_string (msg->type, ONE_VIDEO_TCP_MAX_VERSION),
+      tmp);
+  g_free (tmp);
 
   /* TODO: Error checking */
   /* Write header */
