@@ -131,6 +131,7 @@ OneVideoRemotePeer* one_video_remote_peer_new_unlocked       (OneVideoLocalPeer 
                                                               const gchar *addr_s);
 gboolean            one_video_local_peer_setup               (OneVideoLocalPeer *local);
 gboolean            one_video_local_peer_start_unlocked      (OneVideoLocalPeer *local);
+void                one_video_remote_peer_remove_unlocked    (OneVideoRemotePeer *remote);
 
 G_END_DECLS
 

@@ -37,7 +37,6 @@
 GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-static void one_video_remote_peer_remove_unlocked   (OneVideoRemotePeer *remote);
 static void one_video_remote_peer_free_unlocked     (OneVideoRemotePeer *remote);
 static gboolean one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
 
@@ -148,14 +147,14 @@ one_video_local_peer_setup (OneVideoLocalPeer * local)
 void
 one_video_local_peer_stop (OneVideoLocalPeer * local)
 {
+  if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING) {
+    one_video_local_peer_end_call (local);
+  }
+
   if (local->state >= ONE_VIDEO_LOCAL_STATE_SETUP) {
     one_video_local_peer_stop_transmit (local);
     one_video_local_peer_stop_playback (local);
   }
-
-  /*if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING) {
-    one_video_local_peer_end_call (local);
-  }*/
 
   one_video_local_peer_stop_comms (local);
   local->state = ONE_VIDEO_LOCAL_STATE_NULL;
@@ -377,8 +376,10 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
 }
 
 /* Does not do any operations that involve taking the OneVideoLocalPeer lock.
- * See: one_video_remote_peer_remove() */
-static void
+ * See: one_video_remote_peer_remove() 
+ *
+ * NOT a public symbol */
+void
 one_video_remote_peer_remove_unlocked (OneVideoRemotePeer * remote)
 {
   gchar *tmp;

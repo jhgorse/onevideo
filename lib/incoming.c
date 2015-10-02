@@ -395,6 +395,49 @@ send_reply:
   return ret;
 }
 
+static gboolean
+one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
+    GOutputStream * output, OneVideoTcpMsg * msg)
+{
+  gchar *peer_id;
+  guint64 call_id;
+  OneVideoTcpMsg *reply;
+  OneVideoRemotePeer *remote;
+  const gchar *variant_type;
+  gboolean ret = FALSE;
+
+  variant_type = one_video_tcp_msg_type_to_variant_type (
+      ONE_VIDEO_TCP_MSG_TYPE_END_CALL, ONE_VIDEO_TCP_MAX_VERSION);
+  g_variant_get (msg->variant, variant_type, &call_id, &peer_id);
+
+  if (local->state != ONE_VIDEO_LOCAL_STATE_PAUSED &&
+      local->state != ONE_VIDEO_LOCAL_STATE_PLAYING) {
+    reply = one_video_tcp_msg_new_error (call_id, "Busy");
+    goto send_reply;
+  }
+
+  remote = one_video_local_peer_get_remote_by_addr_s (local, peer_id);
+  if (!remote) {
+    reply = one_video_tcp_msg_new_error (call_id, "Invalid peer id");
+    goto send_reply;
+  }
+
+  GST_DEBUG ("Removing remote peer %s from the call", remote->addr_s);
+
+  /* Remove the specified peer from the call */
+  one_video_remote_peer_remove (remote);
+
+  reply = one_video_tcp_msg_new_ack (msg->id);
+
+  ret = TRUE;
+
+send_reply:
+  one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+  one_video_tcp_msg_free (reply);
+  g_free (peer_id);
+  return ret;
+}
+
 /* TODO: This does blocking reads over the network, which is ok for now because
  * we're using a threaded listener with 10 threads. However, this makes us
  * susceptible to DoS attacks. Needs fixing. */
@@ -466,7 +509,8 @@ body_done:
       one_video_local_peer_start_call (local, output, msg);
       break;
     case ONE_VIDEO_TCP_MSG_TYPE_END_CALL:
-      g_assert_not_reached ();
+      one_video_local_peer_remove_peer_from_call (local, output, msg);
+      break;
     default:
       one_video_tcp_msg_write_new_error_to_stream (output, msg->id,
           "Unknown message type", NULL, NULL);

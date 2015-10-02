@@ -564,3 +564,71 @@ err:
   g_task_return_error (task, error);
   goto out;
 }
+
+static gboolean
+one_video_remote_peer_tcp_client_end_call (OneVideoRemotePeer * remote,
+    OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
+{
+  gchar *error_msg;
+  OneVideoTcpMsg *reply = NULL;
+  gboolean ret = FALSE;
+
+  /* FIXME: This does a blocking write which is really bad especially if we're
+   * ending the call because we're exiting */
+  reply = one_video_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
+  if (!reply)
+    goto no_reply;
+
+  switch (reply->type) {
+    case ONE_VIDEO_TCP_MSG_TYPE_ACK:
+      handle_tcp_msg_ack (reply);
+      GST_DEBUG ("Recvd from '%s' ACK", remote->addr_s);
+      break;
+    case ONE_VIDEO_TCP_MSG_TYPE_ERROR:
+      /* Try again? */
+      error_msg = handle_tcp_msg_error (reply);
+      GST_ERROR ("Remote %s returned an error in reply to end call: %s",
+          remote->addr_s, error_msg);
+      g_free (error_msg);
+      goto err;
+    default:
+      GST_ERROR ("Expected message type '%s' from %s, got '%s'",
+          one_video_tcp_msg_type_to_string (
+            ONE_VIDEO_TCP_MSG_TYPE_ACK, ONE_VIDEO_TCP_MAX_VERSION),
+          remote->addr_s, one_video_tcp_msg_type_to_string (reply->type,
+            reply->version));
+      goto err;
+  }
+
+  ret = TRUE;
+err:
+  one_video_tcp_msg_free (reply);
+no_reply:
+  return ret;
+}
+
+void
+one_video_local_peer_end_call (OneVideoLocalPeer * local)
+{
+  guint ii;
+  OneVideoTcpMsg *msg;
+  const gchar *variant_type;
+
+  g_assert (local->priv->active_call_id);
+
+  variant_type = one_video_tcp_msg_type_to_variant_type (
+      ONE_VIDEO_TCP_MSG_TYPE_END_CALL, ONE_VIDEO_TCP_MAX_VERSION);
+  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_END_CALL,
+      g_variant_new (variant_type, local->priv->active_call_id, local->addr_s));
+
+  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
+    OneVideoRemotePeer *remote;
+
+    remote = g_ptr_array_index (local->priv->remote_peers, ii);
+    one_video_remote_peer_tcp_client_end_call (remote, msg, NULL, NULL);
+  }
+
+  local->priv->active_call_id = 0;
+
+  one_video_tcp_msg_free (msg);
+}

@@ -39,6 +39,8 @@ void	one_video_local_peer_negotiate_thread   (GTask *task,
                                                  OneVideoLocalPeer *local,
                                                  GCancellable *cancellable);
 
+void    one_video_local_peer_end_call           (OneVideoLocalPeer *local);
+
 G_END_DECLS
 
 #endif /* __ONE_VIDEO_NEGOTIATE_H__ */
