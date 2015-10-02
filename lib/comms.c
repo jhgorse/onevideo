@@ -250,13 +250,15 @@ one_video_tcp_msg_write_to_stream (GOutputStream * output,
     /* Write data */
     ret = g_output_stream_write_all (output, g_variant_get_data (variant),
         size, NULL, cancellable, error);
+    g_variant_unref (variant);
   }
 
 out:
-  g_variant_unref (variant);
   return ret;
 err:
-  GST_ERROR ("Unable to write header: %s", msg->data);
+  tmp = one_video_tcp_msg_print (msg);
+  GST_ERROR ("Unable to write header for msg: %s", tmp);
+  g_free (tmp);
   goto out;
 }
 
