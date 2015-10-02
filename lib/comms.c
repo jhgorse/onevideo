@@ -48,7 +48,7 @@ static const struct {
   {ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xssssa(suuuu))"},
 
   {ONE_VIDEO_TCP_MSG_TYPE_HELLO,            "hello",              NULL},
-  /* Format: call_id, local_peer */
+  /* Format: call_id, peer_id_str */
   {ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xs)"},
   /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xas)"},
@@ -62,12 +62,12 @@ static const struct {
   {ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuu))"},
   /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_START_CALL,       "start call",         "(xas)"},
-  /* Format: call_id */
-  {ONE_VIDEO_TCP_MSG_TYPE_PAUSE_CALL,       "pause call",         "x"},
-  /* Format: call_id */
-  {ONE_VIDEO_TCP_MSG_TYPE_RESUME_CALL,      "resume call",        "x"},
-  /* Format: call_id */
-  {ONE_VIDEO_TCP_MSG_TYPE_END_CALL,         "end call",           "x"},
+  /* Format: call_id, peer_id_str */
+  {ONE_VIDEO_TCP_MSG_TYPE_PAUSE_CALL,       "pause call",         "(xs)"},
+  /* Format: call_id, peer_id_str */
+  {ONE_VIDEO_TCP_MSG_TYPE_RESUME_CALL,      "resume call",        "(xs)"},
+  /* Format: call_id, peer_id_str */
+  {ONE_VIDEO_TCP_MSG_TYPE_END_CALL,         "end call",           "(xs)"},
   {ONE_VIDEO_TCP_MSG_TYPE_BYE,              "bye",                NULL},
   {0}
 };
