@@ -55,7 +55,7 @@ one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 {
   g_mutex_lock (&local->priv->lock);
   g_ptr_array_foreach (local->priv->remote_peers,
-      (GFunc) one_video_remote_peer_remove_unlocked, NULL);
+      (GFunc) one_video_remote_peer_remove_not_array, NULL);
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   local->priv->remote_peers = g_ptr_array_new ();
   g_mutex_unlock (&local->priv->lock);
@@ -380,7 +380,7 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
  *
  * NOT a public symbol */
 void
-one_video_remote_peer_remove_unlocked (OneVideoRemotePeer * remote)
+one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
 {
   gchar *tmp;
   OneVideoLocalPeer *local = remote->local;
@@ -451,7 +451,7 @@ one_video_remote_peer_remove (OneVideoRemotePeer * remote)
   g_ptr_array_remove (remote->local->priv->remote_peers, remote);
   g_mutex_unlock (&remote->local->priv->lock);
 
-  one_video_remote_peer_remove_unlocked (remote);
+  one_video_remote_peer_remove_not_array (remote);
 }
 
 static void
