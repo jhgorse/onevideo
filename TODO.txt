@@ -20,8 +20,10 @@
    negotiation process or the call.
 
 * Logging
- - Right now, we log everything to GST_DEBUG unconditionally for convenience in
-   debugging (involves malloc). Change this to be conditional.
+ - Right now, we log very verbosely to GST_DEBUG for convenience in debugging.
+   Change this so we do relatively expensive logging (such as logging that needs
+   variant printing) conditional on the log level and do it at the GST_TRACE log
+   level (or similar).
 
 * Video format negotiation
  - We pass-through whatever highest-quality format the Webcam outputs to the
