@@ -1,0 +1,53 @@
+* Network communication
+ - Timeout on hanging negotiations
+ - Timeout quickly on unimportant messages
+ - End/pause/resume calls correctly
+ - Retry sending of important messages
+
+* Asynchronous
+ - All API is currently synchronous; add async when working on GUI once more of
+   the interactions have been mapped out and coded
+ - Network communication is blocking and synchronous internally. Some of that
+   should be asynchronous (it's all run in a separate thread so not a big issue
+   right now)
+
+* Error handling
+ - We need to define our own GErrors and pass them around in the API. Currently,
+   we just pass around NULL. The machinery is in place, so should be
+   straighforward.
+ - Need ERROR types in the network protocol itself so the negotiator and/or
+   peers can take appropriate corrective action instead of just aborting the
+   negotiation process or the call.
+
+* Logging
+ - Right now, we log everything to GST_DEBUG unconditionally for convenience in
+   debugging (involves malloc). Change this to be conditional.
+
+* Video format negotiation
+ - We pass-through whatever highest-quality format the Webcam outputs to the
+   peers. That can be JPEG or H.264. This makes sense and should not be changed.
+ - Caps are being forced as JPEG 720p 30fps. We should choose 1080p if it's
+   available and peers can handle it.
+ - Raw video caps are useless and will not be added. USB 2 webcams (99% of all
+   consumer webcams) cannot output HD video at 30fps in any raw video format.
+   They output either JPEG or H.264. The exceptions are cards like Decklink.
+ - It probably makes sense to transparently add a jpegenc element in case we
+   encounter a webcam that only outputs low quality YUV raw video.
+ - Evaluate whether it's worth it to add H.264 support. The highest quality
+   might be given by JPEG, in which case H.264 would be useless. Need to do
+   bitrate and quality comparisons and find out whether it's feasible to have an
+   element that only converts H.264-encoded video outputted by a webcam to
+   keyframe-only H.264 video.
+ - Note that we're using keyframe-based video formats to reduce startup latency
+   while avoiding complexity in the peers.
+ - Choose send/recv caps based on available CPU/network bandwidth
+
+* General
+ - Add the ability for any peer to add other peers to an existing call
+ - Allow peers to gracefully degrade a call; reducing video res or removing it
+   altogether
+   + New msg type: CHANGE_CALL_DETAILS
+   + Some types of format changes don't even need an out of band renegotiation;
+     such as changing the resolution of the outputted JPEG
+   + TODO: Only set generic caps without resolution for video and let the
+     depayloader detect it at runtime. This works for JPEG, not sure about H.264
