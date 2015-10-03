@@ -50,7 +50,7 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
     goto send_reply_nolock;
   }
 
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
 
   /* Technically, this is covered by the local->state check, but can't hurt */
   if (local->priv->negotiate != NULL) {
@@ -61,7 +61,7 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
   local->priv->negotiate = g_new0 (OneVideoNegotiate, 1);
   local->priv->negotiate->call_id = call_id;
   local->priv->negotiate->negotiator =
-    one_video_remote_peer_new_unlocked (local, negotiator_addr_s);
+    one_video_remote_peer_new (local, negotiator_addr_s);
 
   local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING;
 
@@ -70,7 +70,7 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
   ret = TRUE;
 
 send_reply:
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
 send_reply_nolock:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
@@ -108,7 +108,7 @@ setup_negotiate_remote_peers (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
     if (g_strcmp0 (addr_s, negotiator_addr_s) == 0)
       remote = local->priv->negotiate->negotiator;
     else
-      remote = one_video_remote_peer_new_unlocked (local, addr_s);
+      remote = one_video_remote_peer_new (local, addr_s);
 
     g_assert (remote != NULL);
 
@@ -150,12 +150,12 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
     goto send_reply;
   }
 
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
 
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid call id");
-    g_mutex_unlock (&local->priv->lock);
+    g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
@@ -170,7 +170,7 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
         remote->priv->recv_ports[0], remote->priv->recv_ports[1],
         remote->priv->recv_ports[2], remote->priv->recv_ports[3]);
 
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
 
   send_acaps = gst_caps_to_string (local->priv->supported_send_acaps);
   send_vcaps = gst_caps_to_string (local->priv->supported_send_vcaps);
@@ -276,7 +276,7 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
     goto send_reply_nolock;
   }
 
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
 
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
@@ -294,7 +294,7 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
   ret = TRUE;
 
 send_reply:
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
 send_reply_nolock:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
@@ -328,7 +328,7 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
     }
 
     /* Move from the negotiating hash table to the local peer */
-    one_video_local_peer_add_remote_unlocked (local, remote);
+    one_video_local_peer_add_remote (local, remote);
     g_hash_table_steal (remotes, addr_s);
   }
   g_variant_iter_free (iter);
@@ -342,7 +342,7 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
       (GDestroyNotify) g_hash_table_unref);
   g_clear_pointer (&local->priv->negotiate, g_free);
 
-  return one_video_local_peer_start_unlocked (local);
+  return one_video_local_peer_start (local);
 err:
   g_free (addr_s);
   g_variant_iter_free (iter);
@@ -367,25 +367,25 @@ one_video_local_peer_start_call (OneVideoLocalPeer * local,
     goto send_reply;
   }
 
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
 
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid call id");
-    g_mutex_unlock (&local->priv->lock);
+    g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
   /* Start calling the specified list of peers */
   if (!start_call (local, msg)) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid list of peers");
-    g_mutex_unlock (&local->priv->lock);
+    g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
   reply = one_video_tcp_msg_new_ack (msg->id);
 
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
   ret = TRUE;
 
 send_reply:

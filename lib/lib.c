@@ -37,7 +37,6 @@
 GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-static void one_video_remote_peer_free_unlocked     (OneVideoRemotePeer *remote);
 static gboolean one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
 
 #define on_remote_receive_error one_video_on_gst_bus_error
@@ -53,12 +52,12 @@ one_video_local_peer_stop_transmit (OneVideoLocalPeer * local)
 static void
 one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 {
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
   g_ptr_array_foreach (local->priv->remote_peers,
       (GFunc) one_video_remote_peer_remove_not_array, NULL);
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   local->priv->remote_peers = g_ptr_array_new ();
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
 
   g_assert (gst_element_set_state (local->playback, GST_STATE_NULL)
       == GST_STATE_CHANGE_SUCCESS);
@@ -100,7 +99,7 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr,
   /* NOTE: GArray and GPtrArray are not thread-safe; we must lock accesses */
   local->priv->used_ports = g_array_sized_new (FALSE, TRUE, sizeof (guint), 4);
   local->priv->remote_peers = g_ptr_array_new ();
-  g_mutex_init (&local->priv->lock);
+  g_rec_mutex_init (&local->priv->lock);
 
   /*-- Initialize caps supported by us --*/
   /* We will only ever use 48KHz Opus */
@@ -167,7 +166,7 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
 {
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   g_array_free (local->priv->used_ports, TRUE);
-  g_mutex_clear (&local->priv->lock);
+  g_rec_mutex_clear (&local->priv->lock);
 
   g_object_unref (local->priv->tcp_server);
 
@@ -223,7 +222,7 @@ set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
 
 /* This is NOT a public symbol */
 OneVideoRemotePeer *
-one_video_remote_peer_new_unlocked (OneVideoLocalPeer * local,
+one_video_remote_peer_new (OneVideoLocalPeer * local,
     const gchar * addr_s)
 {
   gchar *name;
@@ -245,7 +244,11 @@ one_video_remote_peer_new_unlocked (OneVideoLocalPeer * local,
   remote->priv->vplayback = gst_bin_new (name);
   g_free (name);
 
+  /* We need a lock for set_free_recv_ports() which manipulates
+   * local->priv->used_ports */
+  g_rec_mutex_lock (&local->priv->lock);
   g_assert (set_free_recv_ports (local, &remote->priv->recv_ports));
+  g_rec_mutex_unlock (&local->priv->lock);
 
   /* Use the system clock and explicitly reset the base/start times to ensure
    * that all the pipelines started by us have the same base/start times */
@@ -260,20 +263,6 @@ one_video_remote_peer_new_unlocked (OneVideoLocalPeer * local,
   g_object_unref (bus);
 
   remote->state = ONE_VIDEO_REMOTE_STATE_ALLOCATED;
-
-  return remote;
-}
-
-OneVideoRemotePeer *
-one_video_remote_peer_new (OneVideoLocalPeer * local, const gchar * addr_s)
-{
-  OneVideoRemotePeer *remote;
-
-  /* We need a lock for set_free_recv_ports() which manipulates
-   * local->priv->used_ports */
-  g_mutex_lock (&local->priv->lock);
-  remote = one_video_remote_peer_new_unlocked (local, addr_s);
-  g_mutex_unlock (&local->priv->lock);
 
   return remote;
 }
@@ -438,7 +427,7 @@ one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
   remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
 
   tmp = g_strdup (remote->addr_s);
-  one_video_remote_peer_free_unlocked (remote);
+  one_video_remote_peer_free (remote);
   GST_DEBUG ("Freed everything for remote peer %s", tmp);
   g_free (tmp);
 }
@@ -447,25 +436,27 @@ void
 one_video_remote_peer_remove (OneVideoRemotePeer * remote)
 {
   /* Remove from the peers list first so nothing else tries to use it */
-  g_mutex_lock (&remote->local->priv->lock);
+  g_rec_mutex_lock (&remote->local->priv->lock);
   g_ptr_array_remove (remote->local->priv->remote_peers, remote);
-  g_mutex_unlock (&remote->local->priv->lock);
+  g_rec_mutex_unlock (&remote->local->priv->lock);
 
   one_video_remote_peer_remove_not_array (remote);
 }
 
-static void
-one_video_remote_peer_free_unlocked (OneVideoRemotePeer * remote)
+void
+one_video_remote_peer_free (OneVideoRemotePeer * remote)
 {
   guint ii;
   OneVideoLocalPeer *local = remote->local;
 
+  g_rec_mutex_lock (&local->priv->lock);
   for (ii = 0; ii < local->priv->used_ports->len; ii++)
     /* Port numbers are unique, sorted, and contiguous. So if we find the first
      * port, we've found all of them. */
     if (g_array_index (local->priv->used_ports, guint, ii) ==
         remote->priv->recv_ports[0])
       g_array_remove_range (local->priv->used_ports, ii, 4);
+  g_rec_mutex_unlock (&local->priv->lock);
 
   gst_caps_unref (remote->priv->recv_acaps);
   gst_caps_unref (remote->priv->recv_vcaps);
@@ -473,15 +464,6 @@ one_video_remote_peer_free_unlocked (OneVideoRemotePeer * remote)
   g_free (remote->addr_s);
   g_free (remote->priv);
   g_free (remote);
-}
-
-void
-one_video_remote_peer_free (OneVideoRemotePeer * remote)
-{
-  OneVideoLocalPeer *local = remote->local;
-  g_mutex_lock (&local->priv->lock);
-  one_video_remote_peer_free_unlocked (remote);
-  g_mutex_unlock (&local->priv->lock);
 }
 
 /*
@@ -505,13 +487,13 @@ one_video_local_peer_get_remote_by_addr_s (OneVideoLocalPeer * local,
   guint ii;
   OneVideoRemotePeer *remote;
 
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
     remote = g_ptr_array_index (local->priv->remote_peers, ii);
     if (g_strcmp0 (addr_s, remote->addr_s))
       break;
   }
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
 
   return remote;
 }
@@ -571,22 +553,14 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
   return ret != GST_STATE_CHANGE_FAILURE;
 }
 
-/* This is NOT a public symbol */
-void
-one_video_local_peer_add_remote_unlocked (OneVideoLocalPeer * local,
-    OneVideoRemotePeer * remote)
-{
-  g_ptr_array_add (local->priv->remote_peers, remote);
-}
-
 void
 one_video_local_peer_add_remote (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
   /* Add to our list of remote peers */
-  g_mutex_lock (&local->priv->lock);
-  one_video_local_peer_add_remote_unlocked (local, remote);
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
+  g_ptr_array_add (local->priv->remote_peers, remote);
+  g_rec_mutex_unlock (&local->priv->lock);
 }
 
 static gboolean
@@ -615,7 +589,7 @@ one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
   GTask *task;
 
   /* Unlocked in _finish */
-  g_mutex_lock (&local->priv->lock);
+  g_rec_mutex_lock (&local->priv->lock);
   if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
     GST_ERROR ("Our state is %u instead of INITIALISED", local->state);
     return FALSE;
@@ -637,14 +611,13 @@ gboolean
 one_video_local_peer_negotiate_finish (OneVideoLocalPeer * local,
     GAsyncResult * result, GError ** error)
 {
-  g_mutex_unlock (&local->priv->lock);
+  g_rec_mutex_unlock (&local->priv->lock);
 
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
-/* NOT a public symbol */
 gboolean
-one_video_local_peer_start_unlocked (OneVideoLocalPeer * local)
+one_video_local_peer_start (OneVideoLocalPeer * local)
 {
   guint index;
   GstStateChangeReturn ret;
@@ -657,6 +630,7 @@ one_video_local_peer_start_unlocked (OneVideoLocalPeer * local)
     return FALSE;
   }
 
+  g_rec_mutex_lock (&local->priv->lock);
   g_assert (one_video_local_peer_begin_transmit (local));
 
   for (index = 0; index < local->priv->remote_peers->len; index++) {
@@ -676,6 +650,7 @@ one_video_local_peer_start_unlocked (OneVideoLocalPeer * local)
         remote->priv->recv_ports[3]);
     remote->state = ONE_VIDEO_REMOTE_STATE_PLAYING;
   }
+  g_rec_mutex_unlock (&local->priv->lock);
 
   ret = gst_element_set_state (local->playback, GST_STATE_PLAYING);
   if (ret == GST_STATE_CHANGE_FAILURE)
@@ -694,15 +669,4 @@ one_video_local_peer_start_unlocked (OneVideoLocalPeer * local)
     GST_ERROR ("Unable to set %s receive pipeline to PLAYING!", remote->addr_s);
     return FALSE;
   }
-}
-
-gboolean
-one_video_local_peer_start (OneVideoLocalPeer * local)
-{
-  gboolean ret;
-
-  g_mutex_lock (&local->priv->lock);
-  ret = one_video_local_peer_start_unlocked (local);
-  g_mutex_unlock (&local->priv->lock);
-  return ret;
 }

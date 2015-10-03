@@ -89,7 +89,7 @@ struct _OneVideoLocalPeerPriv {
   /* Array of OneVideoRemotePeers: peers we want to connect to */
   GPtrArray *remote_peers;
   /* Lock to access non-thread-safe structures like GPtrArray */
-  GMutex lock;
+  GRecMutex lock;
 
   /* Path to the v4l2 device being used */
   gchar *v4l2_path;
@@ -125,12 +125,7 @@ struct _OneVideoRemotePeerPriv {
   GstElement *video_proxysrc;
 };
 
-void                one_video_local_peer_add_remote_unlocked (OneVideoLocalPeer * local,
-                                                              OneVideoRemotePeer * remote);
-OneVideoRemotePeer* one_video_remote_peer_new_unlocked       (OneVideoLocalPeer *local,
-                                                              const gchar *addr_s);
 gboolean            one_video_local_peer_setup               (OneVideoLocalPeer *local);
-gboolean            one_video_local_peer_start_unlocked      (OneVideoLocalPeer *local);
 void                one_video_remote_peer_remove_not_array   (OneVideoRemotePeer *remote);
 
 G_END_DECLS
