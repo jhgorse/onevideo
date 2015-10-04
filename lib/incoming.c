@@ -424,6 +424,11 @@ one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
   /* Remove the specified peer from the call */
   one_video_remote_peer_remove (remote);
 
+  if (local->priv->remote_peers->len == 0) {
+    GST_DEBUG ("No peers left in call, ending call...");
+    one_video_local_peer_stop (local);
+  }
+
   reply = one_video_tcp_msg_new_ack (msg->id);
 
   ret = TRUE;

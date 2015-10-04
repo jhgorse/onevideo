@@ -146,7 +146,10 @@ one_video_local_peer_setup (OneVideoLocalPeer * local)
 void
 one_video_local_peer_stop (OneVideoLocalPeer * local)
 {
-  if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING) {
+  g_rec_mutex_lock (&local->priv->lock);
+  if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING &&
+      local->priv->remote_peers->len > 0) {
+    /* Send END_CALL message to remote peers */
     one_video_local_peer_end_call (local);
   }
 
@@ -159,6 +162,7 @@ one_video_local_peer_stop (OneVideoLocalPeer * local)
   local->state = ONE_VIDEO_LOCAL_STATE_NULL;
   g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
   g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);
+  g_rec_mutex_unlock (&local->priv->lock);
 }
 
 void
