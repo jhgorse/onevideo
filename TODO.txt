@@ -1,7 +1,9 @@
+Items marked with a ★ are high priority
+
 * Network communication
- - Timeout on hanging negotiations
- - Timeout quickly on unimportant messages
- - End/pause/resume calls correctly
+ ★ Timeout on hanging negotiations
+ ★ Timeout quickly on unimportant messages
+ ★ End/pause/resume calls correctly
  - Retry sending of important messages
 
 * Asynchronous
@@ -10,6 +12,7 @@
  - Network communication is blocking and synchronous internally. Some of that
    should be asynchronous (it's all run in a separate thread so not a big issue
    right now)
+ ★ For example, replies to incoming queries should definitely be asynchronous.
 
 * Error handling
  - We need to define our own GErrors and pass them around in the API. Currently,
@@ -53,3 +56,6 @@
      such as changing the resolution of the outputted JPEG
    + TODO: Only set generic caps without resolution for video and let the
      depayloader detect it at runtime. This works for JPEG, not sure about H.264
+ - Add signals (move from structs to GObjects for OneVideo*Peer objects?) for
+   things like negotiation-done, remote-added, remote-removed, call-ended, etc.
+   
