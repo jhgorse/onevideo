@@ -161,6 +161,7 @@ static void
 gst_proxy_src_init (GstProxySrc * self)
 {
   GstPad *srcpad, *sinkpad;
+  GstPadTemplate *templ;
 
   GST_OBJECT_FLAG_SET (self, GST_ELEMENT_FLAG_SOURCE);
 
@@ -173,8 +174,9 @@ gst_proxy_src_init (GstProxySrc * self)
   gst_bin_add (GST_BIN (self), self->priv->queue);
 
   srcpad = gst_element_get_static_pad (self->priv->queue, "src");
-  self->priv->srcpad = gst_ghost_pad_new_from_template ("src", srcpad,
-      gst_static_pad_template_get (&src_template));
+  templ = gst_static_pad_template_get (&src_template);
+  self->priv->srcpad = gst_ghost_pad_new_from_template ("src", srcpad, templ);
+  gst_object_unref (templ);
   gst_object_unref (srcpad);
 
   gst_element_add_pad (GST_ELEMENT (self), self->priv->srcpad);
