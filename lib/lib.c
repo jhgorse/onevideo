@@ -274,19 +274,23 @@ one_video_remote_peer_new (OneVideoLocalPeer * local,
 void
 one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 {
+  gchar *addr_only;
   OneVideoLocalPeer *local = remote->local;
 
   g_assert (remote->state == ONE_VIDEO_REMOTE_STATE_PLAYING);
 
   /* Stop transmitting */
-  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[0]);
-  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[1]);
-  g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[2]);
-  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[3]);
+  addr_only = g_inet_address_to_string (
+      g_inet_socket_address_get_address (remote->addr));
+  g_signal_emit_by_name (local->priv->audpsink, "remove", addr_only,
+      remote->priv->send_ports[0]);
+  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", addr_only,
+      remote->priv->send_ports[1]);
+  g_signal_emit_by_name (local->priv->vudpsink, "remove", addr_only,
+      remote->priv->send_ports[2]);
+  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", addr_only,
+      remote->priv->send_ports[3]);
+  g_free (addr_only);
 
   /* Pause receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_PAUSED)
@@ -324,19 +328,23 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 void
 one_video_remote_peer_resume (OneVideoRemotePeer * remote)
 {
+  gchar *addr_only;
   OneVideoLocalPeer *local = remote->local;
 
   g_assert (remote->state == ONE_VIDEO_REMOTE_STATE_PAUSED);
 
   /* Start transmitting */
-  g_signal_emit_by_name (local->priv->audpsink, "add", remote->addr_s,
-      remote->priv->recv_ports[0]);
-  g_signal_emit_by_name (local->priv->artcpudpsink, "add", remote->addr_s,
-      remote->priv->recv_ports[1]);
-  g_signal_emit_by_name (local->priv->vudpsink, "add", remote->addr_s,
-      remote->priv->recv_ports[2]);
-  g_signal_emit_by_name (local->priv->vrtcpudpsink, "add", remote->addr_s,
-      remote->priv->recv_ports[3]);
+  addr_only = g_inet_address_to_string (
+      g_inet_socket_address_get_address (remote->addr));
+  g_signal_emit_by_name (local->priv->audpsink, "add", addr_only,
+      remote->priv->send_ports[0]);
+  g_signal_emit_by_name (local->priv->artcpudpsink, "add", addr_only,
+      remote->priv->send_ports[1]);
+  g_signal_emit_by_name (local->priv->vudpsink, "add", addr_only,
+      remote->priv->send_ports[2]);
+  g_signal_emit_by_name (local->priv->vrtcpudpsink, "add", addr_only,
+      remote->priv->send_ports[3]);
+  g_free (addr_only);
 
   if (remote->priv->audio_proxysrc != NULL) {
     GstPadLinkReturn ret;
@@ -375,18 +383,21 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
 void
 one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
 {
-  gchar *tmp;
+  gchar *tmp, *addr_only;
   OneVideoLocalPeer *local = remote->local;
 
   /* Stop transmitting */
-  g_signal_emit_by_name (local->priv->audpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[0]);
-  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[1]);
-  g_signal_emit_by_name (local->priv->vudpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[2]);
-  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", remote->addr_s,
-      remote->priv->recv_ports[3]);
+  addr_only = g_inet_address_to_string (
+      g_inet_socket_address_get_address (remote->addr));
+  g_signal_emit_by_name (local->priv->audpsink, "remove", addr_only,
+      remote->priv->send_ports[0]);
+  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", addr_only,
+      remote->priv->send_ports[1]);
+  g_signal_emit_by_name (local->priv->vudpsink, "remove", addr_only,
+      remote->priv->send_ports[2]);
+  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", addr_only,
+      remote->priv->send_ports[3]);
+  g_free (addr_only);
 
   /* Release all requested pads and relevant playback bins */
   if (remote->priv->audio_proxysrc != NULL) {
