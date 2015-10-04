@@ -45,12 +45,12 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
       ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE, ONE_VIDEO_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &call_id, &negotiator_addr_s);
 
+  g_rec_mutex_lock (&local->priv->lock);
+
   if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
     reply = one_video_tcp_msg_new_error (call_id, "Busy");
-    goto send_reply_nolock;
+    goto send_reply;
   }
-
-  g_rec_mutex_lock (&local->priv->lock);
 
   /* Technically, this is covered by the local->state check, but can't hurt */
   if (local->priv->negotiate != NULL) {
@@ -71,7 +71,6 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
 send_reply:
   g_rec_mutex_unlock (&local->priv->lock);
-send_reply_nolock:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
@@ -145,12 +144,12 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
       ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS, ONE_VIDEO_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &call_id, NULL);
 
+  g_rec_mutex_lock (&local->priv->lock);
+
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
     reply = one_video_tcp_msg_new_error (call_id, "Busy");
     goto send_reply;
   }
-
-  g_rec_mutex_lock (&local->priv->lock);
 
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
@@ -271,12 +270,12 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
       ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS, ONE_VIDEO_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &call_id, NULL, NULL, NULL);
 
+  g_rec_mutex_lock (&local->priv->lock);
+
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
     reply = one_video_tcp_msg_new_error (call_id, "Busy");
-    goto send_reply_nolock;
+    goto send_reply;
   }
-
-  g_rec_mutex_lock (&local->priv->lock);
 
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
@@ -295,7 +294,6 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
 
 send_reply:
   g_rec_mutex_unlock (&local->priv->lock);
-send_reply_nolock:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
@@ -362,33 +360,30 @@ one_video_local_peer_start_call (OneVideoLocalPeer * local,
       ONE_VIDEO_TCP_MSG_TYPE_START_CALL, ONE_VIDEO_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &call_id, NULL);
 
+  g_rec_mutex_lock (&local->priv->lock);
+
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATED) {
     reply = one_video_tcp_msg_new_error (call_id, "Busy");
     goto send_reply;
   }
 
-  g_rec_mutex_lock (&local->priv->lock);
-
   if (local->priv->negotiate == NULL ||
       local->priv->negotiate->call_id != call_id) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid call id");
-    g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
   /* Start calling the specified list of peers */
   if (!start_call (local, msg)) {
     reply = one_video_tcp_msg_new_error (call_id, "Invalid list of peers");
-    g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
   reply = one_video_tcp_msg_new_ack (msg->id);
-
-  g_rec_mutex_unlock (&local->priv->lock);
   ret = TRUE;
 
 send_reply:
+  g_rec_mutex_unlock (&local->priv->lock);
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
@@ -409,6 +404,8 @@ one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_END_CALL, ONE_VIDEO_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &call_id, &peer_id);
+
+  g_rec_mutex_lock (&local->priv->lock);
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_PAUSED &&
       local->state != ONE_VIDEO_LOCAL_STATE_PLAYING) {
@@ -432,7 +429,9 @@ one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
   ret = TRUE;
 
 send_reply:
+  g_rec_mutex_unlock (&local->priv->lock);
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+
   one_video_tcp_msg_free (reply);
   g_free (peer_id);
   return ret;
