@@ -45,6 +45,19 @@ kill_remote_peer (OneVideoRemotePeer * remote)
 }
 
 static gboolean
+on_local_peer_stop (OneVideoLocalPeer * local)
+{
+  if (local->state != ONE_VIDEO_LOCAL_STATE_STOPPED)
+    /* Check again later */
+    return TRUE;
+
+  g_main_loop_quit (loop);
+
+  /* Remove the source so it's not called again */
+  return FALSE;
+}
+
+static gboolean
 on_app_exit (OneVideoLocalPeer * local)
 {
   one_video_local_peer_stop (local);
@@ -145,9 +158,11 @@ main (int   argc,
       v4l2_device_path);
   g_object_unref (listen_addr);
 
-  if (remotes == NULL)
+  if (remotes == NULL) {
     g_print ("No remotes specified; listening for incoming connections\n");
-  else {
+    /* Stop the mainloop and exit when an externally-initiated call ends */
+    g_idle_add ((GSourceFunc) on_local_peer_stop, local);
+  } else {
     g_print ("Dialling remotes...\n");
     dial_remotes (local, remotes);
     g_print ("Waiting for remotes to reply...\n");
