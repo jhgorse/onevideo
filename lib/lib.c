@@ -159,7 +159,7 @@ one_video_local_peer_stop (OneVideoLocalPeer * local)
   }
 
   one_video_local_peer_stop_comms (local);
-  local->state = ONE_VIDEO_LOCAL_STATE_NULL;
+  local->state = ONE_VIDEO_LOCAL_STATE_STOPPED;
   g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
   g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);
   g_rec_mutex_unlock (&local->priv->lock);
