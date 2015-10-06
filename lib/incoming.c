@@ -43,6 +43,10 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE, ONE_VIDEO_TCP_MAX_VERSION);
+  if (!g_variant_is_of_type (msg->variant, G_VARIANT_TYPE (variant_type))) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
+    goto send_reply;
+  }
   g_variant_get (msg->variant, variant_type, &call_id, &negotiator_addr_s);
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
@@ -141,6 +145,10 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
   /* Get the call id */
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS, ONE_VIDEO_TCP_MAX_VERSION);
+  if (!g_variant_is_of_type (msg->variant, G_VARIANT_TYPE (variant_type))) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
+    goto send_reply;
+  }
   g_variant_get (msg->variant, variant_type, &call_id, NULL);
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
@@ -267,6 +275,10 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS, ONE_VIDEO_TCP_MAX_VERSION);
+  if (!g_variant_is_of_type (msg->variant, G_VARIANT_TYPE (variant_type))) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
+    goto send_reply;
+  }
   g_variant_get (msg->variant, variant_type, &call_id, NULL, NULL, NULL);
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
@@ -358,6 +370,10 @@ one_video_local_peer_start_call (OneVideoLocalPeer * local,
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_START_CALL, ONE_VIDEO_TCP_MAX_VERSION);
+  if (!g_variant_is_of_type (msg->variant, G_VARIANT_TYPE (variant_type))) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
+    goto send_reply;
+  }
   g_variant_get (msg->variant, variant_type, &call_id, NULL);
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATED) {
@@ -404,6 +420,10 @@ one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_END_CALL, ONE_VIDEO_TCP_MAX_VERSION);
+  if (!g_variant_is_of_type (msg->variant, G_VARIANT_TYPE (variant_type))) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
+    goto send_reply;
+  }
   g_variant_get (msg->variant, variant_type, &call_id, &peer_id);
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_PAUSED &&
