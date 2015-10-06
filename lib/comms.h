@@ -50,6 +50,7 @@ enum _OneVideoTcpMsgType {
   /* Replies */
   ONE_VIDEO_TCP_MSG_TYPE_ACK = 200,
   ONE_VIDEO_TCP_MSG_TYPE_ERROR,
+  ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,
   ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,
 
   /* Both queries and replies */
@@ -77,16 +78,18 @@ static const guint32 one_video_versions[] = {1,};
 #define ONE_VIDEO_TCP_MIN_VERSION one_video_versions[0]
 #define ONE_VIDEO_TCP_MAX_VERSION one_video_versions[0]
 
-OneVideoTcpMsg* one_video_tcp_msg_new                 (OneVideoTcpMsgType type,
-                                                       GVariant *data);
-void            one_video_tcp_msg_free                (OneVideoTcpMsg *msg);
-OneVideoTcpMsg* one_video_tcp_msg_new_error           (guint64 id,
-                                                       const gchar *error_msg);
-OneVideoTcpMsg* one_video_tcp_msg_new_ack             (guint64 id);
-OneVideoTcpMsg* one_video_tcp_msg_new_start_negotiate (guint64 id,
-                                                       gchar *local_addr_s);
+OneVideoTcpMsg* one_video_tcp_msg_new                   (OneVideoTcpMsgType type,
+                                                         GVariant *data);
+void            one_video_tcp_msg_free                  (OneVideoTcpMsg *msg);
+OneVideoTcpMsg* one_video_tcp_msg_new_error             (guint64 id,
+                                                         const gchar *error_msg);
+OneVideoTcpMsg* one_video_tcp_msg_new_error_call        (guint64 id,
+                                                         const gchar *error_msg);
+OneVideoTcpMsg* one_video_tcp_msg_new_ack               (guint64 id);
+OneVideoTcpMsg* one_video_tcp_msg_new_start_negotiate   (guint64 id,
+                                                         gchar *local_addr_s);
 
-gchar*          one_video_tcp_msg_print               (OneVideoTcpMsg *msg);
+gchar*          one_video_tcp_msg_print                 (OneVideoTcpMsg *msg);
 
 gboolean        one_video_tcp_msg_write_to_stream           (GOutputStream *output,
                                                              OneVideoTcpMsg *msg,

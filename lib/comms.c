@@ -40,6 +40,8 @@ static const struct {
   {ONE_VIDEO_TCP_MSG_TYPE_ACK,              "acknowledged",       "x"},
   /* Format: (msg_id, error string) */
   {ONE_VIDEO_TCP_MSG_TYPE_ERROR,            "error",              "(xs)"},
+  /* Format: (call_id, error string) */
+  {ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,       "error during call",  "(xs)"},
   /* Format:
    * (call_id, send_acaps, send_vcaps, recv_acaps, recv_vcaps,
    *  [(remote_peer1, arecv_port1, artcp_port1, vrecv_port1, vrtcp_port1),
@@ -155,6 +157,20 @@ one_video_tcp_msg_new_error (guint64 id, const gchar * error_msg)
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_ERROR, ONE_VIDEO_TCP_MIN_VERSION);
   msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_ERROR,
+      g_variant_new (variant_type, id, error_msg));
+
+  return msg;
+}
+
+OneVideoTcpMsg *
+one_video_tcp_msg_new_error_call (guint64 id, const gchar * error_msg)
+{
+  OneVideoTcpMsg *msg;
+  const gchar *variant_type;
+
+  variant_type = one_video_tcp_msg_type_to_variant_type (
+      ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL, ONE_VIDEO_TCP_MIN_VERSION);
+  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,
       g_variant_new (variant_type, id, error_msg));
 
   return msg;
