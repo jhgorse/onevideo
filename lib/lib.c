@@ -603,20 +603,17 @@ one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
 {
   GTask *task;
 
-  /* Unlocked in _finish */
-  g_rec_mutex_lock (&local->priv->lock);
   if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
     GST_ERROR ("Our state is %u instead of INITIALISED", local->state);
     return FALSE;
   }
-
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING;
 
   task = g_task_new (NULL, cancellable, callback, callback_data);
   g_task_set_task_data (task, local, NULL);
   g_task_set_return_on_cancel (task, TRUE);
   g_task_run_in_thread (task,
       (GTaskThreadFunc) one_video_local_peer_negotiate_thread);
+  local->priv->negotiator_task = task;
   g_object_unref (task);
 
   return TRUE;
@@ -626,8 +623,7 @@ gboolean
 one_video_local_peer_negotiate_finish (OneVideoLocalPeer * local,
     GAsyncResult * result, GError ** error)
 {
-  g_rec_mutex_unlock (&local->priv->lock);
-
+  local->priv->negotiator_task = NULL;
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 

@@ -73,6 +73,8 @@ struct _OneVideoLocalPeerPriv {
   guint64 active_call_id;
   /* Struct used for holding info while negotiating */
   OneVideoNegotiate *negotiate;
+  /* The task used for doing negotiation when we're the negotiator */
+  GTask *negotiator_task;
 
   /* The caps that we support sending */
   GstCaps *supported_send_acaps;

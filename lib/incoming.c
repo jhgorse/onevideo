@@ -81,6 +81,61 @@ send_reply:
   return ret;
 }
 
+static gboolean
+one_video_local_peer_cancel_negotiate (OneVideoLocalPeer * local,
+    GOutputStream * output, OneVideoTcpMsg * msg)
+{
+  gchar *addr_s;
+  guint64 call_id;
+  OneVideoTcpMsg *reply;
+  const gchar *variant_type;
+  gboolean ret = FALSE;
+
+  variant_type = one_video_tcp_msg_type_to_variant_type (
+      ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, ONE_VIDEO_TCP_MAX_VERSION);
+  if (!g_variant_is_of_type (msg->variant, G_VARIANT_TYPE (variant_type))) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
+    goto send_reply;
+  }
+  g_variant_get (msg->variant, variant_type, &call_id, &addr_s);
+
+  g_rec_mutex_lock (&local->priv->lock);
+  if (local->state == ONE_VIDEO_LOCAL_STATE_NEGOTIATING &&
+      local->priv->negotiate != NULL &&
+      g_strcmp0 (addr_s, local->priv->negotiate->negotiator->addr_s) == 0) {
+    /* We're the negotiatee and we just got a cancel */
+    local->state = ONE_VIDEO_LOCAL_STATE_FAILED;
+    g_clear_pointer (&local->priv->negotiate->remotes,
+        (GDestroyNotify) g_hash_table_unref);
+    g_clear_pointer (&local->priv->negotiate, g_free);
+  } else if (local->state == ONE_VIDEO_LOCAL_STATE_NEGOTIATING &&
+      local->priv->negotiator_task != NULL) {
+    /* We're the negotiator and we just got a cancel */
+    /* TODO: For now, we completely cancel the negotiation process. Should have
+     * a list of peers that have signalled a cancel and just append to it. It
+     * should be the job of the negotiating thread to check this and handle it
+     * gracefully. */
+    g_cancellable_cancel (
+        g_task_get_cancellable (local->priv->negotiator_task));
+  } else {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message");
+    goto send_reply_unlock;
+  }
+
+  reply = one_video_tcp_msg_new_ack (msg->id);
+
+  ret = TRUE;
+
+send_reply_unlock:
+  g_rec_mutex_unlock (&local->priv->lock);
+send_reply:
+  one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+
+  one_video_tcp_msg_free (reply);
+  g_free (addr_s);
+  return ret;
+}
+
 /* Called with the lock TAKEN */
 static gboolean
 setup_negotiate_remote_peers (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
@@ -524,6 +579,9 @@ body_done:
   switch (msg->type) {
     case ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE:
       one_video_local_peer_start_negotiate (local, output, msg);
+      break;
+    case ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE:
+      one_video_local_peer_cancel_negotiate (local, output, msg);
       break;
     case ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS:
       one_video_local_peer_query_reply_caps (local, connection, msg);

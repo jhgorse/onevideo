@@ -40,6 +40,7 @@ typedef enum _OneVideoTcpMsgType OneVideoTcpMsgType;
 enum _OneVideoTcpMsgType {
   /* Queries/Events */
   ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE = 100,
+  ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE,
   ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,
   ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS,
   ONE_VIDEO_TCP_MSG_TYPE_START_CALL,
@@ -87,6 +88,8 @@ OneVideoTcpMsg* one_video_tcp_msg_new_error_call        (guint64 id,
                                                          const gchar *error_msg);
 OneVideoTcpMsg* one_video_tcp_msg_new_ack               (guint64 id);
 OneVideoTcpMsg* one_video_tcp_msg_new_start_negotiate   (guint64 id,
+                                                         gchar *local_addr_s);
+OneVideoTcpMsg* one_video_tcp_msg_new_cancel_negotiate  (guint64 id,
                                                          gchar *local_addr_s);
 
 gchar*          one_video_tcp_msg_print                 (OneVideoTcpMsg *msg);

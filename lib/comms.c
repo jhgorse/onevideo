@@ -52,6 +52,11 @@ static const struct {
   {ONE_VIDEO_TCP_MSG_TYPE_HELLO,            "hello",              NULL},
   /* Format: call_id, peer_id_str */
   {ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xs)"},
+  /* Format: call_id, peer_id_str
+   * Can be sent by any peer during the negotiation process to cancel it.
+   * The call initiator sends it to all peers and the other peers send it
+   * only to the call initiator. */
+  {ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, "cancel negotiating", "(xs)"},
   /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xas)"},
   /* Format:
@@ -199,6 +204,20 @@ one_video_tcp_msg_new_start_negotiate (guint64 id, gchar * local_addr_s)
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
   msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,
+      g_variant_new (variant_type, id, local_addr_s));
+
+  return msg;
+}
+
+OneVideoTcpMsg *
+one_video_tcp_msg_new_cancel_negotiate (guint64 id, gchar * local_addr_s)
+{
+  OneVideoTcpMsg *msg;
+  const gchar *variant_type;
+
+  variant_type = one_video_tcp_msg_type_to_variant_type (
+      ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
+  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE,
       g_variant_new (variant_type, id, local_addr_s));
 
   return msg;

@@ -99,6 +99,41 @@ no_conn:
   return reply;
 }
 
+void
+one_video_remote_peer_send_tcp_msg_quick_noreply (OneVideoRemotePeer * remote,
+    OneVideoTcpMsg * msg)
+{
+  gchar *tmp;
+  GSocketClient *client;
+  GSocketConnection *conn;
+  GOutputStream *output;
+
+  client = g_socket_client_new ();
+  /* Wait at most 1 second per client */
+  g_socket_client_set_timeout (client, 1);
+  conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
+      NULL, NULL);
+  if (!conn)
+    goto no_conn;
+
+  tmp = one_video_tcp_msg_print (msg);
+  GST_TRACE ("Quick-sending to '%s' a '%s' msg of size %u: %s", remote->addr_s,
+      one_video_tcp_msg_type_to_string (msg->type, msg->version),
+      msg->size, tmp);
+  g_free (tmp);
+
+  output = g_io_stream_get_output_stream (G_IO_STREAM (conn));
+  if (!one_video_tcp_msg_write_to_stream (output, msg, NULL, NULL))
+    goto out;
+
+out:
+  g_io_stream_close (G_IO_STREAM (conn), NULL, NULL);
+  g_object_unref (conn);
+no_conn:
+  g_object_unref (client);
+  return;
+}
+
 static gboolean
 one_video_remote_peer_tcp_client_start_negotiate (OneVideoRemotePeer * remote,
     guint64 call_id, GCancellable * cancellable, GError ** error)
@@ -140,6 +175,19 @@ err:
 no_reply:
   one_video_tcp_msg_free (msg);
   return ret;
+}
+
+static void
+one_video_remote_peer_tcp_client_cancel_negotiate (OneVideoRemotePeer * remote,
+    guint64 call_id)
+{
+  OneVideoTcpMsg *msg;
+
+  msg = one_video_tcp_msg_new_cancel_negotiate (call_id, remote->local->addr_s);
+
+  one_video_remote_peer_send_tcp_msg_quick_noreply (remote, msg);
+    
+  one_video_tcp_msg_free (msg);
 }
 
 static GVariant *
@@ -468,6 +516,11 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   GPtrArray *remotes = local->priv->remote_peers;
   GError *error = NULL;
 
+  if (g_cancellable_is_cancelled (cancellable)) {
+    local->priv->negotiator_task = NULL;
+    return;
+  }
+
   /* Format: {OneVideoRemotePeer*: GVariant*}
    * GVariant is of type ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS */
   in = g_hash_table_new_full (NULL, NULL, NULL,
@@ -475,6 +528,9 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
 
   call_id = g_get_monotonic_time ();
 
+  /* Send START_NEGOTIATE + QUERY_CAPS to remote peers and get REPLY_CAPS */
+  g_rec_mutex_lock (&local->priv->lock);
+  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING;
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
@@ -486,29 +542,45 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     /* START_NEGOTIATE → ACK */
     ret = one_video_remote_peer_tcp_client_start_negotiate (remote, call_id,
         cancellable, &error);
-    if (!ret)
+    if (!ret) {
+      g_rec_mutex_unlock (&local->priv->lock);
       goto err;
+    }
 
     /* QUERY_CAPS → REPLY_CAPS */
     reply = one_video_remote_peer_tcp_client_query_caps (remote, call_id,
         cancellable, &error);
-    if (!reply)
+    if (!reply) {
+      g_rec_mutex_unlock (&local->priv->lock);
       goto err;
+    }
 
     g_hash_table_insert (in, remote, g_variant_ref (reply->variant));
     one_video_tcp_msg_free (reply);
   }
+  g_rec_mutex_unlock (&local->priv->lock);
+
+  /* After every synchronous operation, check if our task has been cancelled */
+  if (g_cancellable_is_cancelled (cancellable))
+    goto cancelled;
 
   /* FIXME: Read caps from all the peers and find the best caps
    * For now, we use the same caps everywhere and just negotiate ports */
   
+  g_rec_mutex_lock (&local->priv->lock);
   /* Set our own call details */
   one_video_local_peer_set_call_details (local, in);
-
   /* Transform REPLY_CAPS to CALL_DETAILS */
   out = one_video_aggregate_call_details_for_remotes (local, in, call_id);
+  g_rec_mutex_unlock (&local->priv->lock);
+
+  if (g_cancellable_is_cancelled (cancellable)) {
+    g_hash_table_unref (out);
+    goto cancelled;
+  }
 
   /* Distribute call details to all remotes */
+  g_rec_mutex_lock (&local->priv->lock);
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
@@ -521,15 +593,22 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
         g_hash_table_lookup (out, remote), cancellable, &error);
 
     if (!ret) {
+      g_rec_mutex_unlock (&local->priv->lock);
       g_hash_table_unref (out);
       goto err;
     }
   }
+  g_rec_mutex_unlock (&local->priv->lock);
 
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED;
+  if (g_cancellable_is_cancelled (cancellable)) {
+    g_hash_table_unref (out);
+    goto cancelled;
+  }
 
   /* Start the call
    * FIXME: Do this in one_video_local_start() ? */
+  g_rec_mutex_lock (&local->priv->lock);
+  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED;
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
@@ -544,24 +623,38 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
         peers, cancellable, &error);
     g_variant_unref (peers);
     if (!ret) {
+      g_rec_mutex_unlock (&local->priv->lock);
       g_hash_table_unref (out);
       goto err;
     }
   }
 
-  /* TODO: Unset this when the call ends (we can't end calls currently) */
-  local->priv->active_call_id = call_id;
-
+  g_rec_mutex_unlock (&local->priv->lock);
   g_hash_table_unref (out);
 
-  g_task_return_boolean (task, TRUE);
+  /* Unset return-on-cancel so we can do our own return */
+  if (g_task_set_return_on_cancel (task, FALSE)) {
+    local->priv->active_call_id = call_id;
+    g_task_return_boolean (task, TRUE);
+  } else {
+    goto cancelled;
+  }
 
 out:
   g_hash_table_unref (in);
+  local->priv->negotiator_task = NULL;
   return;
 
 err:
   g_task_return_error (task, error);
+cancelled:
+  g_rec_mutex_lock (&local->priv->lock);
+  for (ii = 0; ii < remotes->len; ii++) {
+    OneVideoRemotePeer *remote = g_ptr_array_index (remotes, ii);
+    one_video_remote_peer_tcp_client_cancel_negotiate (remote, call_id);
+  }
+  local->state = ONE_VIDEO_LOCAL_STATE_FAILED;
+  g_rec_mutex_unlock (&local->priv->lock);
   goto out;
 }
 
