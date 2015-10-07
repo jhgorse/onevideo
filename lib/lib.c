@@ -52,13 +52,6 @@ one_video_local_peer_stop_transmit (OneVideoLocalPeer * local)
 static void
 one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 {
-  g_rec_mutex_lock (&local->priv->lock);
-  g_ptr_array_foreach (local->priv->remote_peers,
-      (GFunc) one_video_remote_peer_remove_not_array, NULL);
-  g_ptr_array_free (local->priv->remote_peers, TRUE);
-  local->priv->remote_peers = g_ptr_array_new ();
-  g_rec_mutex_unlock (&local->priv->lock);
-
   g_assert (gst_element_set_state (local->playback, GST_STATE_NULL)
       == GST_STATE_CHANGE_SUCCESS);
   GST_DEBUG ("Stopped playback");
@@ -128,46 +121,10 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr,
   return local;
 }
 
-/* NOT a public symbol. Called internally after the call details are set. */
-gboolean
-one_video_local_peer_setup (OneVideoLocalPeer * local)
-{
-  if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATED) {
-    GST_ERROR ("Cannot setup local peer before negotiation is done");
-    return FALSE;
-  }
-
-  /* TODO TODO TODO: Set the send/recv caps here */
-
-  local->state = ONE_VIDEO_LOCAL_STATE_SETUP;
-  return TRUE;
-}
-
-void
-one_video_local_peer_stop (OneVideoLocalPeer * local)
-{
-  g_rec_mutex_lock (&local->priv->lock);
-  if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING &&
-      local->priv->remote_peers->len > 0) {
-    /* Send END_CALL message to remote peers */
-    one_video_local_peer_end_call (local);
-  }
-
-  if (local->state >= ONE_VIDEO_LOCAL_STATE_SETUP) {
-    one_video_local_peer_stop_transmit (local);
-    one_video_local_peer_stop_playback (local);
-  }
-
-  one_video_local_peer_stop_comms (local);
-  local->state = ONE_VIDEO_LOCAL_STATE_STOPPED;
-  g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
-  g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);
-  g_rec_mutex_unlock (&local->priv->lock);
-}
-
 void
 one_video_local_peer_free (OneVideoLocalPeer * local)
 {
+  GST_DEBUG ("Freeing local peer");
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   g_array_free (local->priv->used_ports, TRUE);
   g_rec_mutex_clear (&local->priv->lock);
@@ -585,7 +542,7 @@ one_video_local_peer_setup_remote (OneVideoLocalPeer * local,
   one_video_local_peer_setup_remote_receive (local, remote);
   one_video_local_peer_setup_remote_playback (local, remote);
   
-  remote->state = ONE_VIDEO_REMOTE_STATE_SETUP;
+  remote->state = ONE_VIDEO_REMOTE_STATE_READY;
 
   return TRUE;
 }
@@ -627,6 +584,25 @@ one_video_local_peer_negotiate_finish (OneVideoLocalPeer * local,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
+void
+one_video_local_peer_negotiate_stop (OneVideoLocalPeer * local)
+{
+  g_rec_mutex_lock (&local->priv->lock);
+  if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATOR) {
+    g_assert (local->priv->negotiator_task != NULL);
+    GST_DEBUG ("Stopping negotiation as the negotiator");
+    g_cancellable_cancel (
+        g_task_get_cancellable (local->priv->negotiator_task));
+    /* Unlock mutex so that the other thread gets access */
+  } else if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATEE) {
+    GST_DEBUG ("Stopping negotiation as the negotiatee");
+    g_clear_pointer (&local->priv->negotiate->remotes,
+        (GDestroyNotify) g_hash_table_unref);
+    g_clear_pointer (&local->priv->negotiate, g_free);
+  }
+  g_rec_mutex_unlock (&local->priv->lock);
+}
+
 gboolean
 one_video_local_peer_start (OneVideoLocalPeer * local)
 {
@@ -634,9 +610,7 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
   GstStateChangeReturn ret;
   OneVideoRemotePeer *remote;
 
-  g_assert (one_video_local_peer_setup (local));
-
-  if (local->state != ONE_VIDEO_LOCAL_STATE_SETUP) {
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_READY)) {
     GST_ERROR ("Negotiation hasn't been done yet!");
     return FALSE;
   }
@@ -661,23 +635,58 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
         remote->priv->recv_ports[3]);
     remote->state = ONE_VIDEO_REMOTE_STATE_PLAYING;
   }
-  g_rec_mutex_unlock (&local->priv->lock);
 
   ret = gst_element_set_state (local->playback, GST_STATE_PLAYING);
   if (ret == GST_STATE_CHANGE_FAILURE)
     goto play_fail;
 
   GST_DEBUG ("Ready to playback data from all remotes");
+  /* The difference between negotiator and negotiatee ends with playback */
   local->state = ONE_VIDEO_LOCAL_STATE_PLAYING;
+  g_rec_mutex_unlock (&local->priv->lock);
   return TRUE;
 
   play_fail: {
     GST_ERROR ("Unable to set local playback pipeline to PLAYING!");
+    g_rec_mutex_unlock (&local->priv->lock);
     return FALSE;
   }
 
   recv_fail: {
     GST_ERROR ("Unable to set %s receive pipeline to PLAYING!", remote->addr_s);
+    g_rec_mutex_unlock (&local->priv->lock);
     return FALSE;
   }
+}
+
+void
+one_video_local_peer_stop (OneVideoLocalPeer * local)
+{
+  GST_DEBUG ("Stopping local peer");
+  g_rec_mutex_lock (&local->priv->lock);
+  if (local->state >= ONE_VIDEO_LOCAL_STATE_READY &&
+      local->priv->remote_peers->len > 0) {
+    GST_DEBUG ("Sending END_CALL to remote peers");
+    one_video_local_peer_end_call (local);
+  }
+
+  if (local->priv->remote_peers->len > 0) {
+    g_ptr_array_foreach (local->priv->remote_peers,
+        (GFunc) one_video_remote_peer_remove_not_array, NULL);
+    g_ptr_array_free (local->priv->remote_peers, TRUE);
+    local->priv->remote_peers = g_ptr_array_new ();
+  }
+
+  if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING) {
+    GST_DEBUG ("Stopping transmit and playback");
+    one_video_local_peer_stop_transmit (local);
+    one_video_local_peer_stop_playback (local);
+  }
+
+  GST_DEBUG ("Stopping TCP communication");
+  one_video_local_peer_stop_comms (local);
+  local->state = ONE_VIDEO_LOCAL_STATE_STOPPED;
+  g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
+  g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);
+  g_rec_mutex_unlock (&local->priv->lock);
 }

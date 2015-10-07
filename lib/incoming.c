@@ -51,14 +51,8 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
   g_rec_mutex_lock (&local->priv->lock);
 
-  if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED)) {
     reply = one_video_tcp_msg_new_error (msg->id, "Busy");
-    goto send_reply;
-  }
-
-  /* Technically, this is covered by the local->state check, but can't hurt */
-  if (local->priv->negotiate != NULL) {
-    reply = one_video_tcp_msg_new_error (msg->id, "Already negotiating");
     goto send_reply_unlock;
   }
 
@@ -67,7 +61,8 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
   local->priv->negotiate->negotiator =
     one_video_remote_peer_new (local, negotiator_addr_s);
 
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING;
+  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
+    ONE_VIDEO_LOCAL_STATE_NEGOTIATEE;
 
   reply = one_video_tcp_msg_new_ack (msg->id);
 
@@ -102,23 +97,26 @@ one_video_local_peer_cancel_negotiate (OneVideoLocalPeer * local,
   g_variant_get (msg->variant, variant_type, &call_id, &addr_s);
 
   g_rec_mutex_lock (&local->priv->lock);
-  if (local->state == ONE_VIDEO_LOCAL_STATE_NEGOTIATING &&
-      local->priv->negotiate != NULL &&
+  if ((local->state &
+       (ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
+        ONE_VIDEO_LOCAL_STATE_NEGOTIATEE)) &&
       g_strcmp0 (addr_s, local->priv->negotiate->negotiator->addr_s) == 0) {
-    /* We're the negotiatee and we just got a cancel */
-    local->state = ONE_VIDEO_LOCAL_STATE_FAILED;
+    GST_DEBUG ("Received a CANCEL_NEGOTIATE as a negotiatee; resetting");
+    local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
     g_clear_pointer (&local->priv->negotiate->remotes,
         (GDestroyNotify) g_hash_table_unref);
     g_clear_pointer (&local->priv->negotiate, g_free);
-  } else if (local->state == ONE_VIDEO_LOCAL_STATE_NEGOTIATING &&
-      local->priv->negotiator_task != NULL) {
-    /* We're the negotiator and we just got a cancel */
+  } else if (local->state &
+      (ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
+       ONE_VIDEO_LOCAL_STATE_NEGOTIATOR)) {
     /* TODO: For now, we completely cancel the negotiation process. Should have
      * a list of peers that have signalled a cancel and just append to it. It
      * should be the job of the negotiating thread to check this and handle it
      * gracefully. */
+    GST_DEBUG ("Received a CANCEL_NEGOTIATE as a negotiator; cancelling task");
     g_cancellable_cancel (
         g_task_get_cancellable (local->priv->negotiator_task));
+    local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
   } else {
     reply = one_video_tcp_msg_new_error (msg->id, "Invalid message");
     goto send_reply_unlock;
@@ -210,14 +208,15 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
 
   g_rec_mutex_lock (&local->priv->lock);
 
-  if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
+  if (!(local->state &
+        (ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
+         ONE_VIDEO_LOCAL_STATE_NEGOTIATEE))) {
     reply = one_video_tcp_msg_new_error (msg->id, "Busy");
     g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
   }
 
-  if (local->priv->negotiate == NULL ||
-      local->priv->negotiate->call_id != call_id) {
+  if (local->priv->negotiate->call_id != call_id) {
     reply = one_video_tcp_msg_new_error (msg->id, "Invalid call id");
     g_rec_mutex_unlock (&local->priv->lock);
     goto send_reply;
@@ -312,7 +311,8 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
     remote->priv->recv_vcaps = gst_caps_from_string (vcaps);
   }
 
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED;
+  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED |
+    ONE_VIDEO_LOCAL_STATE_NEGOTIATEE;
 
   g_variant_iter_free (iter);
   return TRUE;
@@ -438,7 +438,9 @@ one_video_local_peer_start_call (OneVideoLocalPeer * local,
 
   g_rec_mutex_lock (&local->priv->lock);
 
-  if (local->state != ONE_VIDEO_LOCAL_STATE_NEGOTIATED) {
+  if (!(local->state &
+        (ONE_VIDEO_LOCAL_STATE_NEGOTIATED |
+         ONE_VIDEO_LOCAL_STATE_NEGOTIATEE))) {
     reply = one_video_tcp_msg_new_error (msg->id, "Busy");
     goto send_reply_unlock;
   }
@@ -488,8 +490,8 @@ one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
 
   g_rec_mutex_lock (&local->priv->lock);
 
-  if (local->state != ONE_VIDEO_LOCAL_STATE_PAUSED &&
-      local->state != ONE_VIDEO_LOCAL_STATE_PLAYING) {
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_PAUSED ||
+        local->state & ONE_VIDEO_LOCAL_STATE_PLAYING)) {
     reply = one_video_tcp_msg_new_error (msg->id, "Busy");
     goto send_reply_unlock;
   }

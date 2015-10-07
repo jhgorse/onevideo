@@ -530,7 +530,8 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
 
   /* Send START_NEGOTIATE + QUERY_CAPS to remote peers and get REPLY_CAPS */
   g_rec_mutex_lock (&local->priv->lock);
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING;
+  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
+    ONE_VIDEO_LOCAL_STATE_NEGOTIATOR;
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
@@ -608,7 +609,8 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   /* Start the call
    * FIXME: Do this in one_video_local_start() ? */
   g_rec_mutex_lock (&local->priv->lock);
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED;
+  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED |
+    ONE_VIDEO_LOCAL_STATE_NEGOTIATOR;
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
@@ -628,6 +630,8 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
       goto err;
     }
   }
+  local->state = ONE_VIDEO_LOCAL_STATE_READY |
+    ONE_VIDEO_LOCAL_STATE_NEGOTIATOR;
 
   g_rec_mutex_unlock (&local->priv->lock);
   g_hash_table_unref (out);
@@ -653,7 +657,7 @@ cancelled:
     OneVideoRemotePeer *remote = g_ptr_array_index (remotes, ii);
     one_video_remote_peer_tcp_client_cancel_negotiate (remote, call_id);
   }
-  local->state = ONE_VIDEO_LOCAL_STATE_FAILED;
+  local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
   g_rec_mutex_unlock (&local->priv->lock);
   goto out;
 }

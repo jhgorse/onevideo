@@ -49,29 +49,37 @@ typedef struct _OneVideoRemotePeerPriv OneVideoRemotePeerPriv;
 typedef enum _OneVideoRemotePeerState OneVideoRemotePeerState;
 
 enum _OneVideoLocalPeerState {
-  ONE_VIDEO_LOCAL_STATE_NULL,
-  ONE_VIDEO_LOCAL_STATE_INITIALISED,
+  ONE_VIDEO_LOCAL_STATE_NULL          = 0,
 
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATING,
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATED,
+  /**~ Special states ~**/
+  /* These are ORed with other states to signal a special state */
+  /* This is ORed with the current state to signal failure */
+  ONE_VIDEO_LOCAL_STATE_FAILED        = 1 << 0,
+  /* One of these is ORed with the current state when we're taking on the role
+   * of either negotiator or negotiatee */
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATOR    = 1 << 1,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATEE    = 1 << 2,
 
-  ONE_VIDEO_LOCAL_STATE_SETUP,
-  ONE_VIDEO_LOCAL_STATE_PLAYING,
-  ONE_VIDEO_LOCAL_STATE_PAUSED,
-  ONE_VIDEO_LOCAL_STATE_STOPPED,
+  /* Ordinary states. These are not ORed with each other. */
+  ONE_VIDEO_LOCAL_STATE_INITIALISED   = 1 << 9,
 
-  ONE_VIDEO_LOCAL_STATE_FAILED,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATING   = 1 << 10,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATED    = 1 << 11,
+
+  ONE_VIDEO_LOCAL_STATE_READY         = 1 << 12,
+  ONE_VIDEO_LOCAL_STATE_PLAYING       = 1 << 13,
+  ONE_VIDEO_LOCAL_STATE_PAUSED        = 1 << 14,
+  ONE_VIDEO_LOCAL_STATE_STOPPED       = 1 << 15,
 };
 
 enum _OneVideoRemotePeerState {
   ONE_VIDEO_REMOTE_STATE_NULL,
+  ONE_VIDEO_REMOTE_STATE_FAILED,
   ONE_VIDEO_REMOTE_STATE_ALLOCATED,
 
-  ONE_VIDEO_REMOTE_STATE_SETUP,
+  ONE_VIDEO_REMOTE_STATE_READY,
   ONE_VIDEO_REMOTE_STATE_PLAYING,
   ONE_VIDEO_REMOTE_STATE_PAUSED,
-
-  ONE_VIDEO_REMOTE_STATE_FAILED,
 };
 
 /* Represents us; the library and the client implementing this local */
@@ -120,6 +128,7 @@ gboolean            one_video_local_peer_negotiate_async  (OneVideoLocalPeer *lo
 gboolean            one_video_local_peer_negotiate_finish (OneVideoLocalPeer *local,
                                                            GAsyncResult *result,
                                                            GError **error);
+void                one_video_local_peer_negotiate_stop   (OneVideoLocalPeer *local);
 gboolean            one_video_local_peer_start            (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop             (OneVideoLocalPeer *local);
 
