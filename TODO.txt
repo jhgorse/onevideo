@@ -17,7 +17,8 @@ Items marked with a ★ are high priority
 * Error handling
  - We need to define our own GErrors and pass them around in the API. Currently,
    we just pass around NULL. The machinery is in place, so should be
-   straighforward.
+   straighforward. Because we don't do this, we don't check the set GError at
+   all and leak GErrors.
  - Need ERROR types in the network protocol itself so the negotiator and/or
    peers can take appropriate corrective action instead of just aborting the
    negotiation process or the call.
