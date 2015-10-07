@@ -380,6 +380,7 @@ one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
         == GST_STATE_CHANGE_SUCCESS);
     g_assert (gst_bin_remove (GST_BIN (local->playback),
           remote->priv->aplayback));
+    remote->priv->aplayback = NULL;
     GST_DEBUG ("Released audio playback bin of remote %s", remote->addr_s);
   }
 
@@ -388,14 +389,13 @@ one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
         == GST_STATE_CHANGE_SUCCESS);
     g_assert (gst_bin_remove (GST_BIN (local->playback),
           remote->priv->vplayback));
+    remote->priv->vplayback = NULL;
     GST_DEBUG ("Released video playback bin of remote %s", remote->addr_s);
   }
 
   /* Stop receiving */
   g_assert (gst_element_set_state (remote->receive, GST_STATE_NULL)
       == GST_STATE_CHANGE_SUCCESS);
-  gst_object_unref (remote->receive);
-  remote->receive = NULL;
   remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
 
   tmp = g_strdup (remote->addr_s);
@@ -421,6 +421,7 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
   guint ii;
   OneVideoLocalPeer *local = remote->local;
 
+  GST_DEBUG ("Freeing remote %s", remote->addr_s);
   g_rec_mutex_lock (&local->priv->lock);
   for (ii = 0; ii < local->priv->used_ports->len; ii++)
     /* Port numbers are unique, sorted, and contiguous. So if we find the first
@@ -430,8 +431,17 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
       g_array_remove_range (local->priv->used_ports, ii, 4);
   g_rec_mutex_unlock (&local->priv->lock);
 
-  gst_caps_unref (remote->priv->recv_acaps);
-  gst_caps_unref (remote->priv->recv_vcaps);
+  /* Free relevant bins and pipelines */
+  if (remote->priv->aplayback)
+    gst_object_unref (remote->priv->aplayback);
+  if (remote->priv->vplayback)
+    gst_object_unref (remote->priv->vplayback);
+  gst_object_unref (remote->receive);
+
+  if (remote->priv->recv_acaps)
+    gst_caps_unref (remote->priv->recv_acaps);
+  if (remote->priv->recv_vcaps)
+    gst_caps_unref (remote->priv->recv_vcaps);
   g_object_unref (remote->addr);
   g_free (remote->addr_s);
   g_free (remote->priv);
