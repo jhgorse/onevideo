@@ -47,10 +47,19 @@ kill_remote_peer (OneVideoRemotePeer * remote)
 static gboolean
 on_local_peer_stop (OneVideoLocalPeer * local)
 {
-  if (local->state != ONE_VIDEO_LOCAL_STATE_STOPPED)
-    /* Check again later */
-    return TRUE;
+  if (local->state & ONE_VIDEO_LOCAL_STATE_STOPPED) {
+      g_print ("Local peer stopped, exiting...\n");
+      goto quit;
+  }
 
+  if (local->state & ONE_VIDEO_LOCAL_STATE_FAILED) {
+      g_print ("Local peer failed, exiting...\n");
+      one_video_local_peer_stop (local);
+      goto quit;
+  }
+
+  return TRUE;
+quit:
   g_main_loop_quit (loop);
 
   /* Remove the source so it's not called again */
@@ -60,6 +69,8 @@ on_local_peer_stop (OneVideoLocalPeer * local)
 static gboolean
 on_app_exit (OneVideoLocalPeer * local)
 {
+  if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATING)
+    one_video_local_peer_negotiate_stop (local);
   one_video_local_peer_stop (local);
   g_main_loop_quit (loop);
 
@@ -77,11 +88,13 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
 
   local = g_task_get_task_data (G_TASK (res));
   ret = one_video_local_peer_negotiate_finish (local, res, &error);
-  g_clear_error (&error);
   if (ret) {
     g_print ("All remotes have replied.\n");
     one_video_local_peer_start (local);
     return;
+  } else {
+    if (error != NULL)
+      g_printerr ("Error while negotiating: %s\n", error->message);
   }
 }
 
