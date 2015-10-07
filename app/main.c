@@ -160,14 +160,14 @@ main (int   argc,
 
   if (remotes == NULL) {
     g_print ("No remotes specified; listening for incoming connections\n");
-    /* Stop the mainloop and exit when an externally-initiated call ends */
-    g_idle_add ((GSourceFunc) on_local_peer_stop, local);
+    /* Stop the mainloop and exit when the call ends */
   } else {
     g_print ("Dialling remotes...\n");
     dial_remotes (local, remotes);
     g_print ("Waiting for remotes to reply...\n");
   }
 
+  g_idle_add ((GSourceFunc) on_local_peer_stop, local);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
