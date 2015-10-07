@@ -569,18 +569,25 @@ one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
     gpointer callback_data)
 {
   GTask *task;
+  GCancellable *our_cancellable;
 
   if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
     GST_ERROR ("Our state is %u instead of INITIALISED", local->state);
     return FALSE;
   }
 
-  task = g_task_new (NULL, cancellable, callback, callback_data);
+  if (cancellable)
+    our_cancellable = g_object_ref (cancellable);
+  else
+    our_cancellable = g_cancellable_new ();
+
+  task = g_task_new (NULL, our_cancellable, callback, callback_data);
   g_task_set_task_data (task, local, NULL);
   g_task_set_return_on_cancel (task, TRUE);
   g_task_run_in_thread (task,
       (GTaskThreadFunc) one_video_local_peer_negotiate_thread);
   local->priv->negotiator_task = task;
+  g_object_unref (our_cancellable); /* Hand over ref to the task */
   g_object_unref (task);
 
   return TRUE;
