@@ -406,7 +406,7 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   /* Move the call id */
   local->priv->active_call_id = local->priv->negotiate->call_id;
 
-  /* Clear out negotiate struct. Freeing the unused remotes removes unused
+  /* Clear out negotiate struct. Freeing the remotes removes the allocated
    * udp ports as well */
   g_clear_pointer (&local->priv->negotiate->remotes,
       (GDestroyNotify) g_hash_table_unref);
