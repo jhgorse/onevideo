@@ -704,7 +704,9 @@ one_video_local_peer_end_call (OneVideoLocalPeer * local)
   OneVideoTcpMsg *msg;
   const gchar *variant_type;
 
-  g_assert (local->priv->active_call_id);
+  if (!local->priv->active_call_id)
+    /* No active call */
+    return;
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_END_CALL, ONE_VIDEO_TCP_MAX_VERSION);
