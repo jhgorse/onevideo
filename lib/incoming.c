@@ -31,6 +31,31 @@
 #include "utils.h"
 #include "incoming.h"
 
+static guint timeout_value = 0;
+
+#define ONE_VIDEO_NEGOTIATE_TIMEOUT_SECONDS 5
+
+static gboolean
+check_negotiate_timeout (OneVideoLocalPeer * local)
+{
+  /* Quit if we failed due to some reason */
+  if (local->state & ONE_VIDEO_LOCAL_STATE_FAILED)
+    return G_SOURCE_REMOVE;
+
+  timeout_value += 1;
+
+  if (timeout_value > ONE_VIDEO_NEGOTIATE_TIMEOUT_SECONDS) {
+    GST_DEBUG ("Timed out during negotiation, stopping...");
+    local->state |= ONE_VIDEO_LOCAL_STATE_FAILED |
+      ONE_VIDEO_LOCAL_STATE_TIMEOUT;
+    one_video_local_peer_negotiate_stop (local);
+    timeout_value = 0;
+    return G_SOURCE_REMOVE;
+  }
+
+  return G_SOURCE_CONTINUE;
+}
+
 static gboolean
 one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
     GOutputStream * output, OneVideoTcpMsg * msg)
@@ -60,6 +85,12 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
   local->priv->negotiate->call_id = call_id;
   local->priv->negotiate->negotiator =
     one_video_remote_peer_new (local, negotiator_addr_s);
+
+  /* Set a rough timer for timing out the negotiation */
+  timeout_value = 0;
+  local->priv->negotiate->check_timeout_id = 
+    g_timeout_add_seconds_full (G_PRIORITY_DEFAULT_IDLE, 1,
+        (GSourceFunc) check_negotiate_timeout, local, NULL);
 
   local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
     ONE_VIDEO_LOCAL_STATE_NEGOTIATEE;
@@ -205,6 +236,8 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
     goto send_reply;
   }
 
+  timeout_value = 0;
+
   /* Allocate ports for all peers listed (pre-setup) */
   setup_negotiate_remote_peers (local, msg);
 
@@ -337,6 +370,8 @@ one_video_local_peer_call_details (OneVideoLocalPeer * local,
     goto send_reply_unlock;
   }
 
+  timeout_value = 0;
+
   /* Set call details */
   if (!set_call_details (local, msg)) {
     reply = one_video_tcp_msg_new_error_call (call_id, "Invalid call details");
@@ -391,6 +426,9 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   local->state = ONE_VIDEO_LOCAL_STATE_READY
     | ONE_VIDEO_LOCAL_STATE_NEGOTIATEE;
 
+  /* Negotiation has finished, remove timer */
+  g_source_remove (local->priv->negotiate->check_timeout_id);
+
   /* Clear out negotiate struct. Freeing the remotes removes the allocated
    * udp ports as well */
   g_clear_pointer (&local->priv->negotiate->remotes,
@@ -435,6 +473,8 @@ one_video_local_peer_start_call (OneVideoLocalPeer * local,
     reply = one_video_tcp_msg_new_error (msg->id, "Invalid call id");
     goto send_reply_unlock;
   }
+
+  timeout_value = 0;
 
   /* Start calling the specified list of peers */
   if (!start_call (local, msg)) {

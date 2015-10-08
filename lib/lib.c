@@ -621,6 +621,7 @@ one_video_local_peer_negotiate_stop (OneVideoLocalPeer * local)
     /* Unlock mutex so that the other thread gets access */
   } else if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATEE) {
     GST_DEBUG ("Stopping negotiation as the negotiatee");
+    g_source_remove (local->priv->negotiate->check_timeout_id);
     g_clear_pointer (&local->priv->negotiate->remotes,
         (GDestroyNotify) g_hash_table_unref);
     g_clear_pointer (&local->priv->negotiate, g_free);

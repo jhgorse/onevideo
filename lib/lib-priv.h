@@ -49,6 +49,8 @@ struct _OneVideoNegotiate {
   OneVideoRemotePeer *negotiator;
   /* Potential remotes while negotiating */
   GHashTable *remotes;
+  /* A GSourceFunc id that checks for timeouts */
+  guint check_timeout_id;
 };
 
 typedef struct _OneVideoNegotiate OneVideoNegotiate;

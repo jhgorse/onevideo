@@ -55,10 +55,11 @@ enum _OneVideoLocalPeerState {
   /* These are ORed with other states to signal a special state */
   /* This is ORed with the current state to signal failure */
   ONE_VIDEO_LOCAL_STATE_FAILED        = 1 << 0,
+  ONE_VIDEO_LOCAL_STATE_TIMEOUT       = 1 << 1,
   /* One of these is ORed with the current state when we're taking on the role
    * of either negotiator or negotiatee */
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATOR    = 1 << 1,
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATEE    = 1 << 2,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATOR    = 1 << 7,
+  ONE_VIDEO_LOCAL_STATE_NEGOTIATEE    = 1 << 8,
 
   /* Ordinary states. These are not ORed with each other. */
   ONE_VIDEO_LOCAL_STATE_INITIALISED   = 1 << 9,
