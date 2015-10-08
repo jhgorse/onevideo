@@ -405,6 +405,8 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
 
   /* Move the call id */
   local->priv->active_call_id = local->priv->negotiate->call_id;
+  local->state = ONE_VIDEO_LOCAL_STATE_READY
+    | ONE_VIDEO_LOCAL_STATE_NEGOTIATEE;
 
   /* Clear out negotiate struct. Freeing the remotes removes the allocated
    * udp ports as well */
