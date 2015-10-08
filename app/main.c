@@ -108,7 +108,7 @@ dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
     remote = one_video_remote_peer_new (local, remotes[index]);
     one_video_local_peer_add_remote (local, remote);
 
-    GST_DEBUG ("Created and added remote peer %s", remote->addr_s);
+    g_print ("Created and added remote peer %s", remote->addr_s);
   }
 
   one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
