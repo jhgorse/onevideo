@@ -41,7 +41,7 @@ kill_remote_peer (OneVideoRemotePeer * remote)
   one_video_remote_peer_remove (remote);
   g_main_loop_quit (loop);
 
-  return FALSE;
+  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -58,12 +58,11 @@ on_local_peer_stop (OneVideoLocalPeer * local)
       goto quit;
   }
 
-  return TRUE;
+  return G_SOURCE_CONTINUE;
 quit:
   g_main_loop_quit (loop);
 
-  /* Remove the source so it's not called again */
-  return FALSE;
+  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -74,8 +73,7 @@ on_app_exit (OneVideoLocalPeer * local)
   one_video_local_peer_stop (local);
   g_main_loop_quit (loop);
 
-  /* Remove the source so it's not called again */
-  return FALSE;
+  return G_SOURCE_REMOVE;
 }
 
 static void
