@@ -3,8 +3,10 @@
 
 build_dir=$(dirname $0)
 
+. "${build_dir}/export-path.sh"
+
 : ${VALGRIND_LOG:="valgrind-memcheck.log"}
-GST_PLUGIN_PATH="${GST_PLUGIN_PATH}:${build_dir}/gst/proxy/.libs" G_SLICE="always-malloc" G_DEBUG="$G_DEBUG,gc-friendly" GST_DEBUG="*:3,onevideo:6,$GST_DEBUG" \
+G_SLICE="always-malloc" G_DEBUG="$G_DEBUG,gc-friendly" GST_DEBUG="*:3,onevideo:6,$GST_DEBUG" \
 	libtool --mode=execute \
 	valgrind --suppressions="${build_dir}"/tests/supp/gst.supp --tool=memcheck --leak-check=full --leak-resolution=high --num-callers=30 --log-file="${VALGRIND_LOG}" \
 	"${build_dir}"/app/one-video-app "$@"
