@@ -52,8 +52,9 @@ on_local_peer_stop (OneVideoLocalPeer * local)
       goto quit;
   }
 
-  if (local->state & ONE_VIDEO_LOCAL_STATE_FAILED) {
-      g_print ("Local peer failed, exiting...\n");
+  if (local->state & ONE_VIDEO_LOCAL_STATE_FAILED &&
+      local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATOR) {
+      g_print ("Local negotiator peer failed, exiting...\n");
       one_video_local_peer_stop (local);
       goto quit;
   }
