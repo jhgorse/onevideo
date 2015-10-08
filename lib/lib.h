@@ -128,7 +128,7 @@ gboolean            one_video_local_peer_negotiate_async  (OneVideoLocalPeer *lo
 gboolean            one_video_local_peer_negotiate_finish (OneVideoLocalPeer *local,
                                                            GAsyncResult *result,
                                                            GError **error);
-void                one_video_local_peer_negotiate_stop   (OneVideoLocalPeer *local);
+gboolean            one_video_local_peer_negotiate_stop   (OneVideoLocalPeer *local);
 gboolean            one_video_local_peer_start            (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop             (OneVideoLocalPeer *local);
 

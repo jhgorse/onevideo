@@ -96,38 +96,21 @@ one_video_local_peer_cancel_negotiate (OneVideoLocalPeer * local,
   }
   g_variant_get (msg->variant, variant_type, &call_id, &addr_s);
 
-  g_rec_mutex_lock (&local->priv->lock);
-  if ((local->state &
-       (ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
-        ONE_VIDEO_LOCAL_STATE_NEGOTIATEE)) &&
-      g_strcmp0 (addr_s, local->priv->negotiate->negotiator->addr_s) == 0) {
-    GST_DEBUG ("Received a CANCEL_NEGOTIATE as a negotiatee; resetting");
-    local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
-    g_clear_pointer (&local->priv->negotiate->remotes,
-        (GDestroyNotify) g_hash_table_unref);
-    g_clear_pointer (&local->priv->negotiate, g_free);
-  } else if (local->state &
-      (ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
-       ONE_VIDEO_LOCAL_STATE_NEGOTIATOR)) {
-    /* TODO: For now, we completely cancel the negotiation process. Should have
-     * a list of peers that have signalled a cancel and just append to it. It
-     * should be the job of the negotiating thread to check this and handle it
-     * gracefully. */
-    GST_DEBUG ("Received a CANCEL_NEGOTIATE as a negotiator; cancelling task");
-    g_cancellable_cancel (
-        g_task_get_cancellable (local->priv->negotiator_task));
-    local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
-  } else {
+  GST_DEBUG ("Received a CANCEL_NEGOTIATE");
+
+  /* TODO: For now, we completely cancel the negotiation process. Should have
+   * a list of peers that have signalled a cancel and just append to it. It
+   * should be the job of the negotiating thread to check this and handle it
+   * gracefully. */
+  if (!one_video_local_peer_negotiate_stop (local)) {
     reply = one_video_tcp_msg_new_error (msg->id, "Invalid message");
-    goto send_reply_unlock;
+    goto send_reply;
   }
 
   reply = one_video_tcp_msg_new_ack (msg->id);
 
   ret = TRUE;
 
-send_reply_unlock:
-  g_rec_mutex_unlock (&local->priv->lock);
 send_reply:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 

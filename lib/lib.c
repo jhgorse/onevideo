@@ -601,10 +601,18 @@ one_video_local_peer_negotiate_finish (OneVideoLocalPeer * local,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
-void
+gboolean
 one_video_local_peer_negotiate_stop (OneVideoLocalPeer * local)
 {
   g_rec_mutex_lock (&local->priv->lock);
+
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATING) &&
+      !(local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATED)) {
+    GST_ERROR ("Can't stop negotiating when not negotiating");
+    g_rec_mutex_unlock (&local->priv->lock);
+    return FALSE;
+  }
+
   if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATOR) {
     g_assert (local->priv->negotiator_task != NULL);
     GST_DEBUG ("Stopping negotiation as the negotiator");
@@ -616,8 +624,16 @@ one_video_local_peer_negotiate_stop (OneVideoLocalPeer * local)
     g_clear_pointer (&local->priv->negotiate->remotes,
         (GDestroyNotify) g_hash_table_unref);
     g_clear_pointer (&local->priv->negotiate, g_free);
+    /* Reset state so we accept incoming connections again */
+    local->state = ONE_VIDEO_LOCAL_STATE_INITIALISED;
+  } else {
+    g_assert_not_reached ();
   }
+
+  local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
+
   g_rec_mutex_unlock (&local->priv->lock);
+  return TRUE;
 }
 
 gboolean
