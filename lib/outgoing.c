@@ -72,8 +72,11 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
   g_socket_client_set_timeout (client, ONE_VIDEO_TCP_TIMEOUT);
   conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
       cancellable, error);
-  if (!conn)
+  if (!conn) {
+    GST_ERROR ("Unable to connect to %s: %s", remote->addr_s,
+        (*error)->message);
     goto no_conn;
+  }
 
   tmp = one_video_tcp_msg_print (msg);
   GST_TRACE ("Sending to '%s' a '%s' msg of size %u: %s", remote->addr_s,
