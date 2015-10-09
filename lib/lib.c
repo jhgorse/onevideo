@@ -124,6 +124,8 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr,
 void
 one_video_local_peer_free (OneVideoLocalPeer * local)
 {
+  GST_DEBUG ("Stopping TCP communication");
+  one_video_local_peer_stop_comms (local);
   GST_DEBUG ("Freeing local peer");
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   g_array_free (local->priv->used_ports, TRUE);
@@ -717,8 +719,6 @@ one_video_local_peer_stop (OneVideoLocalPeer * local)
     one_video_local_peer_stop_playback (local);
   }
 
-  GST_DEBUG ("Stopping TCP communication");
-  one_video_local_peer_stop_comms (local);
   local->state = ONE_VIDEO_LOCAL_STATE_STOPPED;
   g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
   g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);

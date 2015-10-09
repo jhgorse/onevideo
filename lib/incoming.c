@@ -76,7 +76,8 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
   g_rec_mutex_lock (&local->priv->lock);
 
-  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED)) {
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED) &&
+      !(local->state & ONE_VIDEO_LOCAL_STATE_STOPPED)) {
     reply = one_video_tcp_msg_new_error (msg->id, "Busy");
     goto send_reply_unlock;
   }
