@@ -101,8 +101,10 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
 {
   GstBus *bus;
   GstCaps *jpeg_video_caps, *raw_audio_caps;
-  GstElement *asrc, *afilter, *aencode, *apay, *apaycaps, *asink, *artcpsink;
-  GstElement *vsrc, *vfilter, *vqueue, *vpay, *vpaycaps, *vsink, *vrtcpsink;
+  GstElement *asrc, *afilter, *aencode, *apay, *apaycaps;
+  GstElement *artpqueue, *asink, *artcpqueue, *artcpsink;
+  GstElement *vsrc, *vfilter, *vqueue, *vpay, *vpaycaps;
+  GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink;
   GstPad *srcpad, *sinkpad;
 
   if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit))
@@ -125,7 +127,9 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   apay = gst_element_factory_make ("rtpopuspay", NULL);
   apaycaps = gst_element_factory_make ("capsfilter", "audio-rtp-transmit-caps");
   g_object_set (apaycaps, "caps", local->priv->send_acaps, NULL);
+  artpqueue = gst_element_factory_make ("queue", NULL);
   asink = gst_element_factory_make ("udpsink", "adata-transmit-udpsink");
+  artcpqueue = gst_element_factory_make ("queue", NULL);
   artcpsink = gst_element_factory_make ("udpsink", "artcp-transmit-udpsink");
 
   /* FIXME: Use GstDevice* instead of a device path string
@@ -142,16 +146,23 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   vpaycaps = gst_element_factory_make ("capsfilter", "video-rtp-transmit-caps");
   g_object_set (vpaycaps, "caps", local->priv->send_vcaps, NULL);
+  vrtpqueue = gst_element_factory_make ("queue", NULL);
   vsink = gst_element_factory_make ("udpsink", "vdata-transmit-udpsink");
+  vrtcpqueue = gst_element_factory_make ("queue", NULL);
   vrtcpsink = gst_element_factory_make ("udpsink", "vrtcp-transmit-udpsink");
 
   gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
-      afilter, aencode, apay, apaycaps, asink, artcpsink, vsrc, vfilter, vqueue,
-      vpay, vpaycaps, vsink, vrtcpsink, NULL);
+      afilter, aencode, apay, apaycaps, artpqueue, asink, artcpqueue, artcpsink,
+      vsrc, vfilter, vqueue, vpay, vpaycaps, vrtpqueue, vsink, vrtcpqueue,
+      vrtcpsink, NULL);
 
   /* Link audio branch */
   g_assert (gst_element_link_many (asrc, afilter, aencode, apay, apaycaps,
         NULL));
+  g_assert (gst_element_link (artcpqueue, artcpsink));
+  local->priv->artcpudpsink = artcpsink;
+  g_assert (gst_element_link (artpqueue, asink));
+  local->priv->audpsink = asink;
 
   srcpad = gst_element_get_static_pad (apaycaps, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_0");
@@ -160,22 +171,24 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   gst_object_unref (srcpad);
 
   srcpad = gst_element_get_static_pad (local->priv->rtpbin, "send_rtp_src_0");
-  sinkpad = gst_element_get_static_pad (asink, "sink");
+  sinkpad = gst_element_get_static_pad (artpqueue, "sink");
   gst_pad_link (srcpad, sinkpad);
-  local->priv->audpsink = asink;
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
   srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_0");
-  sinkpad = gst_element_get_static_pad (artcpsink, "sink");
+  sinkpad = gst_element_get_static_pad (artcpqueue, "sink");
   gst_pad_link (srcpad, sinkpad);
-  local->priv->artcpudpsink = artcpsink;
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
   /* Link video branch */
   g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vpay, vpaycaps,
         NULL));
+  g_assert (gst_element_link (vrtcpqueue, vrtcpsink));
+  local->priv->vrtcpudpsink = vrtcpsink;
+  g_assert (gst_element_link (vrtpqueue, vsink));
+  local->priv->vudpsink = vsink;
 
   srcpad = gst_element_get_static_pad (vpaycaps, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_1");
@@ -184,16 +197,14 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   gst_object_unref (srcpad);
 
   srcpad = gst_element_get_static_pad (local->priv->rtpbin, "send_rtp_src_1");
-  sinkpad = gst_element_get_static_pad (vsink, "sink");
+  sinkpad = gst_element_get_static_pad (vrtpqueue, "sink");
   gst_pad_link (srcpad, sinkpad);
-  local->priv->vudpsink = vsink;
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
   srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_1");
-  sinkpad = gst_element_get_static_pad (vrtcpsink, "sink");
+  sinkpad = gst_element_get_static_pad (vrtcpqueue, "sink");
   gst_pad_link (srcpad, sinkpad);
-  local->priv->vrtcpudpsink = vrtcpsink;
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
