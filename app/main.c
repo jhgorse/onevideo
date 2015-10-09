@@ -125,6 +125,7 @@ main (int   argc,
   GError *error = NULL;
 
   guint exit_after = 0;
+  gboolean auto_exit = FALSE;
   guint iface_port = ONE_VIDEO_DEFAULT_COMM_PORT;
   gchar *iface_name = NULL;
   gchar *v4l2_device_path = NULL;
@@ -132,6 +133,8 @@ main (int   argc,
   GOptionEntry entries[] = {
     {"exit-after", 0, 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
           " seconds (default: never exit)", "SECONDS"},
+    {"auto-exit", 0, 0, G_OPTION_ARG_NONE, &auto_exit, "Automatically exit when"
+          " the call is ended in passive mode (default: no)", NULL},
     {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
           " to listen on (default: any)", "NAME"},
     {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "TCP port to listen on"
@@ -139,7 +142,8 @@ main (int   argc,
           ")", "PORT"},
     {"peer", 'c', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers with an"
           " optional port to connect to. Specify multiple times to connect to"
-          " several peers.", "PEER:PORT"},
+          " several peers. Without this option, passive mode is used in which"
+          " we wait for incoming connections.", "PEER:PORT"},
     {"device", 'd', 0, G_OPTION_ARG_STRING, &v4l2_device_path, "Path to the"
           " V4L2 (camera) device (Ex: /dev/video0)", "PATH"},
     {NULL}
@@ -179,7 +183,9 @@ main (int   argc,
     g_print ("Waiting for remotes to reply...\n");
   }
 
-  g_idle_add ((GSourceFunc) on_local_peer_stop, local);
+  /* If in passive mode, auto exit only when requested */
+  if (remotes != NULL || auto_exit)
+    g_idle_add ((GSourceFunc) on_local_peer_stop, local);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
