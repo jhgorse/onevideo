@@ -103,7 +103,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   GstCaps *jpeg_video_caps, *raw_audio_caps;
   GstElement *asrc, *afilter, *aencode, *apay, *apaycaps;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink;
-  GstElement *vsrc, *vfilter, *vqueue, *vpay, *vpaycaps;
+  GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay, *vpaycaps;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink;
   GstPad *srcpad, *sinkpad;
 
@@ -142,7 +142,8 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   jpeg_video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
   g_object_set (vfilter, "caps", jpeg_video_caps, NULL);
   gst_caps_unref (jpeg_video_caps);
-  vqueue = gst_element_factory_make ("queue", "v4l2-queue");
+  vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
+  vqueue2 = gst_element_factory_make ("jpegenc", NULL);
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   vpaycaps = gst_element_factory_make ("capsfilter", "video-rtp-transmit-caps");
   g_object_set (vpaycaps, "caps", local->priv->send_vcaps, NULL);
@@ -153,8 +154,8 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
 
   gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
       afilter, aencode, apay, apaycaps, artpqueue, asink, artcpqueue, artcpsink,
-      vsrc, vfilter, vqueue, vpay, vpaycaps, vrtpqueue, vsink, vrtcpqueue,
-      vrtcpsink, NULL);
+      vsrc, vfilter, vqueue, vqueue2, vpay, vpaycaps, vrtpqueue, vsink,
+      vrtcpqueue, vrtcpsink, NULL);
 
   /* Link audio branch */
   g_assert (gst_element_link_many (asrc, afilter, aencode, apay, apaycaps,
@@ -183,7 +184,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   gst_object_unref (srcpad);
 
   /* Link video branch */
-  g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vpay, vpaycaps,
+  g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vqueue2, vpay, vpaycaps,
         NULL));
   g_assert (gst_element_link (vrtcpqueue, vrtcpsink));
   local->priv->vrtcpudpsink = vrtcpsink;
