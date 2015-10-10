@@ -162,10 +162,13 @@ main (int   argc,
 
   loop = g_main_loop_new (NULL, FALSE);
 
-  if (iface_name != NULL)
+  if (iface_name != NULL) {
     inet_addr = one_video_get_inet_addr_for_iface (iface_name);
-  else
-    inet_addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
+  } else {
+    inet_addr = g_inet_address_new_loopback (G_SOCKET_FAMILY_IPV4);
+    /* FIXME: Listen on the default route instead */
+    g_printerr ("Interface not specified, listening on localhost\n");
+  }
 
   listen_addr = g_inet_socket_address_new (inet_addr, iface_port);
   g_object_unref (inet_addr);

@@ -91,7 +91,7 @@ struct _OneVideoLocalPeer {
   GstElement *playback;
   /* Address we're listening on */
   GInetSocketAddress *addr;
-  /* String representation */
+  /* String representation of the above address */
   gchar *addr_s;
 
   OneVideoLocalPeerState state;

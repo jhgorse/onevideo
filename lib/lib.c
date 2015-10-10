@@ -71,6 +71,11 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr,
   OneVideoLocalPeer *local;
 
   g_return_val_if_fail (listen_addr != NULL, NULL);
+  if (g_inet_address_get_is_any (
+        g_inet_socket_address_get_address (listen_addr))) {
+    GST_ERROR ("Cannot listen on all interfaces!");
+    return NULL;
+  }
 
   if (onevideo_debug == NULL)
     GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
