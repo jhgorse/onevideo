@@ -114,6 +114,115 @@ dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
   one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
 }
 
+static gboolean
+device_is_in_use (GstDevice * device)
+{
+  gchar *name;
+  GstElement *check, *src, *sink;
+  GstStateChangeReturn state_ret;
+  GstState state;
+  gboolean ret = FALSE;
+
+  check = gst_pipeline_new ("test-v4l2");
+  src = gst_device_create_element (device, "test-src");
+  sink = gst_element_factory_make ("fakesink", NULL);
+  gst_bin_add_many (GST_BIN (check), src, sink, NULL);
+  g_assert (gst_element_link (src, sink));
+  gst_element_set_state (check, GST_STATE_PLAYING);
+
+  /* Wait for upto 10 seconds in case the state change is ASYNC */
+  state_ret = gst_element_get_state (check, &state, NULL, 5*GST_SECOND);
+  if (state_ret == GST_STATE_CHANGE_FAILURE) {
+    ret = TRUE;
+    name = gst_device_get_display_name (device);
+    g_printerr ("Unable to use device %s, failing\n", name);
+    g_free (name);
+  } else if (state_ret == GST_STATE_CHANGE_ASYNC) {
+    ret = TRUE;
+    name = gst_device_get_display_name (device);
+    g_printerr ("Took too long checking device %s, failing\n", name);
+    g_free (name);
+  } else {
+    g_assert (state_ret == GST_STATE_CHANGE_SUCCESS);
+    g_assert (state == GST_STATE_PLAYING);
+  }
+
+  gst_element_set_state (check, GST_STATE_NULL);
+  gst_object_unref (check);
+  return ret;
+}
+
+static GstDevice *
+get_device_choice (GList * devices)
+{
+  gchar *name;
+  GList *device;
+  GString *line;
+  GIOChannel *channel;
+  GError *error = NULL;
+  guint num = 0;
+
+  if (devices == NULL) {
+    g_printerr ("No video sources detected, using the test video source\n");
+    return NULL;
+  }
+
+  channel = g_io_channel_unix_new (STDIN_FILENO);
+  g_print ("Choose a webcam to use for sending video by entering the "
+      "number next to the name:\n");
+  g_print ("Test video source [%u]\n", num);
+  num += 1;
+  for (device = devices; device; device = device->next, num++) {
+    /* TODO: Add API to GstDevice for this */
+    if (device_is_in_use (device->data))
+      continue;
+    name = gst_device_get_display_name (device->data);
+    g_print ("%s [%u]\n", name, num);
+    g_free (name);
+  }
+  g_print ("> ");
+  device = NULL;
+
+again:
+  line = g_string_new ("");
+  switch (g_io_channel_read_line_string (channel, line, NULL, &error)) {
+    guint index;
+    case G_IO_STATUS_NORMAL:
+      index = g_ascii_digit_value (line->str[0]);
+      if (index < 0 || index >= num) {
+        g_printerr ("Invalid selection %c, try again\n> ", line->str[0]);
+        g_string_free (line, TRUE);
+        goto again;
+      }
+      if (index == 0) {
+        /* device is NULL and the test device will be selected */
+        g_print ("Selected test video source, continuing...\n");
+        break;
+      }
+      g_assert ((device = g_list_nth (devices, index - 1)));
+      name = gst_device_get_display_name (device->data);
+      g_print ("Selected device %s, continuing...\n", name);
+      g_free (name);
+      break;
+    case G_IO_STATUS_ERROR:
+      g_printerr ("ERROR reading line: %s\n", error->message);
+      break;
+    case G_IO_STATUS_EOF:
+      g_printerr ("Nothing entered? (EOF)\n");
+      goto again;
+    case G_IO_STATUS_AGAIN:
+      g_printerr ("EAGAIN\n");
+      goto again;
+    default:
+      g_assert_not_reached ();
+  }
+
+  g_string_free (line, TRUE);
+  g_io_channel_unref (channel);
+
+  return device ? device->data : NULL;
+}
+
 int
 main (int   argc,
       char *argv[])
@@ -123,12 +232,12 @@ main (int   argc,
   GInetAddress *inet_addr = NULL;
   GSocketAddress *listen_addr;
   GError *error = NULL;
+  GList *devices;
 
   guint exit_after = 0;
   gboolean auto_exit = FALSE;
   guint iface_port = ONE_VIDEO_DEFAULT_COMM_PORT;
   gchar *iface_name = NULL;
-  gchar *v4l2_device_path = NULL;
   gchar **remotes = NULL;
   GOptionEntry entries[] = {
     {"exit-after", 0, 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
@@ -144,8 +253,6 @@ main (int   argc,
           " optional port to connect to. Specify multiple times to connect to"
           " several peers. Without this option, passive mode is used in which"
           " we wait for incoming connections.", "PEER:PORT"},
-    {"device", 'd', 0, G_OPTION_ARG_STRING, &v4l2_device_path, "Path to the"
-          " V4L2 (camera) device (Ex: /dev/video0)", "PATH"},
     {NULL}
   };
 
@@ -173,9 +280,12 @@ main (int   argc,
   listen_addr = g_inet_socket_address_new (inet_addr, iface_port);
   g_object_unref (inet_addr);
 
-  local = one_video_local_peer_new (G_INET_SOCKET_ADDRESS (listen_addr),
-      v4l2_device_path);
+  local = one_video_local_peer_new (G_INET_SOCKET_ADDRESS (listen_addr));
   g_object_unref (listen_addr);
+
+  devices = one_video_local_peer_get_video_devices (local);
+  one_video_local_peer_set_video_device (local, get_device_choice (devices));
+  g_list_free_full (devices, g_object_unref);
 
   if (remotes == NULL) {
     g_print ("No remotes specified; listening for incoming connections\n");
@@ -199,7 +309,6 @@ main (int   argc,
   g_clear_pointer (&loop, g_main_loop_unref);
   g_strfreev (remotes);
   g_free (iface_name);
-  g_free (v4l2_device_path);
 
   return 0;
 }
