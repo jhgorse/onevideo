@@ -128,7 +128,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   g_object_set (afilter, "caps", raw_audio_caps, NULL);
   gst_caps_unref (raw_audio_caps);
   aencode = gst_element_factory_make ("opusenc", NULL);
-  g_object_set (aencode, "frame-size", 2, NULL);
+  g_object_set (aencode, "frame-size", 10, NULL);
   apay = gst_element_factory_make ("rtpopuspay", NULL);
   artpqueue = gst_element_factory_make ("queue", NULL);
   asink = gst_element_factory_make ("udpsink", "adata-transmit-udpsink");
