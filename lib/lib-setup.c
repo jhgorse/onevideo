@@ -97,19 +97,24 @@ one_video_local_peer_setup_playback_pipeline (OneVideoLocalPeer * local)
 }
 
 gboolean
-one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
+one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
+    GstDevice * video_device)
 {
   GstBus *bus;
-  GstCaps *jpeg_video_caps, *raw_audio_caps;
-  GstElement *asrc, *afilter, *aencode, *apay, *apaycaps;
+  GstCaps *video_caps, *raw_audio_caps;
+  GstElement *asrc, *afilter, *aencode, *apay;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink;
-  GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay, *vpaycaps;
+  GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink;
   GstPad *srcpad, *sinkpad;
 
-  if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit))
-    /* Already setup */
-    return TRUE;
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED))
+    return FALSE;
+
+  if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit)) {
+    /* Wipe pre-existing transmit pipeline and recreate anew */
+    gst_object_unref (local->transmit);
+  }
 
   local->transmit = gst_pipeline_new ("transmit-pipeline");
   local->priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
@@ -125,47 +130,49 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   aencode = gst_element_factory_make ("opusenc", NULL);
   g_object_set (aencode, "frame-size", 2, NULL);
   apay = gst_element_factory_make ("rtpopuspay", NULL);
-  apaycaps = gst_element_factory_make ("capsfilter", "audio-rtp-transmit-caps");
-  g_object_set (apaycaps, "caps", local->priv->send_acaps, NULL);
   artpqueue = gst_element_factory_make ("queue", NULL);
   asink = gst_element_factory_make ("udpsink", "adata-transmit-udpsink");
   artcpqueue = gst_element_factory_make ("queue", NULL);
   artcpsink = gst_element_factory_make ("udpsink", "artcp-transmit-udpsink");
 
-  /* FIXME: Use GstDevice* instead of a device path string
-   * FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
+  /* FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
    * FIXME: Select the best format based on formats available on the camera */
-  vsrc = gst_element_factory_make ("v4l2src", NULL);
-  if (local->priv->v4l2_path != NULL)
-    g_object_set (vsrc, "device", local->priv->v4l2_path, NULL);
-  vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
-  jpeg_video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
-  g_object_set (vfilter, "caps", jpeg_video_caps, NULL);
-  gst_caps_unref (jpeg_video_caps);
-  vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
+  if (video_device == NULL) {
+    vsrc = gst_element_factory_make ("videotestsrc", NULL);
+    g_object_set (vsrc, "is-live", TRUE, NULL);
+    vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
+    video_caps = gst_caps_from_string ("video/x-raw, " VIDEO_CAPS_STR);
+    g_object_set (vfilter, "caps", video_caps, NULL);
+    gst_caps_unref (video_caps);
+    vqueue = gst_element_factory_make ("queue", "v4l2-queue");
+  } else {
+    vsrc = gst_device_create_element (video_device, NULL);
+    vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
+    video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
+    g_object_set (vfilter, "caps", video_caps, NULL);
+    gst_caps_unref (video_caps);
+    vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
+  }
   vqueue2 = gst_element_factory_make ("jpegenc", NULL);
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
-  vpaycaps = gst_element_factory_make ("capsfilter", "video-rtp-transmit-caps");
-  g_object_set (vpaycaps, "caps", local->priv->send_vcaps, NULL);
   vrtpqueue = gst_element_factory_make ("queue", NULL);
   vsink = gst_element_factory_make ("udpsink", "vdata-transmit-udpsink");
   vrtcpqueue = gst_element_factory_make ("queue", NULL);
   vrtcpsink = gst_element_factory_make ("udpsink", "vrtcp-transmit-udpsink");
 
   gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
-      afilter, aencode, apay, apaycaps, artpqueue, asink, artcpqueue, artcpsink,
-      vsrc, vfilter, vqueue, vqueue2, vpay, vpaycaps, vrtpqueue, vsink,
-      vrtcpqueue, vrtcpsink, NULL);
+      afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, vsrc,
+      vfilter, vqueue, vqueue2, vpay, vrtpqueue, vsink, vrtcpqueue, vrtcpsink,
+      NULL);
 
   /* Link audio branch */
-  g_assert (gst_element_link_many (asrc, afilter, aencode, apay, apaycaps,
-        NULL));
+  g_assert (gst_element_link_many (asrc, afilter, aencode, apay, NULL));
   g_assert (gst_element_link (artcpqueue, artcpsink));
   local->priv->artcpudpsink = artcpsink;
   g_assert (gst_element_link (artpqueue, asink));
   local->priv->audpsink = asink;
 
-  srcpad = gst_element_get_static_pad (apaycaps, "src");
+  srcpad = gst_element_get_static_pad (apay, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_0");
   gst_pad_link (srcpad, sinkpad);
   gst_object_unref (sinkpad);
@@ -184,14 +191,13 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   gst_object_unref (srcpad);
 
   /* Link video branch */
-  g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vqueue2, vpay, vpaycaps,
-        NULL));
+  g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vqueue2, vpay, NULL));
   g_assert (gst_element_link (vrtcpqueue, vrtcpsink));
   local->priv->vrtcpudpsink = vrtcpsink;
   g_assert (gst_element_link (vrtpqueue, vsink));
   local->priv->vudpsink = vsink;
 
-  srcpad = gst_element_get_static_pad (vpaycaps, "src");
+  srcpad = gst_element_get_static_pad (vpay, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_1");
   gst_pad_link (srcpad, sinkpad);
   gst_object_unref (sinkpad);

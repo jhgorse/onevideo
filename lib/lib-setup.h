@@ -36,7 +36,8 @@ void      one_video_on_gst_bus_error                     (GstBus *bus,
                                                           GstMessage *msg,
                                                           gpointer user_data);
 
-gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local);
+gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local,
+                                                          GstDevice *video_device);
 gboolean  one_video_local_peer_setup_playback_pipeline   (OneVideoLocalPeer *local);
 gboolean  one_video_local_peer_setup_tcp_comms           (OneVideoLocalPeer *local);
 

@@ -116,8 +116,7 @@ struct _OneVideoRemotePeer {
 };
 
 /* Local peer (us) */
-OneVideoLocalPeer*  one_video_local_peer_new              (GInetSocketAddress *addr,
-                                                           gchar *v4l2_device_path);
+OneVideoLocalPeer*  one_video_local_peer_new              (GInetSocketAddress *addr);
 void                one_video_local_peer_free             (OneVideoLocalPeer *local);
 void                one_video_local_peer_add_remote       (OneVideoLocalPeer *local,
                                                            OneVideoRemotePeer *remote);
@@ -132,6 +131,11 @@ gboolean            one_video_local_peer_negotiate_finish (OneVideoLocalPeer *lo
 gboolean            one_video_local_peer_negotiate_stop   (OneVideoLocalPeer *local);
 gboolean            one_video_local_peer_start            (OneVideoLocalPeer *local);
 void                one_video_local_peer_stop             (OneVideoLocalPeer *local);
+
+/* Device discovery */
+GList*              one_video_local_peer_get_video_devices  (OneVideoLocalPeer *local);
+gboolean            one_video_local_peer_set_video_device   (OneVideoLocalPeer *local,
+                                                             GstDevice *device);
 
 /* Peer discovery */
 GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);

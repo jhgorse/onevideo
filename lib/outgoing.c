@@ -317,9 +317,10 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
     g_variant_iter_free (iter);
   }
 
-  local->priv->send_acaps = gst_caps_ref (local->priv->supported_send_acaps);
+  local->priv->send_acaps = gst_caps_copy (local->priv->supported_send_acaps);
   /* TODO: Decide send_vcaps based on our upload bandwidth limit */
-  local->priv->send_vcaps = gst_caps_ref (local->priv->supported_send_vcaps);
+  local->priv->send_vcaps = gst_caps_fixate (
+      gst_caps_copy (local->priv->supported_send_vcaps));
   /* TODO: Restrict local->priv->supported_recv_vcaps as per CPU and download
    * bandwidth limits based on the number of peers */
 }

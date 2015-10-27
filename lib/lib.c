@@ -65,9 +65,9 @@ one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
 }
 
 OneVideoLocalPeer *
-one_video_local_peer_new (GInetSocketAddress * listen_addr,
-    gchar * v4l2_path)
+one_video_local_peer_new (GInetSocketAddress * listen_addr)
 {
+  GstCaps *vcaps;
   OneVideoLocalPeer *local;
 
   g_return_val_if_fail (listen_addr != NULL, NULL);
@@ -87,9 +87,20 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr,
   local->addr_s = one_video_inet_socket_address_to_string (local->addr);
   local->state = ONE_VIDEO_LOCAL_STATE_NULL;
   local->priv = g_new0 (OneVideoLocalPeerPriv, 1);
-  /* Hard-coded for now, but this should be selected in _setup depending
-   * on the negotiated video format to be sent */
-  local->priv->v4l2_path = v4l2_path;
+
+  /* Initialize the V4L2 device monitor */
+  /* We only want native formats: JPEG, (and later) YUY2 and H.264 */
+  vcaps = gst_caps_new_empty_simple ("image/jpeg");
+  /*gst_caps_append (vcaps,
+      gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "YUY2"));
+  gst_caps_append (vcaps, gst_caps_new_empty_simple ("video/x-h264"));*/
+  local->priv->dm = gst_device_monitor_new ();
+  gst_device_monitor_add_filter (local->priv->dm, "Video/Source", vcaps);
+  gst_caps_unref (vcaps);
+  /* Start probing devices asynchronously. We don't listen to the bus messages
+   * for this right now, and just get the list of all devices later. */
+  gst_device_monitor_start (local->priv->dm);
+
   /* Threaded socket service since we use blocking TCP network reads
    * TODO: Use threads equal to number of remote peers? To ensure that peers
    * never wait while communicating. */
@@ -102,18 +113,17 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr,
   /*-- Initialize caps supported by us --*/
   /* We will only ever use 48KHz Opus */
   local->priv->supported_send_acaps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
-  /* For now, we force everyone to send 720p JPEG.
-   * TODO: Query devices and fetch available JPEG dimensions + H.264 formats */
-  local->priv->supported_send_vcaps = gst_caps_from_string (RTP_VIDEO_CAPS_STR
-      ", " VIDEO_CAPS_STR);
+  /* supported_send_vcaps is set in set_video_device() */
+
   /* We will only ever use 48KHz Opus */
   local->priv->supported_recv_acaps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
   /* For now, only support JPEG.
    * TODO: Add other supported formats here */
   local->priv->supported_recv_vcaps = gst_caps_from_string (RTP_VIDEO_CAPS_STR);
 
-  /* Setup transmit pipeline */
-  g_assert (one_video_local_peer_setup_transmit_pipeline (local));
+  /*-- Setup various pipelines and resources --*/
+
+  /* Transmit pipeline is setup in set_video_device() */
 
   /* Setup components of the playback pipeline */
   g_assert (one_video_local_peer_setup_playback_pipeline (local));
@@ -453,6 +463,27 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
   g_free (remote->addr_s);
   g_free (remote->priv);
   g_free (remote);
+}
+
+GList *
+one_video_local_peer_get_video_devices (OneVideoLocalPeer * local)
+{
+  return gst_device_monitor_get_devices (local->priv->dm);
+}
+
+gboolean
+one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
+    GstDevice * device)
+{
+  /* TODO: Currently, we can only get a device that outputs JPEG and our
+   * transmit code assumes that. When we fix that to also support YUY2 and
+   * H.264, we need to fix all this code too. */
+  /* FIXME: This should add caps from the device */
+  local->priv->supported_send_vcaps = gst_caps_from_string (RTP_VIDEO_CAPS_STR
+      ", " VIDEO_CAPS_STR);
+
+  /* Setup transmit pipeline */
+  return one_video_local_peer_setup_transmit_pipeline (local, device);
 }
 
 /*

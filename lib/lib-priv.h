@@ -95,8 +95,8 @@ struct _OneVideoLocalPeerPriv {
   /* Lock to access non-thread-safe structures like GPtrArray */
   GRecMutex lock;
 
-  /* Path to the v4l2 device being used */
-  gchar *v4l2_path;
+  /* The V4L2 device monitor being used */
+  GstDeviceMonitor *dm;
 };
 
 struct _OneVideoRemotePeerPriv {
