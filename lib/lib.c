@@ -69,6 +69,7 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
 {
   GstCaps *vcaps;
   OneVideoLocalPeer *local;
+  guint16 tcp_port;
 
   g_return_val_if_fail (listen_addr != NULL, NULL);
   if (g_inet_address_get_is_any (
@@ -87,6 +88,11 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
   local->addr_s = one_video_inet_socket_address_to_string (local->addr);
   local->state = ONE_VIDEO_LOCAL_STATE_NULL;
   local->priv = g_new0 (OneVideoLocalPeerPriv, 1);
+
+  /* Allocate ports for recv RTCP RRs from all remotes */
+  tcp_port = g_inet_socket_address_get_port (local->addr);
+  local->priv->recv_rtcp_ports[0] = tcp_port + 1;
+  local->priv->recv_rtcp_ports[1] = tcp_port + 2;
 
   /* Initialize the V4L2 device monitor */
   /* We only want native formats: JPEG, (and later) YUY2 and H.264 */
@@ -146,6 +152,9 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   g_array_free (local->priv->used_ports, TRUE);
   g_rec_mutex_clear (&local->priv->lock);
 
+  gst_device_monitor_stop (local->priv->dm);
+  g_object_unref (local->priv->dm);
+
   g_object_unref (local->priv->tcp_server);
 
   gst_caps_unref (local->priv->supported_send_acaps);
@@ -175,13 +184,13 @@ set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
 {
   guint ii, start;
 
-  /* Start from the port right after the configured TCP communication port */
-  start = 1 + g_inet_socket_address_get_port (local->addr);
+  /* Start from the port right after the video RTCP recv port */
+  start = 1 + local->priv->recv_rtcp_ports[1];
 
   g_array_sort (local->priv->used_ports, compare_ints);
 
-  /* Ports are always in contiguous sets of 4, so if we find a hole in the
-   * sorted list of used ports, it definitely has 4 ports in it */
+  /* Recv ports are always in contiguous sets of 4, so if we
+   * find a hole in the sorted list of used ports, it has 4 unused ports */
   for (ii = 0; ii < local->priv->used_ports->len; ii++)
     if (g_array_index (local->priv->used_ports, guint, ii) == start)
       start++;
@@ -190,10 +199,8 @@ set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
 
   /* TODO: Check whether these ports are actually available on the system */
 
-  (*recv_ports)[0] = start;
-  (*recv_ports)[1] = start + 1;
-  (*recv_ports)[2] = start + 2;
-  (*recv_ports)[3] = start + 3;
+  for (ii = 0; ii < 4; ii++)
+    (*recv_ports)[ii] = start + ii;
   g_array_append_vals (local->priv->used_ports, recv_ports, 4);
   return TRUE;
 }
@@ -256,14 +263,14 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
   /* Stop transmitting */
   addr_only = g_inet_address_to_string (
       g_inet_socket_address_get_address (remote->addr));
-  g_signal_emit_by_name (local->priv->audpsink, "remove", addr_only,
+  g_signal_emit_by_name (local->priv->asend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[0]);
-  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", addr_only,
+  g_signal_emit_by_name (local->priv->asend_rtcp_sink, "remove", addr_only,
       remote->priv->send_ports[1]);
-  g_signal_emit_by_name (local->priv->vudpsink, "remove", addr_only,
-      remote->priv->send_ports[2]);
-  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", addr_only,
+  g_signal_emit_by_name (local->priv->vsend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[3]);
+  g_signal_emit_by_name (local->priv->vsend_rtcp_sink, "remove", addr_only,
+      remote->priv->send_ports[4]);
   g_free (addr_only);
 
   /* Pause receiving */
@@ -310,14 +317,14 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
   /* Start transmitting */
   addr_only = g_inet_address_to_string (
       g_inet_socket_address_get_address (remote->addr));
-  g_signal_emit_by_name (local->priv->audpsink, "add", addr_only,
+  g_signal_emit_by_name (local->priv->asend_rtp_sink, "add", addr_only,
       remote->priv->send_ports[0]);
-  g_signal_emit_by_name (local->priv->artcpudpsink, "add", addr_only,
+  g_signal_emit_by_name (local->priv->asend_rtcp_sink, "add", addr_only,
       remote->priv->send_ports[1]);
-  g_signal_emit_by_name (local->priv->vudpsink, "add", addr_only,
-      remote->priv->send_ports[2]);
-  g_signal_emit_by_name (local->priv->vrtcpudpsink, "add", addr_only,
+  g_signal_emit_by_name (local->priv->vsend_rtp_sink, "add", addr_only,
       remote->priv->send_ports[3]);
+  g_signal_emit_by_name (local->priv->vsend_rtcp_sink, "add", addr_only,
+      remote->priv->send_ports[4]);
   g_free (addr_only);
 
   if (remote->priv->audio_proxysrc != NULL) {
@@ -363,14 +370,14 @@ one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
   /* Stop transmitting */
   addr_only = g_inet_address_to_string (
       g_inet_socket_address_get_address (remote->addr));
-  g_signal_emit_by_name (local->priv->audpsink, "remove", addr_only,
+  g_signal_emit_by_name (local->priv->asend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[0]);
-  g_signal_emit_by_name (local->priv->artcpudpsink, "remove", addr_only,
+  g_signal_emit_by_name (local->priv->asend_rtcp_sink, "remove", addr_only,
       remote->priv->send_ports[1]);
-  g_signal_emit_by_name (local->priv->vudpsink, "remove", addr_only,
-      remote->priv->send_ports[2]);
-  g_signal_emit_by_name (local->priv->vrtcpudpsink, "remove", addr_only,
+  g_signal_emit_by_name (local->priv->vsend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[3]);
+  g_signal_emit_by_name (local->priv->vsend_rtcp_sink, "remove", addr_only,
+      remote->priv->send_ports[4]);
   g_free (addr_only);
 
   /* Release all requested pads and relevant playback bins */
@@ -533,9 +540,9 @@ append_clients (gpointer data, gpointer user_data)
   g_string_append_printf (clients[1], "%s:%u,", addr_s,
       remote->priv->send_ports[1]);
   g_string_append_printf (clients[2], "%s:%u,", addr_s,
-      remote->priv->send_ports[2]);
-  g_string_append_printf (clients[3], "%s:%u,", addr_s,
       remote->priv->send_ports[3]);
+  g_string_append_printf (clients[3], "%s:%u,", addr_s,
+      remote->priv->send_ports[4]);
 
   g_free (addr_s);
 }
@@ -544,21 +551,43 @@ append_clients (gpointer data, gpointer user_data)
 static gboolean
 one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
 {
+  GSocket *socket;
   GString **clients;
+  gchar *local_addr_s;
   GstStateChangeReturn ret;
 
-  /* {audio RTP, audio RTCP, video RTP, video RTCP} */
+  /* {audio RTP, audio RTCP SR, video RTP, video RTCP SR} */
   clients = g_malloc0_n (sizeof (GString*), 4);
   clients[0] = g_string_new ("");
   clients[1] = g_string_new ("");
   clients[2] = g_string_new ("");
   clients[3] = g_string_new ("");
-  
   g_ptr_array_foreach (local->priv->remote_peers, append_clients, clients);
-  g_object_set (local->priv->audpsink, "clients", clients[0]->str, NULL);
-  g_object_set (local->priv->artcpudpsink, "clients", clients[1]->str, NULL);
-  g_object_set (local->priv->vudpsink, "clients", clients[2]->str, NULL);
-  g_object_set (local->priv->vrtcpudpsink, "clients", clients[3]->str, NULL);
+
+  local_addr_s =
+    g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
+
+  /* Send audio RTP to all remote peers */
+  g_object_set (local->priv->asend_rtp_sink, "clients", clients[0]->str, NULL);
+  /* Send audio RTCP SRs to all remote peers */
+  socket = one_video_get_socket_for_addr (local_addr_s,
+      local->priv->recv_rtcp_ports[0]);
+  g_object_set (local->priv->asend_rtcp_sink, "clients", clients[1]->str,
+      "socket", socket, NULL);
+  /* Recv audio RTCP RRs from all remote peers (same socket as above) */
+  g_object_set (local->priv->arecv_rtcp_src, "socket", socket, NULL);
+  g_object_unref (socket);
+
+  /* Send video RTP to all remote peers */
+  g_object_set (local->priv->vsend_rtp_sink, "clients", clients[2]->str, NULL);
+  /* Send video RTCP SRs to all remote peers */
+  socket = one_video_get_socket_for_addr (local_addr_s,
+      local->priv->recv_rtcp_ports[1]);
+  g_object_set (local->priv->vsend_rtcp_sink, "clients", clients[3]->str,
+      "socket", socket, NULL);
+  /* Recv video RTCP RRs from all remote peers (same socket as above) */
+  g_object_set (local->priv->vrecv_rtcp_src, "socket", socket, NULL);
+  g_object_unref (socket);
 
   ret = gst_element_set_state (local->transmit, GST_STATE_PLAYING);
   GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
@@ -569,6 +598,7 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
   g_string_free (clients[2], TRUE);
   g_string_free (clients[3], TRUE);
   g_free (clients);
+  g_free (local_addr_s);
 
   return ret != GST_STATE_CHANGE_FAILURE;
 }

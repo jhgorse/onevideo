@@ -287,13 +287,16 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
     GVariantIter *iter;
     OneVideoRemotePeer *remote;
     gchar *addr_s, *send_acaps, *send_vcaps;
-    guint32 ports[4] = {};
+    guint32 ports[6] = {};
 
     remote = g_ptr_array_index (local->priv->remote_peers, ii);
 
     value = g_hash_table_lookup (in, remote);
-    g_variant_get (value, in_vtype, NULL, &send_acaps, &send_vcaps, NULL, NULL,
-        &iter);
+    g_variant_get (value, in_vtype, NULL, &ports[2], &ports[5], &send_acaps,
+        &send_vcaps, NULL, NULL, &iter);
+
+    remote->priv->send_ports[2] = ports[2];
+    remote->priv->send_ports[5] = ports[5];
 
     /* The caps we will receive from this peer are, of course,
      * the caps it will send to us */
@@ -302,15 +305,15 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
     g_free (send_acaps); g_free (send_vcaps);
 
     while (g_variant_iter_loop (iter, "(suuuu)", &addr_s, &ports[0],
-          &ports[1], &ports[2], &ports[3])) {
+          &ports[1], &ports[3], &ports[4])) {
       if (g_strcmp0 (local->addr_s, addr_s) != 0)
         continue;
       remote->priv->send_ports[0] = ports[0];
       remote->priv->send_ports[1] = ports[1];
-      remote->priv->send_ports[2] = ports[2];
       remote->priv->send_ports[3] = ports[3];
-      GST_DEBUG ("Set remote peer call details: %s, [%u, %u, %u, %u]", addr_s,
-          ports[0], ports[1], ports[2], ports[3]);
+      remote->priv->send_ports[4] = ports[4];
+      GST_DEBUG ("Set remote peer call details: %s, [%u, %u, %u, %u, %u, %u]",
+          addr_s, ports[0], ports[1], ports[2], ports[3], ports[4], ports[5]);
       g_free (addr_s);
       break;
     }
@@ -361,7 +364,7 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
     OneVideoRemotePeer *this;
     
     this = g_ptr_array_index (remotes, ii);
-    thisb = g_variant_builder_new (G_VARIANT_TYPE ("a(sssuuuu)"));
+    thisb = g_variant_builder_new (G_VARIANT_TYPE ("a(sssuuuuuu)"));
 
     for (jj = 0; jj < remotes->len; jj++) {
       gchar *addr_s;
@@ -369,19 +372,19 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
       GVariantIter *iter;
       OneVideoRemotePeer *other;
       gchar *recv_acaps, *recv_vcaps;
-      guint32 ports[4] = {};
+      guint32 ports[6] = {};
 
       other = g_ptr_array_index (remotes, jj);
       if (other == this)
         continue;
       otherv = g_hash_table_lookup (in, other);
 
-      /* 'send_caps' of 'this' remote are 'recv_caps' of the 'other' remote */
-      g_variant_get (otherv, in_vtype, NULL, &recv_acaps, &recv_vcaps, NULL,
-          NULL, &iter);
+      g_variant_get (otherv, in_vtype, NULL, &ports[2], &ports[5],
+          /* 'send_caps' of 'this' remote are 'recv_caps' of the 'other' remote */
+          &recv_acaps, &recv_vcaps, NULL, NULL, &iter);
       g_assert (recv_acaps && recv_vcaps);
       while (g_variant_iter_loop (iter, "(suuuu)", &addr_s, &ports[0],
-            &ports[1], &ports[2], &ports[3])) {
+            &ports[1], &ports[3], &ports[4])) {
         /* Skip this element if it's not about this 'other' remote */
         if (g_strcmp0 (this->addr_s, addr_s) != 0) {
           GST_DEBUG ("Building details for %s, got %s, continuing",
@@ -392,19 +395,23 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
             this->addr_s, addr_s);
         /* Now we know what receiver-side ports 'this' should use while sending
          * data to addr_s */
-        g_variant_builder_add (thisb, "(sssuuuu)", other->addr_s, recv_acaps,
-            recv_vcaps, ports[0], ports[1], ports[2], ports[3]);
-        GST_DEBUG ("%s will recv from %s on ports [%u, %u, %u, %u]",
-            other->addr_s, addr_s, ports[0], ports[1], ports[2], ports[3]);
+        g_variant_builder_add (thisb, "(sssuuuuuu)", other->addr_s, recv_acaps,
+            recv_vcaps, ports[0], ports[1], ports[2], ports[3], ports[4],
+            ports[5]);
+        GST_DEBUG ("%s will recv from %s on ports [%u, %u, %u, %u, %u, %u]",
+            other->addr_s, addr_s, ports[0], ports[1], ports[2], ports[3],
+            ports[4], ports[5]);
       }
       g_free (recv_acaps);
       g_free (recv_vcaps);
     }
     /* Besides all the other (remote) peers, also add the recv ports that we
-     * have allocated for this remote peer */
-    g_variant_builder_add (thisb, "(sssuuuu)", local->addr_s, send_acaps,
+     * have allocated for this remote peer and the recv rtcp ports that are
+     * common between all remote peers */
+    g_variant_builder_add (thisb, "(sssuuuuuu)", local->addr_s, send_acaps,
         send_vcaps, this->priv->recv_ports[0], this->priv->recv_ports[1],
-        this->priv->recv_ports[2], this->priv->recv_ports[3]);
+        local->priv->recv_rtcp_ports[0], this->priv->recv_ports[2],
+        this->priv->recv_ports[3], local->priv->recv_rtcp_ports[1]);
     negotiated =
       g_variant_new (out_vtype, call_id, send_acaps, send_vcaps, thisb);
     g_hash_table_insert (out, this, g_variant_ref_sink (negotiated));

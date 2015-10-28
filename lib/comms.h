@@ -55,8 +55,7 @@ enum _OneVideoTcpMsgType {
   ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,
 
   /* Both queries and replies */
-  ONE_VIDEO_TCP_MSG_TYPE_HELLO = 300,     /* Hello with basic client info */
-  ONE_VIDEO_TCP_MSG_TYPE_BYE,
+  ONE_VIDEO_TCP_MSG_TYPE_HELLO = 300,     /* Hello with basic client info (NOT IMPLEMENTED YET) */
 };
 
 typedef struct _OneVideoTcpMsg OneVideoTcpMsg;

@@ -56,14 +56,21 @@ struct _OneVideoNegotiate {
 typedef struct _OneVideoNegotiate OneVideoNegotiate;
 
 struct _OneVideoLocalPeerPriv {
-  /* Transmit GstRtpBin */
+  /* Transmit A/V data, rtcp send/recv RTP bin */
   GstElement *rtpbin;
+  /* The local ports we receive rtcp data on using udpsrc, in order:
+   * {audio_recv_rtcp RRs, video_recv_rtcp RRs}
+   * We recv RTCP RRs from all remotes on the same port for each media type
+   * since we send them all to the same rtpbin */
+  guint recv_rtcp_ports[2];
 
-  /* udpsinks transmitting RTP and RTCP */
-  GstElement *audpsink;
-  GstElement *artcpudpsink;
-  GstElement *vudpsink;
-  GstElement *vrtcpudpsink;
+  /* udpsinks transmitting RTP and RTCP and udpsrcs receiving rtcp */
+  GstElement *asend_rtp_sink;
+  GstElement *asend_rtcp_sink;
+  GstElement *arecv_rtcp_src;
+  GstElement *vsend_rtp_sink;
+  GstElement *vsend_rtcp_sink;
+  GstElement *vrecv_rtcp_src;
 
   /* primary audio playback elements */
   GstElement *audiomixer;
@@ -100,19 +107,19 @@ struct _OneVideoLocalPeerPriv {
 };
 
 struct _OneVideoRemotePeerPriv {
-  /* Transmit udpsink ports in order:
-   * {audio, audio_rtcp, video, video_rtcp} */
-  guint send_ports[4];
+  /* The remote ports we transmit data to using udpsink, in order:
+   * {audio_rtp, audio_send_rtcp SRs, audio_send_rtcp RRs,
+   *  video_rtp, video_send_rtcp SRs, video_send_rtcp RRs} */
+  guint send_ports[6];
+  /* The local ports we receive data on using udpsrc, in order:
+   * {audio_rtp, audio_recv_rtcp SRs,
+   *  video_rtp, video_recv_rtcp SRs} */
+  guint recv_ports[4];
 
   /*-- Receive pipeline --*/
-  /* Receive udpsrc ports in order:
-   * {audio, audio_rtcp, video, video_rtcp} */
-  guint recv_ports[4];
   /* The caps that we will receive */
   GstCaps *recv_acaps;
   GstCaps *recv_vcaps;
-  /* GstRtpBin inside the receive pipeline */
-  GstElement *rtpbin;
   /* Depayloaders */
   GstElement *adepay;
   GstElement *vdepay;

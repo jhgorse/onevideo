@@ -50,6 +50,36 @@ one_video_on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer user_data)
 #define on_local_transmit_error one_video_on_gst_bus_error
 #define on_local_playback_error one_video_on_gst_bus_error
 
+GSocket *
+one_video_get_socket_for_addr (const gchar * addr_s, guint port)
+{
+  GSocketAddress *sock_addr;
+  GSocket *socket = NULL;
+  GError *error = NULL;
+
+  sock_addr = g_inet_socket_address_new_from_string (addr_s, port);
+
+  socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
+      G_SOCKET_PROTOCOL_UDP, &error);
+  if (!socket) {
+    GST_ERROR ("Unable to create new socket: %s", error->message);
+    goto err;
+  }
+
+  if (!g_socket_bind (socket, sock_addr, TRUE, &error)) {
+    GST_ERROR ("Unable to create new socket: %s", error->message);
+    goto err;
+  }
+
+out:
+  g_object_unref (sock_addr);
+  return socket;
+err:
+  g_clear_pointer (&socket, g_object_unref);
+  g_error_free (error);
+  goto out;
+}
+
 /*-- LOCAL PEER SETUP --*/
 gboolean
 one_video_local_peer_setup_playback_pipeline (OneVideoLocalPeer * local)
@@ -103,9 +133,9 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   GstBus *bus;
   GstCaps *video_caps, *raw_audio_caps;
   GstElement *asrc, *afilter, *aencode, *apay;
-  GstElement *artpqueue, *asink, *artcpqueue, *artcpsink;
+  GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay;
-  GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink;
+  GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
   GstPad *srcpad, *sinkpad;
 
   if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED))
@@ -130,10 +160,15 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   aencode = gst_element_factory_make ("opusenc", NULL);
   g_object_set (aencode, "frame-size", 10, NULL);
   apay = gst_element_factory_make ("rtpopuspay", NULL);
+  /* Send RTP audio data */
   artpqueue = gst_element_factory_make ("queue", NULL);
-  asink = gst_element_factory_make ("udpsink", "adata-transmit-udpsink");
+  asink = gst_element_factory_make ("udpsink", "asend_rtp_sink");
+  /* Send RTCP SR for audio (same packets for all peers) */
   artcpqueue = gst_element_factory_make ("queue", NULL);
-  artcpsink = gst_element_factory_make ("udpsink", "artcp-transmit-udpsink");
+  artcpsink = gst_element_factory_make ("udpsink", "asend_rtcp_sink");
+  g_object_set (artcpsink, "sync", FALSE, "async", FALSE, NULL);
+  /* Recv RTCP RR for audio (same port for all peers) */
+  artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src");
 
   /* FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
    * FIXME: Select the best format based on formats available on the camera */
@@ -155,23 +190,30 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   }
   vqueue2 = gst_element_factory_make ("jpegenc", NULL);
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
+  /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);
-  vsink = gst_element_factory_make ("udpsink", "vdata-transmit-udpsink");
+  vsink = gst_element_factory_make ("udpsink", "vsend_rtp_sink");
+  /* Send RTCP SR for video (same packets for all peers) */
   vrtcpqueue = gst_element_factory_make ("queue", NULL);
-  vrtcpsink = gst_element_factory_make ("udpsink", "vrtcp-transmit-udpsink");
+  vrtcpsink = gst_element_factory_make ("udpsink", "vsend_rtcp_sink");
+  g_object_set (vrtcpsink, "sync", FALSE, "async", FALSE, NULL);
+  /* Recv RTCP RR for video (same port for all peers) */
+  vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src");
 
   gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
-      afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, vsrc,
-      vfilter, vqueue, vqueue2, vpay, vrtpqueue, vsink, vrtcpqueue, vrtcpsink,
-      NULL);
+      afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
+      vsrc, vfilter, vqueue, vqueue2, vpay, vrtpqueue, vsink, vrtcpqueue,
+      vrtcpsink, vrtcpsrc, NULL);
 
   /* Link audio branch */
   g_assert (gst_element_link_many (asrc, afilter, aencode, apay, NULL));
   g_assert (gst_element_link (artcpqueue, artcpsink));
-  local->priv->artcpudpsink = artcpsink;
+  local->priv->asend_rtcp_sink = artcpsink;
   g_assert (gst_element_link (artpqueue, asink));
-  local->priv->audpsink = asink;
+  local->priv->asend_rtp_sink = asink;
+  local->priv->arecv_rtcp_src = artcpsrc;
 
+  /* Send RTP data */
   srcpad = gst_element_get_static_pad (apay, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_0");
   gst_pad_link (srcpad, sinkpad);
@@ -184,8 +226,16 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
+  /* Send RTCP SR */
   srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_0");
   sinkpad = gst_element_get_static_pad (artcpqueue, "sink");
+  gst_pad_link (srcpad, sinkpad);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  /* Recv RTCP RR */
+  srcpad = gst_element_get_static_pad (artcpsrc, "src");
+  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "recv_rtcp_sink_0");
   gst_pad_link (srcpad, sinkpad);
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
@@ -193,10 +243,12 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   /* Link video branch */
   g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vqueue2, vpay, NULL));
   g_assert (gst_element_link (vrtcpqueue, vrtcpsink));
-  local->priv->vrtcpudpsink = vrtcpsink;
+  local->priv->vsend_rtcp_sink = vrtcpsink;
   g_assert (gst_element_link (vrtpqueue, vsink));
-  local->priv->vudpsink = vsink;
+  local->priv->vsend_rtp_sink = vsink;
+  local->priv->vrecv_rtcp_src = vrtcpsrc;
 
+  /* Send RTP data */
   srcpad = gst_element_get_static_pad (vpay, "src");
   sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_1");
   gst_pad_link (srcpad, sinkpad);
@@ -209,8 +261,16 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
+  /* Send RTCP SR */
   srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_1");
   sinkpad = gst_element_get_static_pad (vrtcpqueue, "sink");
+  gst_pad_link (srcpad, sinkpad);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  /* Recv RTCP RR */
+  srcpad = gst_element_get_static_pad (vrtcpsrc, "src");
+  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "recv_rtcp_sink_1");
   gst_pad_link (srcpad, sinkpad);
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
@@ -220,7 +280,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   /* Use the system clock and explicitly reset the base/start times to ensure
    * that all the pipelines started by us have the same base/start times */
   gst_pipeline_use_clock (GST_PIPELINE (local->transmit),
-      gst_system_clock_obtain());
+      gst_system_clock_obtain ());
   gst_element_set_base_time (local->transmit, 0);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (local->transmit));
@@ -229,7 +289,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
       G_CALLBACK (on_local_transmit_error), local);
   g_object_unref (bus);
 
-  GST_DEBUG ("Setup pipeline to transmit to remote local");
+  GST_DEBUG ("Setup pipeline to transmit to remote peers");
 
   return TRUE;
 }
@@ -290,9 +350,11 @@ void
 one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
     OneVideoRemotePeer * remote)
 {
-  gchar *local_addr_s;
-  GstElement *asrc, *artcpsrc, *adecode, *asink;
-  GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink;
+  GSocket *socket;
+  GstElement *rtpbin;
+  GstElement *asrc, *artcpsrc, *adecode, *asink, *artcpsink;
+  GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink, *vrtcpsink;
+  gchar *local_addr_s, *remote_addr_s;
   GstPad *srcpad, *sinkpad;
 
   g_assert (remote->priv->recv_acaps != NULL &&
@@ -302,32 +364,48 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
 
   local_addr_s =
     g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
+  remote_addr_s =
+    g_inet_address_to_string (g_inet_socket_address_get_address (remote->addr));
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote peer */
 
-  remote->priv->rtpbin = gst_element_factory_make ("rtpbin", "recv-rtpbin-%u");
-  g_object_set (remote->priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS,
-      "drop-on-latency", TRUE, NULL);
+  rtpbin = gst_element_factory_make ("rtpbin", "recv-rtpbin-%u");
+  g_object_set (rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, "drop-on-latency",
+      TRUE, NULL);
 
-  /* FIXME: Fetch and set udpsrc caps using SDP over UDP
-   * FIXME: Both audio and video should be optional once we have negotiation */
-  asrc = gst_element_factory_make ("udpsrc", "adata-recv-udpsrc-%u");
-  g_object_set (asrc, "address", local_addr_s, "port",
-      remote->priv->recv_ports[0], "caps", remote->priv->recv_acaps, NULL);
-  artcpsrc = gst_element_factory_make ("udpsrc", "artcp-recv-udpsrc-%u");
-  g_object_set (artcpsrc, "address", local_addr_s, "port",
-      remote->priv->recv_ports[1], NULL);
+  /* TODO: Both audio and video should be optional */
+
+  /* Recv RTP audio data */
+  socket = one_video_get_socket_for_addr (local_addr_s,
+      remote->priv->recv_ports[0]);
+  asrc = gst_element_factory_make ("udpsrc", "arecv_rtp_src-%u");
+  g_object_set (asrc, "socket", socket, "caps", remote->priv->recv_acaps, NULL);
+  g_object_unref (socket);
   remote->priv->adepay = gst_element_factory_make ("rtpopusdepay", NULL);
   adecode = gst_element_factory_make ("opusdec", NULL);
   asink = gst_element_factory_make ("proxysink", "audio-proxysink-%u");
   g_assert (asink != NULL);
+  /* Recv RTCP SR for audio */
+  socket = one_video_get_socket_for_addr (local_addr_s,
+      remote->priv->recv_ports[1]);
+  artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src-%u");
+  g_object_set (artcpsrc, "socket", socket, NULL);
+  /* Send RTCP RR for audio using the same port as recv RTCP SR for audio
+   * NOTE: on the other end of this connection, the same port that we send
+   * these RTCP RRs to is also used to send us the RTCP SR packets that we
+   * receive above */
+  artcpsink = gst_element_factory_make ("udpsink", "asend_rtcp_sink-%u");
+  g_object_set (artcpsink, "socket", socket, "sync", FALSE, "async", FALSE,
+      /* Remote peer transport address */
+      "host", remote_addr_s, "port", remote->priv->send_ports[2], NULL);
+  g_object_unref (socket);
 
-  vsrc = gst_element_factory_make ("udpsrc", "vdata-recv-udpsrc-%u");
-  g_object_set (vsrc, "address", local_addr_s, "port",
-      remote->priv->recv_ports[2], "caps", remote->priv->recv_vcaps, NULL);
-  vrtcpsrc = gst_element_factory_make ("udpsrc", "vrtcp-recv-udpsrc-%u");
-  g_object_set (vrtcpsrc, "address", local_addr_s, "port",
-      remote->priv->recv_ports[3], NULL);
+  /* Recv RTP video data */
+  socket = one_video_get_socket_for_addr (local_addr_s,
+      remote->priv->recv_ports[2]);
+  vsrc = gst_element_factory_make ("udpsrc", "vrecv_rtp_src-%u");
+  g_object_set (vsrc, "socket", socket, "caps", remote->priv->recv_vcaps, NULL);
+  g_object_unref (socket);
   remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
   vdecode = gst_element_factory_make ("jpegdec", NULL);
   /* We need this despite setting caps everywhere because the jpeg might have
@@ -335,24 +413,46 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   vconvert = gst_element_factory_make ("videoconvert", NULL);
   vsink = gst_element_factory_make ("proxysink", "video-proxysink-%u");
   g_assert (vsink != NULL);
+  /* Recv RTCP SR for video */
+  socket = one_video_get_socket_for_addr (local_addr_s,
+      remote->priv->recv_ports[3]);
+  vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src-%u");
+  g_object_set (vrtcpsrc, "socket", socket, NULL);
+  /* Send RTCP RR for video using the same port as recv RTCP SR for video
+   * NOTE: on the other end of this connection, the same port that we send
+   * these RTCP RRs to is also used to send us the RTCP SR packets that we
+   * receive above */
+  vrtcpsink = gst_element_factory_make ("udpsink", "vsend_rtcp_sink-%u");
+  g_object_set (vrtcpsink, "socket", socket, "sync", FALSE, "async", FALSE,
+      /* Remote peer transport address */
+      "host", remote_addr_s, "port", remote->priv->send_ports[5], NULL);
+  g_object_unref (socket);
 
-  gst_bin_add_many (GST_BIN (remote->receive), asrc, remote->priv->adepay,
-      adecode, asink, vsrc, remote->priv->vdepay, vdecode, vconvert, vsink,
-      artcpsrc, vrtcpsrc, remote->priv->rtpbin, NULL);
+  gst_bin_add_many (GST_BIN (remote->receive), rtpbin,
+      asrc, remote->priv->adepay, adecode, asink, artcpsink, artcpsrc,
+      vsrc, remote->priv->vdepay, vdecode, vconvert, vsink, vrtcpsink, vrtcpsrc,
+      NULL);
 
   /* Link audio branch via rtpbin */
   g_assert (gst_element_link_many (remote->priv->adepay, adecode, asink, NULL));
 
+  /* Recv audio RTP and send to rtpbin */
   srcpad = gst_element_get_static_pad (asrc, "src");
-  sinkpad =
-    gst_element_get_request_pad (remote->priv->rtpbin, "recv_rtp_sink_0");
+  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtp_sink_0");
   g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
+  /* Recv audio RTCP SR etc and send to rtpbin */
   srcpad = gst_element_get_static_pad (artcpsrc, "src");
-  sinkpad =
-    gst_element_get_request_pad (remote->priv->rtpbin, "recv_rtcp_sink_0");
+  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtcp_sink_0");
+  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  /* Send audio RTCP RR etc from rtpbin */
+  srcpad = gst_element_get_request_pad (rtpbin, "send_rtcp_src_0");
+  sinkpad = gst_element_get_static_pad (artcpsink, "sink");
   g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
@@ -361,16 +461,23 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   g_assert (gst_element_link_many (remote->priv->vdepay, vdecode, vconvert,
         vsink, NULL));
 
+  /* Recv video RTP and send to rtpbin */
   srcpad = gst_element_get_static_pad (vsrc, "src");
-  sinkpad =
-    gst_element_get_request_pad (remote->priv->rtpbin, "recv_rtp_sink_1");
+  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtp_sink_1");
   g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
+  /* Recv video RTCP SR etc and send to rtpbin */
   srcpad = gst_element_get_static_pad (vrtcpsrc, "src");
-  sinkpad =
-    gst_element_get_request_pad (remote->priv->rtpbin, "recv_rtcp_sink_1");
+  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtcp_sink_1");
+  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  /* Send video RTCP RR etc from rtpbin */
+  srcpad = gst_element_get_request_pad (rtpbin, "send_rtcp_src_1");
+  sinkpad = gst_element_get_static_pad (vrtcpsink, "sink");
   g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
@@ -378,14 +485,14 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   /* When recv_rtp_src_%u_%u_%u pads corresponding to the above recv_rtp_sink_%u
    * sinkpads are added when the pipeline pre-rolls, 'pad-added' will be called
    * and we'll finish linking the pipeline */
-  g_signal_connect (remote->priv->rtpbin, "pad-added",
-      G_CALLBACK (rtpbin_pad_added), remote);
+  g_signal_connect (rtpbin, "pad-added", G_CALLBACK (rtpbin_pad_added), remote);
 
   /* This is what exposes video/audio data from this remote peer */
   remote->priv->audio_proxysink = asink;
   remote->priv->video_proxysink = vsink;
 
   GST_DEBUG ("Setup pipeline to receive from remote");
+  g_free (remote_addr_s);
   g_free (local_addr_s);
 }
 

@@ -38,44 +38,59 @@ static const struct {
 } type_strings[] = {
   /* Format: msg_id */
   {ONE_VIDEO_TCP_MSG_TYPE_ACK,              "acknowledged",       "x"},
+
   /* Format: (msg_id, error string) */
   {ONE_VIDEO_TCP_MSG_TYPE_ERROR,            "error",              "(xs)"},
+
   /* Format: (call_id, error string) */
   {ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,       "error during call",  "(xs)"},
-  /* Format:
-   * (call_id, send_acaps, send_vcaps, recv_acaps, recv_vcaps,
-   *  [(remote_peer1, arecv_port1, artcp_port1, vrecv_port1, vrtcp_port1),
-   *   (remote_peer2, arecv_port2, artcp_port2, vrecv_port2, vrtcp_port2),
-   *   ...]) */
-  {ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xssssa(suuuu))"},
 
-  {ONE_VIDEO_TCP_MSG_TYPE_HELLO,            "hello",              NULL},
-  /* Format: call_id, peer_id_str */
+  /* Format:
+   * (call_id, arecv_rtcprr_port, vrecv_rtcprr_port,
+   *  send_acaps, send_vcaps, recv_acaps, recv_vcaps,
+   *  [(remote_peer1, arecv_port1, arecv_rtcpsr_port1, vrecv_port1, vrecv_rtcpsr_port1),
+   *   (remote_peer2, arecv_port2, arecv_rtcpsr_port2, vrecv_port2, vrecv_rtcpsr_port2),
+   *   ...])
+   *
+   *   Note that the rtcprr ports are shared between all peers */
+  {ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xuussssa(suuuu))"},
+
+  /* Format: call_id, peer_id_str
+   * peer_id_str is of the form "address:tcp_port" */
   {ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xs)"},
+
   /* Format: call_id, peer_id_str
    * Can be sent by any peer during the negotiation process to cancel it.
    * The call initiator sends it to all peers and the other peers send it
    * only to the call initiator. */
   {ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, "cancel negotiating", "(xs)"},
+
   /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xas)"},
+
   /* Format:
    * (call_id, send_acaps, send_vcaps,
-   *  [(remote_peer1, recv_acaps, recv_vcaps,
-   *    arecv_port1, artcp_port1, vrecv_port1, vrtcp_port1),
-   *   (remote_peer2, recv_acaps, recv_vcaps,
-   *    arecv_port2, artcp_port2, vrecv_port2, vrtcp_port2),
+   *  [(remote_peer1, recv_acaps1, recv_vcaps1,
+   *    arecv_port1, arecv_rtcpsr_port1, arecv_rtcprr_port1,
+   *    vrecv_port1, vrecv_rtcpsr_port1, vrecv_rtcprr_port1),
+   *   (remote_peer2, recv_acaps2, recv_vcaps2,
+   *    arecv_port2, arecv_rtcpsr_port2, arecv_rtcprr_port1,
+   *    vrecv_port2, vrecv_rtcpsr_port2),
    *   ...]) */
-  {ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuu))"},
+  {ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuuuu))"},
+
   /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_START_CALL,       "start call",         "(xas)"},
+
   /* Format: call_id, peer_id_str */
   {ONE_VIDEO_TCP_MSG_TYPE_PAUSE_CALL,       "pause call",         "(xs)"},
+
   /* Format: call_id, peer_id_str */
   {ONE_VIDEO_TCP_MSG_TYPE_RESUME_CALL,      "resume call",        "(xs)"},
+
   /* Format: call_id, peer_id_str */
   {ONE_VIDEO_TCP_MSG_TYPE_END_CALL,         "end call",           "(xs)"},
-  {ONE_VIDEO_TCP_MSG_TYPE_BYE,              "bye",                NULL},
+
   {0}
 };
 

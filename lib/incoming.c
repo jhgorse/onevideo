@@ -260,8 +260,9 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS, ONE_VIDEO_TCP_MAX_VERSION);
   reply = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,
-      g_variant_new (variant_type, call_id, send_acaps, send_vcaps, recv_acaps,
-        recv_vcaps, peers));
+      g_variant_new (variant_type, call_id,
+        local->priv->recv_rtcp_ports[0], local->priv->recv_rtcp_ports[1],
+        send_acaps, send_vcaps, recv_acaps, recv_vcaps, peers));
   g_variant_builder_unref (peers);
 
   g_free (send_acaps); g_free (send_vcaps);
@@ -287,7 +288,7 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   const gchar *vtype;
   gchar *addr_s, *acaps, *vcaps;
   GHashTable *remotes = local->priv->negotiate->remotes;
-  guint32 ports[4] = {};
+  guint32 ports[6] = {};
 
   vtype = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS, ONE_VIDEO_TCP_MAX_VERSION);
@@ -303,8 +304,8 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   local->priv->send_vcaps = gst_caps_from_string (vcaps);
   g_free (acaps); g_free (vcaps);
 
-  while (g_variant_iter_loop (iter, "(sssuuuu)", &addr_s, &acaps, &vcaps,
-        &ports[0], &ports[1], &ports[2], &ports[3])) {
+  while (g_variant_iter_loop (iter, "(sssuuuuuu)", &addr_s, &acaps, &vcaps,
+        &ports[0], &ports[1], &ports[2], &ports[3], &ports[4], &ports[5])) {
     OneVideoRemotePeer *remote;
 
     remote = g_hash_table_lookup (remotes, addr_s);
@@ -318,6 +319,8 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
     remote->priv->send_ports[1] = ports[1];
     remote->priv->send_ports[2] = ports[2];
     remote->priv->send_ports[3] = ports[3];
+    remote->priv->send_ports[4] = ports[4];
+    remote->priv->send_ports[5] = ports[5];
 
     /* Set the expected recv_caps; unreffing any existing ones if necessary */
     if (remote->priv->recv_acaps != NULL)
