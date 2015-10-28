@@ -326,15 +326,17 @@ static void
 rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
     OneVideoRemotePeer * remote)
 {
-  gchar *name;
   GstPad *sinkpad;
   GstElement *depay;
+  gchar *name = gst_pad_get_name (srcpad);
+  guint len = G_N_ELEMENTS ("recv_rtp_src_");
 
-  name = gst_pad_get_name (srcpad);
-  /* Match the session number to the correct branch (audio or video) */ 
-  if (name[13] == '0')
+  /* Match the session number to the correct branch (audio or video)
+   * The session number is the first %u in the pad name of the form
+   * 'recv_rtp_src_%u_%u_%u' */ 
+  if (name[len-1] == '0')
     depay = remote->priv->adepay;
-  else if (name[13] == '1')
+  else if (name[len-1] == '1')
     depay = remote->priv->vdepay;
   else
     /* We only have two streams with known session numbers */
