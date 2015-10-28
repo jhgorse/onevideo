@@ -60,3 +60,6 @@ Items marked with a ★ are high priority
  - Add signals (move from structs to GObjects for OneVideo*Peer objects?) for
    things like negotiation-done, remote-added, remote-removed, call-ended, etc.
    
+* Device probing/monitoring
+ - GstDeviceMonitor API does not have a way to query whether a device is under
+   use. Currently, we try to use the device and fail, but we should fix the API.
