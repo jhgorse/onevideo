@@ -74,7 +74,7 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
       cancellable, error);
   if (!conn) {
     GST_ERROR ("Unable to connect to %s: %s", remote->addr_s,
-        (*error)->message);
+        error ? (*error)->message : "Unknown error");
     goto no_conn;
   }
 
