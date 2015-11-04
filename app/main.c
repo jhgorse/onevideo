@@ -123,6 +123,8 @@ device_is_in_use (GstDevice * device)
   GstState state;
   gboolean ret = FALSE;
 
+  return FALSE;
+
   check = gst_pipeline_new ("test-v4l2");
   src = gst_device_create_element (device, "test-src");
   sink = gst_element_factory_make ("fakesink", NULL);
