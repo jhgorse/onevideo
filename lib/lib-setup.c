@@ -136,7 +136,6 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
-  GstPad *srcpad, *sinkpad;
 
   if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED))
     return FALSE;
@@ -214,31 +213,18 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   local->priv->arecv_rtcp_src = artcpsrc;
 
   /* Send RTP data */
-  srcpad = gst_element_get_static_pad (apay, "src");
-  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_0");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
-
-  srcpad = gst_element_get_static_pad (local->priv->rtpbin, "send_rtp_src_0");
-  sinkpad = gst_element_get_static_pad (artpqueue, "sink");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (apay, "src", local->priv->rtpbin,
+        "send_rtp_sink_0"));
+  g_assert (gst_element_link_pads (local->priv->rtpbin, "send_rtp_src_0",
+        artpqueue, "sink"));
 
   /* Send RTCP SR */
-  srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_0");
-  sinkpad = gst_element_get_static_pad (artcpqueue, "sink");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (local->priv->rtpbin, "send_rtcp_src_0",
+        artcpqueue, "sink"));
 
   /* Recv RTCP RR */
-  srcpad = gst_element_get_static_pad (artcpsrc, "src");
-  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "recv_rtcp_sink_0");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (artcpsrc, "src", local->priv->rtpbin,
+        "recv_rtcp_sink_0"));
 
   /* Link video branch */
   g_assert (gst_element_link_many (vsrc, vfilter, vqueue, vqueue2, vpay, NULL));
@@ -249,31 +235,18 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   local->priv->vrecv_rtcp_src = vrtcpsrc;
 
   /* Send RTP data */
-  srcpad = gst_element_get_static_pad (vpay, "src");
-  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtp_sink_1");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
-
-  srcpad = gst_element_get_static_pad (local->priv->rtpbin, "send_rtp_src_1");
-  sinkpad = gst_element_get_static_pad (vrtpqueue, "sink");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (vpay, "src", local->priv->rtpbin,
+        "send_rtp_sink_1"));
+  g_assert (gst_element_link_pads (local->priv->rtpbin, "send_rtp_src_1",
+        vrtpqueue, "sink"));
 
   /* Send RTCP SR */
-  srcpad = gst_element_get_request_pad (local->priv->rtpbin, "send_rtcp_src_1");
-  sinkpad = gst_element_get_static_pad (vrtcpqueue, "sink");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (local->priv->rtpbin, "send_rtcp_src_1",
+        vrtcpqueue, "sink"));
 
   /* Recv RTCP RR */
-  srcpad = gst_element_get_static_pad (vrtcpsrc, "src");
-  sinkpad = gst_element_get_request_pad (local->priv->rtpbin, "recv_rtcp_sink_1");
-  gst_pad_link (srcpad, sinkpad);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (vrtcpsrc, "src", local->priv->rtpbin,
+        "recv_rtcp_sink_1"));
 
   /* All done */
 
@@ -357,7 +330,6 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   GstElement *asrc, *artcpsrc, *adecode, *asink, *artcpsink;
   GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink, *vrtcpsink;
   gchar *local_addr_s, *remote_addr_s;
-  GstPad *srcpad, *sinkpad;
 
   g_assert (remote->priv->recv_acaps != NULL &&
       remote->priv->recv_vcaps != NULL && remote->priv->recv_ports[0] > 0 &&
@@ -439,50 +411,30 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   g_assert (gst_element_link_many (remote->priv->adepay, adecode, asink, NULL));
 
   /* Recv audio RTP and send to rtpbin */
-  srcpad = gst_element_get_static_pad (asrc, "src");
-  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtp_sink_0");
-  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (asrc, "src", rtpbin, "recv_rtp_sink_0"));
 
   /* Recv audio RTCP SR etc and send to rtpbin */
-  srcpad = gst_element_get_static_pad (artcpsrc, "src");
-  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtcp_sink_0");
-  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (artcpsrc, "src", rtpbin,
+        "recv_rtcp_sink_0"));
 
   /* Send audio RTCP RR etc from rtpbin */
-  srcpad = gst_element_get_request_pad (rtpbin, "send_rtcp_src_0");
-  sinkpad = gst_element_get_static_pad (artcpsink, "sink");
-  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (rtpbin, "send_rtcp_src_0", artcpsink,
+        "sink"));
 
   /* Link video branch via rtpbin */
   g_assert (gst_element_link_many (remote->priv->vdepay, vdecode, vconvert,
         vsink, NULL));
 
   /* Recv video RTP and send to rtpbin */
-  srcpad = gst_element_get_static_pad (vsrc, "src");
-  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtp_sink_1");
-  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (vsrc, "src", rtpbin, "recv_rtp_sink_1"));
 
   /* Recv video RTCP SR etc and send to rtpbin */
-  srcpad = gst_element_get_static_pad (vrtcpsrc, "src");
-  sinkpad = gst_element_get_request_pad (rtpbin, "recv_rtcp_sink_1");
-  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (vrtcpsrc, "src", rtpbin,
+        "recv_rtcp_sink_1"));
 
   /* Send video RTCP RR etc from rtpbin */
-  srcpad = gst_element_get_request_pad (rtpbin, "send_rtcp_src_1");
-  sinkpad = gst_element_get_static_pad (vrtcpsink, "sink");
-  g_assert (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
-  gst_object_unref (sinkpad);
-  gst_object_unref (srcpad);
+  g_assert (gst_element_link_pads (rtpbin, "send_rtcp_src_1", vrtcpsink,
+        "sink"));
 
   /* When recv_rtp_src_%u_%u_%u pads corresponding to the above recv_rtp_sink_%u
    * sinkpads are added when the pipeline pre-rolls, 'pad-added' will be called

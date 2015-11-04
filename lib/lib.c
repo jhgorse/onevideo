@@ -328,17 +328,8 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
   g_free (addr_only);
 
   if (remote->priv->audio_proxysrc != NULL) {
-    GstPadLinkReturn ret;
-    GstPad *srcpad, *sinkpad;
-
-    sinkpad = gst_element_get_request_pad (local->priv->audiomixer, "sink_%u");
-    srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
-
-    ret = gst_pad_link (srcpad, sinkpad);
-    g_assert (ret == GST_PAD_LINK_OK);
-    gst_object_unref (sinkpad);
-    gst_object_unref (srcpad);
-
+    g_assert (gst_element_link_pads (remote->priv->aplayback, "audiopad",
+          local->priv->audiomixer, "sink_%u"));
     g_assert (gst_element_set_state (remote->priv->aplayback, GST_STATE_PLAYING)
         == GST_STATE_CHANGE_SUCCESS);
     GST_DEBUG ("Resumed audio of %s", remote->addr_s);
