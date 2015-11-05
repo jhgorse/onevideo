@@ -225,6 +225,49 @@ again:
   return device ? device->data : NULL;
 }
 
+static GstDevice *
+get_device (GList * devices, const gchar * device_path)
+{
+  GList *device;
+  gboolean some_device_had_props = FALSE;
+
+  if (devices == NULL) {
+    g_printerr ("No video sources detected, ignoring device choice and using"
+        " the test video source\n");
+    return NULL;
+  }
+
+  for (device = devices; device; device = device->next) {
+    const gchar *path;
+    GstStructure *props;
+
+    g_object_get (GST_DEVICE (device->data), "properties", &props, NULL);
+    if (props == NULL)
+      continue;
+
+    some_device_had_props = TRUE;
+    path = gst_structure_get_string (props, "device.path");
+
+    if (g_strcmp0 (path, device_path) == 0) {
+      g_print ("Found device for path '%s'\n", device_path);
+      gst_structure_free (props);
+      return GST_DEVICE (device->data);
+    }
+
+    gst_structure_free (props);
+  }
+
+  if (!some_device_had_props)
+    g_printerr ("None of the probed devices had properties set; unable to match"
+        " with specified device path! Falling back to using the test video"
+        " source. Upgrade GStreamer or don't use the --device/-d argument.\n");
+  else
+    g_printerr ("Selected device path '%s' wasn't found, using test video"
+        " source...\n", device_path);
+
+  return NULL;
+}
+
 int
 main (int   argc,
       char *argv[])
@@ -240,6 +283,7 @@ main (int   argc,
   gboolean auto_exit = FALSE;
   guint iface_port = ONE_VIDEO_DEFAULT_COMM_PORT;
   gchar *iface_name = NULL;
+  gchar *device_path = NULL;
   gchar **remotes = NULL;
   GOptionEntry entries[] = {
     {"exit-after", 0, 0, G_OPTION_ARG_INT, &exit_after, "Exit cleanly after N"
@@ -248,6 +292,8 @@ main (int   argc,
           " the call is ended in passive mode (default: no)", NULL},
     {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
           " to listen on (default: any)", "NAME"},
+    {"device", 'd', 0, G_OPTION_ARG_STRING, &device_path, "Path to the V4L2"
+          " (camera) device; example: /dev/video0 (default: ask)", "PATH"},
     {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "TCP port to listen on"
           " for incoming connections (default: " STR(ONE_VIDEO_DEFAULT_COMM_PORT)
           ")", "PORT"},
@@ -282,11 +328,14 @@ main (int   argc,
   listen_addr = g_inet_socket_address_new (inet_addr, iface_port);
   g_object_unref (inet_addr);
 
+  g_print ("Probing devices...\n");
   local = one_video_local_peer_new (G_INET_SOCKET_ADDRESS (listen_addr));
   g_object_unref (listen_addr);
 
   devices = one_video_local_peer_get_video_devices (local);
-  one_video_local_peer_set_video_device (local, get_device_choice (devices));
+  g_print ("Probing finished\n");
+  one_video_local_peer_set_video_device (local, device_path ?
+        get_device (devices, device_path) : get_device_choice (devices));
   g_list_free_full (devices, g_object_unref);
 
   if (remotes == NULL) {
