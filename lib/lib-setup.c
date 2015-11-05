@@ -182,9 +182,8 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   } else {
     vsrc = gst_device_create_element (video_device, NULL);
     vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
-    video_caps = gst_caps_from_string ("image/jpeg, " VIDEO_CAPS_STR);
-    g_object_set (vfilter, "caps", video_caps, NULL);
-    gst_caps_unref (video_caps);
+    /* These have already been fixated */
+    g_object_set (vfilter, "caps", local->priv->send_vcaps, NULL);
     vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
   }
   vqueue2 = gst_element_factory_make ("jpegenc", NULL);
@@ -330,6 +329,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   GstElement *asrc, *artcpsrc, *adecode, *asink, *artcpsink;
   GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink, *vrtcpsink;
   gchar *local_addr_s, *remote_addr_s;
+  GstCaps *rtpcaps;
 
   g_assert (remote->priv->recv_acaps != NULL &&
       remote->priv->recv_vcaps != NULL && remote->priv->recv_ports[0] > 0 &&
@@ -353,7 +353,10 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   socket = one_video_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[0]);
   asrc = gst_element_factory_make ("udpsrc", "arecv_rtp_src-%u");
-  g_object_set (asrc, "socket", socket, "caps", remote->priv->recv_acaps, NULL);
+  /* We always use the same caps for sending audio */
+  rtpcaps = gst_caps_from_string (RTP_ALL_AUDIO_CAPS_STR);
+  g_object_set (asrc, "socket", socket, "caps", rtpcaps, NULL);
+  gst_caps_unref (rtpcaps);
   g_object_unref (socket);
   remote->priv->adepay = gst_element_factory_make ("rtpopusdepay", NULL);
   adecode = gst_element_factory_make ("opusdec", NULL);
@@ -378,7 +381,12 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   socket = one_video_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[2]);
   vsrc = gst_element_factory_make ("udpsrc", "vrecv_rtp_src-%u");
-  g_object_set (vsrc, "socket", socket, "caps", remote->priv->recv_vcaps, NULL);
+  /* The depayloader will detect the height/width/framerate on the fly
+   * This allows us to change that without communicating new caps
+   * TODO: This hard-codes JPEG right now. Choose based on priv->recv_vcaps. */
+  rtpcaps = gst_caps_from_string (RTP_JPEG_VIDEO_CAPS_STR);
+  g_object_set (vsrc, "socket", socket, "caps", rtpcaps, NULL);
+  gst_caps_unref (rtpcaps);
   g_object_unref (socket);
   remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
   vdecode = gst_element_factory_make ("jpegdec", NULL);

@@ -37,9 +37,6 @@ G_BEGIN_DECLS
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
-#define RTP_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, clock-rate=48000, encoding-name=OPUS"
-#define RTP_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG"
-
 typedef struct _OneVideoLocalPeer OneVideoLocalPeer;
 typedef struct _OneVideoLocalPeerPriv OneVideoLocalPeerPriv;
 typedef enum _OneVideoLocalPeerState OneVideoLocalPeerState;

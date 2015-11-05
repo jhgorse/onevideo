@@ -286,7 +286,9 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
     GVariant *value;
     GVariantIter *iter;
     OneVideoRemotePeer *remote;
-    gchar *addr_s, *send_acaps, *send_vcaps;
+    /* The caps of the data that this remote will send to everyone */
+    gchar *send_acaps, *send_vcaps;
+    gchar *addr_s;
     guint32 ports[6] = {};
 
     remote = g_ptr_array_index (local->priv->remote_peers, ii);
@@ -319,21 +321,17 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
     }
     g_variant_iter_free (iter);
   }
-
-  local->priv->send_acaps = gst_caps_copy (local->priv->supported_send_acaps);
-  /* TODO: Decide send_vcaps based on our upload bandwidth limit */
-  local->priv->send_vcaps = gst_caps_fixate (
-      gst_caps_copy (local->priv->supported_send_vcaps));
-  /* TODO: Restrict local->priv->supported_recv_vcaps as per CPU and download
-   * bandwidth limits based on the number of peers */
 }
 
+/* Format of GHashTable *in is: {OneVideoRemotePeer*: GVariant*}
+ * GVariant is of type ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS */
 static GHashTable *
 one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
     GHashTable * in, guint64 call_id)
 {
   guint ii, jj;
   GHashTable *out;
+  /* The caps of the data that we will send to everyone */
   gchar *send_acaps, *send_vcaps;
   const gchar *in_vtype, *out_vtype;
   GPtrArray *remotes = local->priv->remote_peers;
@@ -348,9 +346,16 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
   out = g_hash_table_new_full (NULL, NULL, NULL,
       (GDestroyNotify) g_variant_unref);
 
-  /* FIXME: Decide send caps. For now, we use the same caps everywhere. */
-  send_acaps = gst_caps_to_string (local->priv->supported_send_acaps);
-  send_vcaps = gst_caps_to_string (local->priv->supported_send_vcaps);
+  local->priv->send_acaps = gst_caps_fixate (
+      gst_caps_copy (local->priv->supported_send_acaps));
+  send_acaps = gst_caps_to_string (local->priv->send_acaps);
+  /* TODO: Right now, we just select the best video caps available. Instead, we
+   * should decide send_vcaps based on our upload bandwidth limit and based on
+   * the recv_caps of other peers. This is ok right now because other peers
+   * just accept any JPEG video anyway. */
+  local->priv->send_vcaps = gst_caps_fixate (
+      gst_caps_copy (local->priv->supported_send_vcaps));
+  send_vcaps = gst_caps_to_string (local->priv->send_vcaps);
 
   /* For each remote peer, iterate over the reply-caps messages received from
    * all *other* peers and find the udpsink send_ports and recv caps that each
@@ -371,6 +376,8 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
       GVariant *otherv;
       GVariantIter *iter;
       OneVideoRemotePeer *other;
+      /* The caps of the data that the remote 'other'
+       * will receive from the remote 'this'*/
       gchar *recv_acaps, *recv_vcaps;
       guint32 ports[6] = {};
 
@@ -412,14 +419,12 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
         send_vcaps, this->priv->recv_ports[0], this->priv->recv_ports[1],
         local->priv->recv_rtcp_ports[0], this->priv->recv_ports[2],
         this->priv->recv_ports[3], local->priv->recv_rtcp_ports[1]);
+    /* Create the aggregated CALL_DETAILS GVariant for this remote peer */
     negotiated =
       g_variant_new (out_vtype, call_id, send_acaps, send_vcaps, thisb);
     g_hash_table_insert (out, this, g_variant_ref_sink (negotiated));
     g_variant_builder_unref (thisb);
   }
-
-  g_free (send_acaps);
-  g_free (send_vcaps);
 
   return out;
 }
@@ -569,9 +574,6 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     one_video_tcp_msg_free (reply);
   }
   g_rec_mutex_unlock (&local->priv->lock);
-
-  /* FIXME: Read caps from all the peers and find the best caps
-   * For now, we use the same caps everywhere and just negotiate ports */
   
   g_rec_mutex_lock (&local->priv->lock);
   if (g_cancellable_is_cancelled (cancellable))

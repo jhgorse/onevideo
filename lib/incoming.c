@@ -207,7 +207,9 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
   GHashTableIter iter;
   GVariantBuilder *peers;
   const gchar *variant_type;
+  /* The caps that we can receive */
   gchar *recv_acaps, *recv_vcaps;
+  /* The caps that we can send */
   gchar *send_acaps, *send_vcaps;
   OneVideoRemotePeer *remote;
   OneVideoTcpMsg *reply;
@@ -253,7 +255,10 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
   g_rec_mutex_unlock (&local->priv->lock);
 
   send_acaps = gst_caps_to_string (local->priv->supported_send_acaps);
+  /* TODO: Decide send_vcaps based on our upload bandwidth limit */
   send_vcaps = gst_caps_to_string (local->priv->supported_send_vcaps);
+  /* TODO: Fixate and restrict recv_?caps as per CPU and download
+   * bandwidth limits based on the number of peers */
   recv_acaps = gst_caps_to_string (local->priv->supported_recv_acaps);
   recv_vcaps = gst_caps_to_string (local->priv->supported_recv_vcaps);
 

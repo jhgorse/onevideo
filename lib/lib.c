@@ -96,10 +96,10 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
 
   /* Initialize the V4L2 device monitor */
   /* We only want native formats: JPEG, (and later) YUY2 and H.264 */
-  vcaps = gst_caps_new_empty_simple ("image/jpeg");
+  vcaps = gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
   /*gst_caps_append (vcaps,
       gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "YUY2"));
-  gst_caps_append (vcaps, gst_caps_new_empty_simple ("video/x-h264"));*/
+  gst_caps_append (vcaps, gst_caps_new_empty_simple (VIDEO_FORMAT_H264));*/
   local->priv->dm = gst_device_monitor_new ();
   gst_device_monitor_add_filter (local->priv->dm, "Video/Source", vcaps);
   gst_caps_unref (vcaps);
@@ -116,16 +116,20 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
   local->priv->remote_peers = g_ptr_array_new ();
   g_rec_mutex_init (&local->priv->lock);
 
-  /*-- Initialize caps supported by us --*/
+  /*-- Initialize (non-RTP) caps supported by us --*/
+  /* NOTE: Caps negotiated/exchanged between peers are always non-RTP caps */
   /* We will only ever use 48KHz Opus */
-  local->priv->supported_send_acaps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
+  local->priv->supported_send_acaps =
+    gst_caps_from_string (AUDIO_FORMAT_OPUS CAPS_SEP AUDIO_CAPS_STR);
   /* supported_send_vcaps is set in set_video_device() */
 
   /* We will only ever use 48KHz Opus */
-  local->priv->supported_recv_acaps = gst_caps_from_string (RTP_AUDIO_CAPS_STR);
+  local->priv->supported_recv_acaps =
+    gst_caps_new_empty_simple (AUDIO_FORMAT_OPUS);
   /* For now, only support JPEG.
    * TODO: Add other supported formats here */
-  local->priv->supported_recv_vcaps = gst_caps_from_string (RTP_VIDEO_CAPS_STR);
+  local->priv->supported_recv_vcaps =
+    gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
 
   /*-- Setup various pipelines and resources --*/
 
@@ -463,6 +467,108 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
   g_free (remote);
 }
 
+static GstCaps *
+one_video_media_type_to_caps (OneVideoMediaType type)
+{
+  switch (type) {
+    case ONE_VIDEO_MEDIA_TYPE_JPEG:
+      return gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
+    case ONE_VIDEO_MEDIA_TYPE_YUY2:
+      return gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING,
+          "YUY2", NULL);
+    case ONE_VIDEO_MEDIA_TYPE_H264:
+      return gst_caps_new_empty_simple (VIDEO_FORMAT_H264);
+    default:
+      g_assert_not_reached ();
+  }
+  return NULL;
+}
+
+/* Get the caps from the device and extract the useful caps from it
+ * Useful caps are those that are high-def and high framerate, or if none such
+ * are found, high-def and low-framerate, then low-def and high-framerate, then
+ * low-def and low-framerate.
+ *
+ * Currently only returns image/jpeg caps */
+static GstCaps *
+one_video_device_get_usable_caps (GstDevice * device, OneVideoMediaType * type)
+{
+  gchar *tmp;
+  gint ii, len;
+  GstCaps *retcaps, *caps1, *caps2;
+
+  retcaps = gst_device_get_caps (device);
+
+  /* Try extracting jpeg-only structures first */
+  *type = ONE_VIDEO_MEDIA_TYPE_JPEG;
+
+extract_caps:
+  caps2 = one_video_media_type_to_caps (*type);
+  caps1 = gst_caps_intersect (retcaps, caps2);
+  g_clear_pointer (&caps2, gst_caps_unref);
+
+  if (gst_caps_is_empty (caps1)) {
+    gst_caps_unref (caps1);
+    switch (*type) {
+      /* Device does not support JPEG, try YUY2
+       * We don't try other RAW formats because those are all emulated by libv4l2
+       * by converting/decoding from JPEG or YUY2 */
+      case ONE_VIDEO_MEDIA_TYPE_JPEG:
+        /* TODO: Not supported yet (needs support in the transmit pipeline) */
+        g_assert_not_reached ();
+        /* With YUY2, we will encode to JPEG before transmitting */
+        *type = ONE_VIDEO_MEDIA_TYPE_YUY2;
+        goto extract_caps; /* try again */
+      default:
+        tmp = gst_caps_to_string (retcaps);
+        GST_ERROR ("Device doesn't support JPEG or YUY2! Supported caps: %s",
+            tmp);
+        g_free (tmp);
+        g_clear_pointer (&retcaps, gst_caps_unref);
+        return NULL; /* fail */
+    }
+  }
+
+  /* We now have a useful subset of the original device caps */
+  gst_caps_replace (&retcaps, caps1);
+  g_clear_pointer (&caps1, gst_caps_unref);
+
+  /* Transform device caps to rtp caps */
+  len = gst_caps_get_size (retcaps);
+  for (ii = 0; ii < len; ii++) {
+    GstStructure *s;
+    gint n1, n2;
+    gdouble dest;
+
+    s = gst_caps_get_structure (retcaps, ii);
+
+    /* Skip caps structures that aren't 16:9 */
+    gst_structure_get_int (s, "width", &n1);
+    gst_structure_get_int (s, "height", &n2);
+    if ((n1 * 9 - n2 * 16) != 0)
+      goto remove;
+
+    /* Fixate device caps and remove extraneous fields */
+    gst_structure_remove_fields (s, "pixel-aspect-ratio", "colorimetry",
+        "interlace-mode", NULL);
+    gst_structure_fixate (s);
+
+    /* Remove framerates less than 15; those look too choppy */
+    gst_structure_get_fraction (s, "framerate", &n1, &n2);
+    gst_util_fraction_to_double (n1, n2, &dest);
+    if ((*type == ONE_VIDEO_MEDIA_TYPE_JPEG && dest < 30) ||
+        (*type == ONE_VIDEO_MEDIA_TYPE_YUY2 && dest < 15))
+      goto remove
+
+    continue;
+remove:
+    gst_caps_remove_structure (retcaps, ii);
+    ii--; len--;
+  }
+
+  return retcaps;
+}
+
 GList *
 one_video_local_peer_get_video_devices (OneVideoLocalPeer * local)
 {
@@ -473,12 +579,21 @@ gboolean
 one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
     GstDevice * device)
 {
+  OneVideoMediaType video_media_type;
+
   /* TODO: Currently, we can only get a device that outputs JPEG and our
    * transmit code assumes that. When we fix that to also support YUY2 and
    * H.264, we need to fix all this code too. */
-  /* FIXME: This should add caps from the device */
-  local->priv->supported_send_vcaps = gst_caps_from_string (RTP_VIDEO_CAPS_STR
-      ", " VIDEO_CAPS_STR);
+  if (device) {
+    local->priv->supported_send_vcaps =
+      one_video_device_get_usable_caps (device, &video_media_type);
+  } else {
+    local->priv->supported_send_vcaps =
+      gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_SEP VIDEO_CAPS_STR);
+  }
+
+  GST_DEBUG ("Supported send vcaps: %s",
+      gst_caps_to_string (local->priv->supported_send_vcaps));
 
   /* Setup transmit pipeline */
   return one_video_local_peer_setup_transmit_pipeline (local, device);

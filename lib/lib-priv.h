@@ -38,9 +38,30 @@ G_BEGIN_DECLS
 GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
+#define CAPS_SEP ", "
+
 /* We force the same raw audio format everywhere */
 #define AUDIO_CAPS_STR "format=S16LE, channels=2, rate=48000, layout=interleaved"
+/* This is only used for the test video source */
 #define VIDEO_CAPS_STR "width=1280, height=720, framerate=30/1"
+
+#define AUDIO_FORMAT_OPUS "audio/x-opus"
+#define VIDEO_FORMAT_JPEG "image/jpeg"
+#define VIDEO_FORMAT_H264 "video/x-h264"
+
+#define RTP_ALL_AUDIO_CAPS_STR "application/x-rtp, payload=96, media=audio, clock-rate=48000, encoding-name=OPUS"
+#define RTP_JPEG_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG"
+#define RTP_H264_VIDEO_CAPS_STR "application/x-rtp, payload=96, media=video, clock-rate=90000, encoding-name=H264"
+
+typedef enum _OneVideoMediaType OneVideoMediaType;
+typedef struct _OneVideoNegotiate OneVideoNegotiate;
+
+enum _OneVideoMediaType {
+  ONE_VIDEO_MEDIA_TYPE_UNKNOWN    = 0,
+  ONE_VIDEO_MEDIA_TYPE_JPEG,
+  ONE_VIDEO_MEDIA_TYPE_H264, /* Not supported yet */
+  ONE_VIDEO_MEDIA_TYPE_YUY2, /* Fallback if JPEG/H264 are not supported */
+};
 
 struct _OneVideoNegotiate {
   /* Call id while negotiating */
@@ -52,8 +73,6 @@ struct _OneVideoNegotiate {
   /* A GSourceFunc id that checks for timeouts */
   guint check_timeout_id;
 };
-
-typedef struct _OneVideoNegotiate OneVideoNegotiate;
 
 struct _OneVideoLocalPeerPriv {
   /* Transmit A/V data, rtcp send/recv RTP bin */
