@@ -187,6 +187,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
     vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
   }
   vqueue2 = gst_element_factory_make ("jpegenc", NULL);
+  g_object_set (vqueue2, "quality", 30, NULL);
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);
