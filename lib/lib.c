@@ -103,6 +103,7 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
   local->priv->dm = gst_device_monitor_new ();
   gst_device_monitor_add_filter (local->priv->dm, "Video/Source", vcaps);
   gst_caps_unref (vcaps);
+  GST_DEBUG ("Starting device monitor");
   /* Start probing devices asynchronously. We don't listen to the bus messages
    * for this right now, and just get the list of all devices later. */
   gst_device_monitor_start (local->priv->dm);
