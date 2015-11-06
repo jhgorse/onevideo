@@ -1,7 +1,6 @@
 Items marked with a ★ are high priority
 
 * Network communication
- ★ Timeout on hanging negotiations
  ★ Timeout quickly on unimportant messages
  ★ End/pause/resume calls correctly
  - Retry sending of important messages
@@ -32,8 +31,6 @@ Items marked with a ★ are high priority
 * Video format negotiation
  - We pass-through whatever highest-quality format the Webcam outputs to the
    peers. That can be JPEG or H.264. This makes sense and should not be changed.
- - Caps are being forced as JPEG 720p 30fps. We should choose 1080p if it's
-   available and peers can handle it.
  - Raw video caps are useless and will not be added. USB 2 webcams (99% of all
    consumer webcams) cannot output HD video at 30fps in any raw video format.
    They output either JPEG or H.264. The exceptions are cards like Decklink.
