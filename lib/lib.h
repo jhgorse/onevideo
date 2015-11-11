@@ -45,6 +45,16 @@ typedef struct _OneVideoRemotePeer OneVideoRemotePeer;
 typedef struct _OneVideoRemotePeerPriv OneVideoRemotePeerPriv;
 typedef enum _OneVideoRemotePeerState OneVideoRemotePeerState;
 
+/**
+ * OneVideoRemoteFoundCallback:
+ * @address: (transfer none): the #GSocketAddress of the found remote peer
+ * @user_data: the user data passed
+ *
+ * See the documentation for one_video_local_peer_find_remotes_create_source()
+ */
+typedef gboolean (*OneVideoRemoteFoundCallback)   (GSocketAddress *remote,
+                                                   gpointer user_data);
+
 enum _OneVideoLocalPeerState {
   ONE_VIDEO_LOCAL_STATE_NULL          = 0,
 
@@ -135,7 +145,11 @@ gboolean            one_video_local_peer_set_video_device   (OneVideoLocalPeer *
                                                              GstDevice *device);
 
 /* Peer discovery */
-GPtrArray*          one_video_local_peer_find_remotes   (OneVideoLocalPeer *local);
+GSource*            one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer *local,
+                                                                     GCancellable *cancellable,
+                                                                     OneVideoRemoteFoundCallback callback,
+                                                                     gpointer callback_data,
+                                                                     GError **error);
 
 /* Remote peers */
 OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,

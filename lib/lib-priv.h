@@ -123,6 +123,10 @@ struct _OneVideoLocalPeerPriv {
 
   /* The V4L2 device monitor being used */
   GstDeviceMonitor *dm;
+
+  /* The UDP message listener and multicast socket */
+  GSource *mc_socket_source;
+  GSocket *mc_socket;
 };
 
 struct _OneVideoRemotePeerPriv {

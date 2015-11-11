@@ -17,6 +17,7 @@ lib_libonevideo_la_SOURCES = \
 	lib/outgoing.c lib/outgoing.h \
 	lib/incoming.c lib/incoming.h \
 	lib/utils.c lib/utils.h \
+	lib/discovery.c lib/discovery.h \
 	lib/comms.c lib/comms.h
 lib_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS)
 lib_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS)

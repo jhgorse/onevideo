@@ -31,6 +31,7 @@
 #include "comms.h"
 #include "utils.h"
 #include "outgoing.h"
+#include "discovery.h"
 
 #include <string.h>
 
@@ -159,6 +160,9 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
 
   gst_device_monitor_stop (local->priv->dm);
   g_object_unref (local->priv->dm);
+
+  g_source_destroy (local->priv->mc_socket_source);
+  g_object_unref (local->priv->mc_socket);
 
   g_object_unref (local->priv->tcp_server);
 
@@ -602,18 +606,121 @@ one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
   return one_video_local_peer_setup_transmit_pipeline (local, device);
 }
 
-/*
- * Searches for and returns remote peers
- */
-GPtrArray *
-one_video_local_peer_find_remotes (OneVideoLocalPeer * local)
+typedef struct {
+  OneVideoRemoteFoundCallback callback;
+  gpointer callback_data;
+  GCancellable *cancellable;
+} OneVideoDiscoveryReplyData;
+
+static gboolean
+recv_discovery_reply (GSocket * socket, GIOCondition condition,
+    gpointer user_data)
 {
-  GPtrArray *remotes;
+  gboolean ret;
+  OneVideoUdpMsg msg;
+  GSocketAddress *from;
+  OneVideoDiscoveryReplyData *data = user_data;
+  GCancellable *cancellable = data->cancellable;
+  GError *error = NULL;
 
-  remotes = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  /* FIXME: implement this */
+  if (g_cancellable_is_cancelled (cancellable))
+    return G_SOURCE_REMOVE;
 
-  return remotes;
+  GST_DEBUG ("Incoming potential discovery reply");
+
+  ret = one_video_udp_msg_read_message_from (&msg, &from, socket,
+      cancellable, &error);
+  if (!ret) {
+    GST_WARNING ("Error reading discovery reply: %s", error->message);
+    g_clear_error (&error);
+    return G_SOURCE_CONTINUE;
+  }
+
+  /* We don't care about the payload of the message */
+  if (msg.size > 0)
+    g_free (msg.data);
+
+  if (msg.type != ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE) {
+    GST_WARNING ("Invalid discovery reply");
+    g_object_unref (from);
+    return G_SOURCE_CONTINUE;
+  }
+
+  GST_DEBUG ("Found a remote peer");
+  ret = data->callback (from, data->callback_data);
+  g_object_unref (from);
+  return ret;
+}
+
+/**
+ * one_video_local_peer_find_remotes_create_source:
+ * @local: a #OneVideoLocalPeer
+ * @cancellable: a #GCancellable
+ * @callback: a #GFunc called for every remote peer found
+ * @callback_data: the data passed to @callback
+ * @error: a #GError
+ *
+ * Creates and returns a #GSource that calls the passed-in @callback for every
+ * remote peer found with the #GSocketAddress of the remote peer as the first
+ * argument and @callback_data as the second argument. The source is already
+ * setup, so you do not need to do anything.
+ *
+ * To stop searching, call g_cancellable_cancel() on @cancellable, destroy the
+ * source with g_source_destroy(), or return %FALSE from @callback. The caller
+ * keeps full ownership of @callback_data.
+ *
+ * On failure to initiate searching for peers, %FALSE is returned and @error is
+ * set.
+ *
+ * Returns: (transfer full): a newly allocated #GSource, free with
+ * g_source_unref()
+ */
+/* FIXME: @callback should be a custom type, not GFunc since we want it to
+ * return gboolean not void */
+GSource *
+one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
+    GCancellable * cancellable, OneVideoRemoteFoundCallback callback,
+    gpointer callback_data, GError ** error)
+{
+  gboolean ret;
+  GSource *source;
+  GSocket *recv_socket;
+  OneVideoDiscoveryReplyData *reply_data;
+
+  recv_socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
+      G_SOCKET_PROTOCOL_UDP, error);
+  if (!recv_socket)
+    return NULL;
+
+  ret =
+    g_socket_bind (recv_socket, G_SOCKET_ADDRESS (local->addr), TRUE, error);
+  if (!ret) {
+    g_object_unref (recv_socket);
+    return NULL;
+  }
+
+  reply_data = g_new0 (OneVideoDiscoveryReplyData, 1);
+  reply_data->callback = callback;
+  reply_data->callback_data = callback_data;
+  reply_data->cancellable = cancellable;
+
+  GST_DEBUG ("Searching for remote peers");
+  source = g_socket_create_source (recv_socket, G_IO_IN, cancellable);
+  g_source_set_callback (source, (GSourceFunc) recv_discovery_reply, reply_data,
+      g_free);
+  g_source_set_priority (source, G_PRIORITY_HIGH);
+  g_source_attach (source, NULL);
+  g_object_unref (recv_socket);
+  GST_DEBUG ("Searching for remote peers");
+
+  /* Broadcast to the entire subnet to find listening peers */
+  ret = one_video_discovery_send_multicast_discover (local, cancellable, error);
+  if (!ret) {
+    g_source_destroy (source);
+    return NULL;
+  }
+
+  return source;
 }
 
 OneVideoRemotePeer *

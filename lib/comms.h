@@ -35,6 +35,11 @@ G_BEGIN_DECLS
 
 #define ONE_VIDEO_TCP_TIMEOUT 5
 
+/* Zeroconf is 224.0.0.251 on port 53. We use the same address but the port is
+ * ONE_VIDEO_DEFAULT_COMM_PORT.
+ * See: https://en.wikipedia.org/wiki/Multicast_address#IPv4 */
+#define ONE_VIDEO_MULTICAST_GROUP "224.0.0.251"
+
 typedef enum _OneVideoTcpMsgType OneVideoTcpMsgType;
 
 enum _OneVideoTcpMsgType {
@@ -55,7 +60,6 @@ enum _OneVideoTcpMsgType {
   ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,
 
   /* Both queries and replies */
-  ONE_VIDEO_TCP_MSG_TYPE_HELLO = 300,     /* Hello with basic client info (NOT IMPLEMENTED YET) */
 };
 
 typedef struct _OneVideoTcpMsg OneVideoTcpMsg;

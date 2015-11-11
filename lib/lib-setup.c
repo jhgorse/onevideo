@@ -29,6 +29,7 @@
 #include "lib-setup.h"
 #include "incoming.h"
 #include "comms.h"
+#include "discovery.h"
 
 #include <string.h>
 
@@ -271,8 +272,11 @@ gboolean
 one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
 {
   gboolean ret;
+  GInetAddress *multicast_group;
+  GSocketAddress *multicast_addr;
   GError *error = NULL;
 
+  /* Listen for incoming TCP connections */
   ret = g_socket_listener_add_address (
       G_SOCKET_LISTENER (local->priv->tcp_server),
       G_SOCKET_ADDRESS (local->addr), G_SOCKET_TYPE_STREAM,
@@ -282,16 +286,60 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
       g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
     GST_ERROR ("Unable to setup TCP server (%s:%u): %s", name,
         g_inet_socket_address_get_port (local->addr), error->message);
+    g_error_free (error);
     g_free (name);
-    return FALSE;
+    goto out_nofree;
   }
 
   g_signal_connect (local->priv->tcp_server, "run",
       G_CALLBACK (on_incoming_peer_tcp_connection), local);
 
   g_socket_service_start (local->priv->tcp_server);
+  GST_DEBUG ("Listening for incoming TCP connections");
 
-  return TRUE;
+  /* Listen for incoming UDP messages */
+  local->priv->mc_socket = g_socket_new (G_SOCKET_FAMILY_IPV4,
+      G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, NULL);
+  multicast_group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
+  multicast_addr = g_inet_socket_address_new (multicast_group,
+      g_inet_socket_address_get_port (local->addr));
+  ret = g_socket_bind (local->priv->mc_socket, multicast_addr, TRUE, &error);
+  if (!ret) {
+    gchar *name =
+      g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
+    GST_ERROR ("Unable to bind to multicast addr/port (%s:%u): %s", name,
+        g_inet_socket_address_get_port (local->addr), error->message);
+    g_error_free (error);
+    goto out;
+  }
+
+  g_socket_set_broadcast (local->priv->mc_socket, TRUE);
+
+  ret = g_socket_join_multicast_group (local->priv->mc_socket, multicast_group,
+      FALSE, NULL, &error);
+  if (!ret) {
+    GST_ERROR ("Unable to join multicast group %s: %s",
+        ONE_VIDEO_MULTICAST_GROUP, error->message);
+    g_error_free (error);
+    goto out;
+  }
+
+  /* Take ownership of the socket */
+  g_object_ref (local->priv->mc_socket);
+  /* Attach an event source to the default main context */
+  local->priv->mc_socket_source =
+    g_socket_create_source (local->priv->mc_socket, G_IO_IN, NULL);
+  g_source_set_callback (local->priv->mc_socket_source,
+      (GSourceFunc) on_incoming_udp_message, local, NULL);
+  g_source_attach (local->priv->mc_socket_source, NULL);
+  GST_DEBUG ("Listening for incoming UDP messages");
+
+out:
+  g_object_unref (local->priv->mc_socket);
+  g_object_unref (multicast_group);
+  g_object_unref (multicast_addr);
+out_nofree:
+  return ret;
 }
 
 /*-- REMOTE PEER SETUP --*/
