@@ -63,14 +63,14 @@ typedef struct _OneVideoTcpMsg OneVideoTcpMsg;
 struct _OneVideoTcpMsg {
   guint32 version;
   guint64 id;
-  /* OneVideoTcpMsgType */
-  guint32 type;
+  guint32 type; /* OneVideoTcpMsgType */
   guint32 size;
-  GVariant *variant;
-  const char *data;
+  const gchar *data;
+
+  GVariant *variant; /* *data is the wire-friendly repr of *variant */
 };
 
-/* Size of everything in OneVideoTcpMsg minus data */
+/* Size of the metadata sent with a OneVideoTcpMsg */
 #define ONE_VIDEO_TCP_MSG_HEADER_SIZE 20
 
 /* Ordered from oldest to newest */
