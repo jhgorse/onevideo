@@ -35,6 +35,34 @@
 
 static GMainLoop *loop = NULL;
 
+typedef struct {
+  GSource *source;
+  gchar **remotes;
+  OneVideoLocalPeer *local;
+} FindRemotesData;
+
+static gboolean
+found_remote_cb (GSocketAddress * remote, gpointer user_data)
+{
+  guint len;
+  GInetAddress *addr;
+  FindRemotesData *data = user_data;
+
+  if (data->remotes == NULL)
+    data->remotes = g_malloc0_n (sizeof (gchar*), 1);
+
+  /* This returns the length minus the trailing NUL */
+  len = g_strv_length (data->remotes) + 1;
+  /* Expand to include another gchar* pointer */
+  data->remotes = g_realloc_n (data->remotes, sizeof (gchar*), len + 1);
+
+  addr = g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (remote));
+  data->remotes[len - 1] = g_inet_address_to_string (addr);
+  data->remotes[len] = NULL;
+
+  return TRUE;
+}
+
 static gboolean
 kill_remote_peer (OneVideoRemotePeer * remote)
 {
@@ -102,6 +130,7 @@ dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
 {
   guint index;
 
+  g_print ("Dialling remotes...\n");
   for (index = 0; index < g_strv_length (remotes); index++) {
     OneVideoRemotePeer *remote;
 
@@ -112,6 +141,31 @@ dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
   }
 
   one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
+  g_print ("Waiting for remotes to reply...\n");
+}
+
+static gboolean
+aggregate_and_dial_remotes (gpointer user_data)
+{
+  FindRemotesData *data = user_data;
+
+  if (!g_source_is_destroyed (data->source))
+    g_source_destroy (data->source);
+  else
+    g_source_unref (data->source);
+
+  if (data->remotes == NULL) {
+    g_print (" found no remotes. Exiting.\n");
+    g_main_loop_quit (loop);
+    goto out;
+  }
+
+  g_print (" found %u remotes.\n", g_strv_length (data->remotes));
+  dial_remotes (data->local, data->remotes);
+
+out:
+  g_free (data);
+  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -281,6 +335,7 @@ main (int   argc,
 
   guint exit_after = 0;
   gboolean auto_exit = FALSE;
+  gboolean discover_peers = FALSE;
   guint iface_port = ONE_VIDEO_DEFAULT_COMM_PORT;
   gchar *iface_name = NULL;
   gchar *device_path = NULL;
@@ -301,6 +356,8 @@ main (int   argc,
           " optional port to connect to. Specify multiple times to connect to"
           " several peers. Without this option, passive mode is used in which"
           " we wait for incoming connections.", "PEER:PORT"},
+    {"discover", 0, 0, G_OPTION_ARG_NONE, &discover_peers, "Automatically"
+          " discover and connect to peers (default: no)", NULL},
     {NULL}
   };
 
@@ -338,17 +395,43 @@ main (int   argc,
         get_device (devices, device_path) : get_device_choice (devices));
   g_list_free_full (devices, g_object_unref);
 
-  if (remotes == NULL) {
-    g_print ("No remotes specified; listening for incoming connections\n");
-    /* Stop the mainloop and exit when the call ends */
-  } else {
-    g_print ("Dialling remotes...\n");
-    dial_remotes (local, remotes);
-    g_print ("Waiting for remotes to reply...\n");
+  if (remotes == NULL && !discover_peers) {
+      g_print ("No remotes specified; listening for incoming connections\n");
+      goto remotes_done;
   }
 
+  if (remotes == NULL) {
+    GSource *source;
+    FindRemotesData *data;
+    GError *error = NULL;
+
+    g_print ("Discovering remote peers using multicast discovery...");
+
+    data = g_new0 (FindRemotesData, 1);
+    data->local = local;
+
+    source = one_video_local_peer_find_remotes_create_source (local, NULL,
+        found_remote_cb, data, &error);
+    if (source == NULL) {
+      g_print (" unable to search: %s. Exiting.", error->message);
+      g_error_free (error);
+      g_free (data);
+      goto out;
+    }
+    data->source = source;
+    /* In a GUI, this would update a list of peers from which the user would
+     * select a list of call them all. Since this program is not interactive,
+     * we add a callback that waits for 2 seconds and dials whatever remotes
+     * are found or exits if none are found. */
+    g_timeout_add_seconds (5, aggregate_and_dial_remotes, data);
+    goto remotes_done;
+  }
+
+  dial_remotes (local, remotes);
+
+remotes_done:
   /* If in passive mode, auto exit only when requested */
-  if (remotes != NULL || auto_exit)
+  if (remotes != NULL || discover_peers || auto_exit)
     g_idle_add ((GSourceFunc) on_local_peer_stop, local);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
@@ -356,9 +439,11 @@ main (int   argc,
 
   g_main_loop_run (loop);
 
+out:
   g_clear_pointer (&local, one_video_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
   g_strfreev (remotes);
+  g_free (device_path);
   g_free (iface_name);
 
   return 0;
