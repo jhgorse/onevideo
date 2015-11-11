@@ -580,6 +580,7 @@ gboolean
 one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
     GstDevice * device)
 {
+  gchar *caps;
   OneVideoMediaType video_media_type;
 
   /* TODO: Currently, we can only get a device that outputs JPEG and our
@@ -593,8 +594,9 @@ one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
       gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_SEP VIDEO_CAPS_STR);
   }
 
-  GST_DEBUG ("Supported send vcaps: %s",
-      gst_caps_to_string (local->priv->supported_send_vcaps));
+  caps = gst_caps_to_string (local->priv->supported_send_vcaps);
+  GST_DEBUG ("Supported send vcaps: %s", caps);
+  g_free (caps);
 
   /* Setup transmit pipeline */
   return one_video_local_peer_setup_transmit_pipeline (local, device);
