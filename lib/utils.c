@@ -29,6 +29,8 @@
 #include "lib-priv.h"
 #include "utils.h"
 
+#include <string.h>
+
 #include <net/if.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -42,6 +44,13 @@ one_video_inet_socket_address_from_string (const gchar * addr_s)
   guint port;
   gchar **split;
   GSocketAddress *addr = NULL;
+
+  g_return_val_if_fail (addr_s != NULL, NULL);
+
+  if (strlen (addr_s) < 1) {
+    GST_ERROR ("Received empty string as argument");
+    goto out;
+  }
 
   split = g_strsplit (addr_s, ":", 2);
 
@@ -60,7 +69,6 @@ one_video_inet_socket_address_from_string (const gchar * addr_s)
     addr = g_inet_socket_address_new_from_string ("127.0.0.1", port);
   else
     addr = g_inet_socket_address_new_from_string (split[0], port);
-  g_assert (addr != NULL);
 
 out:
   g_strfreev (split);
