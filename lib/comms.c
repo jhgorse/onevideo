@@ -164,7 +164,8 @@ one_video_tcp_msg_free (OneVideoTcpMsg * msg)
 {
   if (!msg)
     return;
-  g_variant_unref (msg->variant);
+  if (msg->variant)
+    g_variant_unref (msg->variant);
   g_free (msg);
 }
 

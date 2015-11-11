@@ -583,7 +583,8 @@ on_incoming_peer_tcp_connection (GSocketService * service,
   ret = one_video_tcp_msg_read_header_from_stream (input, msg, NULL,
       &error);
   if (ret != TRUE) {
-    GST_ERROR ("Unable to read message length prefix: %s", error->message);
+    GST_ERROR ("Unable to read message length prefix: %s",
+        error ? error->message : "Unknown error");
     if (msg->id)
       /* TODO: Make this more specific; add GError types and send back and
        * forth. In general, error handling is quite crap everywhere right
@@ -606,7 +607,8 @@ on_incoming_peer_tcp_connection (GSocketService * service,
   /* Read the rest of the message */
   ret = one_video_tcp_msg_read_body_from_stream (input, msg, NULL, &error);
   if (ret != TRUE) {
-    GST_ERROR ("Unable to read message body: %s", error->message);
+    GST_ERROR ("Unable to read message body: %s",
+        error ? error->message : "Unknown error");
     one_video_tcp_msg_write_new_error_to_stream (output, msg->id,
         "Couldn't read body", NULL, NULL);
     goto out;
