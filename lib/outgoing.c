@@ -426,6 +426,8 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
     g_variant_builder_unref (thisb);
   }
 
+  g_free (send_acaps);
+  g_free (send_vcaps);
   return out;
 }
 
