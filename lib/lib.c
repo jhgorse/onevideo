@@ -559,7 +559,7 @@ extract_caps:
     gst_util_fraction_to_double (n1, n2, &dest);
     if ((*type == ONE_VIDEO_MEDIA_TYPE_JPEG && dest < 30) ||
         (*type == ONE_VIDEO_MEDIA_TYPE_YUY2 && dest < 15))
-      goto remove
+      goto remove;
 
     continue;
 remove:
