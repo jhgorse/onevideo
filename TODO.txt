@@ -2,7 +2,8 @@ Items marked with a ★ are high priority
 
 * Network communication
  ★ Timeout quickly on unimportant messages
- ★ End/pause/resume calls correctly
+ ★ Handle timeouts during calls due to disappearing peers
+ ★ Pause/resume calls correctly
  - Retry sending of important messages
 
 * Asynchronous
