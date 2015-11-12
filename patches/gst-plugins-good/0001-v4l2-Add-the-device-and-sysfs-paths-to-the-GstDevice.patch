@@ -1,0 +1,116 @@
+From 4368363d5686f4ce7714bfc9cb881655d3fc4163 Mon Sep 17 00:00:00 2001
+From: Nirbheek Chauhan <nirbheek@centricular.com>
+Date: Thu, 5 Nov 2015 18:41:56 +0530
+Subject: [PATCH] v4l2: Add the device and sysfs paths to the GstDevice
+ properties
+
+This allows us to match/filter available devices if we already know the device
+file paths
+---
+ sys/v4l2/gstv4l2deviceprovider.c | 35 ++++++++++++++++++++++++++---------
+ 1 file changed, 26 insertions(+), 9 deletions(-)
+
+diff --git a/sys/v4l2/gstv4l2deviceprovider.c b/sys/v4l2/gstv4l2deviceprovider.c
+index 63329e6..ccbf3bc 100644
+--- a/sys/v4l2/gstv4l2deviceprovider.c
++++ b/sys/v4l2/gstv4l2deviceprovider.c
+@@ -39,7 +39,8 @@
+ #endif
+ 
+ static GstV4l2Device *gst_v4l2_device_new (const gchar * device_path,
+-    const gchar * device_name, GstCaps * caps, GstV4l2DeviceType type);
++    const gchar * device_name, GstCaps * caps, GstV4l2DeviceType type,
++    GstStructure * props);
+ 
+ 
+ G_DEFINE_TYPE (GstV4l2DeviceProvider, gst_v4l2_device_provider,
+@@ -97,7 +98,7 @@ gst_v4l2_device_provider_finalize (GObject * object)
+ 
+ static GstV4l2Device *
+ gst_v4l2_device_provider_probe_device (GstV4l2DeviceProvider * provider,
+-    const gchar * device_path, const gchar * device_name)
++    const gchar * device_path, const gchar * device_name, GstStructure * props)
+ {
+   GstV4l2Object *v4l2obj;
+   GstCaps *caps;
+@@ -144,7 +145,8 @@ gst_v4l2_device_provider_probe_device (GstV4l2DeviceProvider * provider,
+   }
+ 
+   device = gst_v4l2_device_new (device_path,
+-      device_name ? device_name : (gchar *) v4l2obj->vcap.card, caps, type);
++      device_name ? device_name : (gchar *) v4l2obj->vcap.card, caps, type,
++      props);
+   gst_caps_unref (caps);
+ 
+ close:
+@@ -169,10 +171,14 @@ gst_v4l2_device_provider_probe (GstDeviceProvider * provider)
+   it = gst_v4l2_iterator_new ();
+ 
+   while (gst_v4l2_iterator_next (it)) {
++    GstStructure *props;
+     GstV4l2Device *device;
+ 
+-    device =
+-        gst_v4l2_device_provider_probe_device (self, it->device_path, NULL);
++    props = gst_structure_new ("v4l2-proplist", "device.path", G_TYPE_STRING,
++        it->device_path, "udev-probed", G_TYPE_BOOLEAN, FALSE, NULL);
++    device = gst_v4l2_device_provider_probe_device (self, it->device_path, NULL,
++        props);
++    gst_structure_free (props);
+ 
+     if (device) {
+       gst_object_ref_sink (device);
+@@ -191,7 +197,9 @@ static GstDevice *
+ gst_v4l2_device_provider_device_from_udev (GstV4l2DeviceProvider * provider,
+     GUdevDevice * udev_device)
+ {
++  GstStructure *props;
+   GstV4l2Device *gstdev;
++  const gchar *sysfs_path = g_udev_device_get_sysfs_path (udev_device);
+   const gchar *device_path = g_udev_device_get_device_file (udev_device);
+   const gchar *device_name;
+ 
+@@ -201,11 +209,19 @@ gst_v4l2_device_provider_device_from_udev (GstV4l2DeviceProvider * provider,
+   if (!device_name)
+     device_name = g_udev_device_get_property (udev_device, "ID_MODEL");
+ 
++  /* Set sysfs and device paths as the GstDevice properties
++   * More can be added if needed or requested by people */
++  props = gst_structure_new ("v4l2-proplist", "sysfs.path", G_TYPE_STRING,
++      sysfs_path, "device.path", G_TYPE_STRING, device_path, "udev-probed",
++      G_TYPE_BOOLEAN, TRUE, NULL);
++
+   gstdev = gst_v4l2_device_provider_probe_device (provider, device_path,
+-      device_name);
++      device_name, props);
++
++  gst_structure_free (props);
+ 
+   if (gstdev)
+-    gstdev->syspath = g_strdup (g_udev_device_get_sysfs_path (udev_device));
++    gstdev->syspath = g_strdup (sysfs_path);
+ 
+   return GST_DEVICE (gstdev);
+ }
+@@ -434,7 +450,7 @@ gst_v4l2_device_create_element (GstDevice * device, const gchar * name)
+ 
+ static GstV4l2Device *
+ gst_v4l2_device_new (const gchar * device_path, const gchar * device_name,
+-    GstCaps * caps, GstV4l2DeviceType type)
++    GstCaps * caps, GstV4l2DeviceType type, GstStructure * props)
+ {
+   GstV4l2Device *gstdev;
+   const gchar *element = NULL;
+@@ -459,7 +475,8 @@ gst_v4l2_device_new (const gchar * device_path, const gchar * device_name,
+   }
+ 
+   gstdev = g_object_new (GST_TYPE_V4L2_DEVICE, "device-path", device_path,
+-      "display-name", device_name, "caps", caps, "device-class", klass, NULL);
++      "display-name", device_name, "caps", caps, "device-class", klass,
++      "properties", props, NULL);
+ 
+   gstdev->element = element;
+ 
+-- 
+2.5.0
+
