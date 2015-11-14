@@ -280,7 +280,6 @@ one_video_remote_peer_new_from_string (OneVideoLocalPeer * local,
 void
 one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 {
-  gboolean res;
   GstStateChangeReturn ret;
   gchar *addr_only;
   OneVideoLocalPeer *local = remote->local;
