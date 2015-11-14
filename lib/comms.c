@@ -48,38 +48,44 @@ static const struct {
   /* Format:
    * (call_id, arecv_rtcprr_port, vrecv_rtcprr_port,
    *  send_acaps, send_vcaps, recv_acaps, recv_vcaps,
-   *  [(remote_peer1, arecv_port1, arecv_rtcpsr_port1, vrecv_port1, vrecv_rtcpsr_port1),
-   *   (remote_peer2, arecv_port2, arecv_rtcpsr_port2, vrecv_port2, vrecv_rtcpsr_port2),
+   *  [(peer1_id, arecv_port1, arecv_rtcpsr_port1, vrecv_port1, vrecv_rtcpsr_port1),
+   *   (peer1_id, arecv_port2, arecv_rtcpsr_port2, vrecv_port2, vrecv_rtcpsr_port2),
    *   ...])
    *
    *   Note that the rtcprr ports are shared between all peers */
   {ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xuussssa(suuuu))"},
 
-  /* Format: call_id, peer_id_str
-   * peer_id_str is of the form "address:tcp_port" */
-  {ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xs)"},
+  /* Format: (call_id, peer_id_str, peer_port)
+   * peer_id_str is of the form "$hostname:$port-$guid" */
+  {ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xsq)"},
 
-  /* Format: call_id, peer_id_str
+  /* Format: (call_id, peer_id_str)
+   * This is sent in reply to a START_NEGOTIATE */
+  {ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE,     "ok, can negotiate",  "(xs)"},
+
+  /* Format: (call_id, peer_id_str)
    * Can be sent by any peer during the negotiation process to cancel it.
    * The call initiator sends it to all peers and the other peers send it
    * only to the call initiator. */
   {ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, "cancel negotiating", "(xs)"},
 
-  /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
-  {ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xas)"},
+  /* Format: (call_id, [(peer1_id, peer1_addr), (peer2_d, peer2_addr), ...])
+   *
+   * The peer_addresses here are as resolved by the negotiator */
+  {ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xa(ss))"},
 
   /* Format:
    * (call_id, send_acaps, send_vcaps,
-   *  [(remote_peer1, recv_acaps1, recv_vcaps1,
+   *  [(peer1_id, recv_acaps1, recv_vcaps1,
    *    arecv_port1, arecv_rtcpsr_port1, arecv_rtcprr_port1,
    *    vrecv_port1, vrecv_rtcpsr_port1, vrecv_rtcprr_port1),
-   *   (remote_peer2, recv_acaps2, recv_vcaps2,
+   *   (peer2_id, recv_acaps2, recv_vcaps2,
    *    arecv_port2, arecv_rtcpsr_port2, arecv_rtcprr_port1,
    *    vrecv_port2, vrecv_rtcpsr_port2),
    *   ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuuuu))"},
 
-  /* Format: (call_id, [remote_peer1, remote_peer2, ...]) */
+  /* Format: (call_id, [peer1_id, peer2_id, ...]) */
   {ONE_VIDEO_TCP_MSG_TYPE_START_CALL,       "start call",         "(xas)"},
 
   /* Format: call_id, peer_id_str */
@@ -212,7 +218,8 @@ one_video_tcp_msg_new_ack (guint64 id)
 }
 
 OneVideoTcpMsg *
-one_video_tcp_msg_new_start_negotiate (guint64 id, gchar * local_addr_s)
+one_video_tcp_msg_new_start_negotiate (guint64 call_id, gchar * local_id,
+    guint16 local_port)
 {
   OneVideoTcpMsg *msg;
   const gchar *variant_type;
@@ -220,13 +227,27 @@ one_video_tcp_msg_new_start_negotiate (guint64 id, gchar * local_addr_s)
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
   msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,
-      g_variant_new (variant_type, id, local_addr_s));
+      g_variant_new (variant_type, call_id, local_id, local_port));
 
   return msg;
 }
 
 OneVideoTcpMsg *
-one_video_tcp_msg_new_cancel_negotiate (guint64 id, gchar * local_addr_s)
+one_video_tcp_msg_new_ok_negotiate (guint64 call_id, gchar * local_id)
+{
+  OneVideoTcpMsg *msg;
+  const gchar *variant_type;
+
+  variant_type = one_video_tcp_msg_type_to_variant_type (
+      ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
+  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE,
+      g_variant_new (variant_type, call_id, local_id));
+
+  return msg;
+}
+
+OneVideoTcpMsg *
+one_video_tcp_msg_new_cancel_negotiate (guint64 call_id, gchar * local_id)
 {
   OneVideoTcpMsg *msg;
   const gchar *variant_type;
@@ -234,7 +255,7 @@ one_video_tcp_msg_new_cancel_negotiate (guint64 id, gchar * local_addr_s)
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
   msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE,
-      g_variant_new (variant_type, id, local_addr_s));
+      g_variant_new (variant_type, call_id, local_id));
 
   return msg;
 }

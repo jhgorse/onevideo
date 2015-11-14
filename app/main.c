@@ -134,7 +134,7 @@ dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
   for (index = 0; index < g_strv_length (remotes); index++) {
     OneVideoRemotePeer *remote;
 
-    remote = one_video_remote_peer_new (local, remotes[index]);
+    remote = one_video_remote_peer_new_from_string (local, remotes[index]);
     one_video_local_peer_add_remote (local, remote);
 
     g_print ("Created and added remote peer %s\n", remote->addr_s);
@@ -376,9 +376,11 @@ main (int   argc,
 
   if (iface_name != NULL) {
     inet_addr = one_video_get_inet_addr_for_iface (iface_name);
+  } else if (g_strcmp0 (iface_name, "any") == 0) {
+    inet_addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
+    g_printerr ("Listening on all interfaces\n");
   } else {
     inet_addr = g_inet_address_new_loopback (G_SOCKET_FAMILY_IPV4);
-    /* FIXME: Listen on the default route instead */
     g_printerr ("Interface not specified, listening on localhost\n");
   }
 

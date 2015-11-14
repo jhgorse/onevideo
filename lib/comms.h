@@ -57,6 +57,7 @@ enum _OneVideoTcpMsgType {
   ONE_VIDEO_TCP_MSG_TYPE_ACK = 200,
   ONE_VIDEO_TCP_MSG_TYPE_ERROR,
   ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,
+  ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE,
   ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,
 
   /* Both queries and replies */
@@ -90,10 +91,13 @@ OneVideoTcpMsg* one_video_tcp_msg_new_error             (guint64 id,
 OneVideoTcpMsg* one_video_tcp_msg_new_error_call        (guint64 id,
                                                          const gchar *error_msg);
 OneVideoTcpMsg* one_video_tcp_msg_new_ack               (guint64 id);
-OneVideoTcpMsg* one_video_tcp_msg_new_start_negotiate   (guint64 id,
-                                                         gchar *local_addr_s);
-OneVideoTcpMsg* one_video_tcp_msg_new_cancel_negotiate  (guint64 id,
-                                                         gchar *local_addr_s);
+OneVideoTcpMsg* one_video_tcp_msg_new_start_negotiate   (guint64 call_id,
+                                                         gchar *local_id,
+                                                         guint16 local_port);
+OneVideoTcpMsg* one_video_tcp_msg_new_ok_negotiate      (guint64 call_id,
+                                                         gchar *local_id);
+OneVideoTcpMsg* one_video_tcp_msg_new_cancel_negotiate  (guint64 call_id,
+                                                         gchar *local_id);
 
 gchar*          one_video_tcp_msg_print                 (OneVideoTcpMsg *msg);
 

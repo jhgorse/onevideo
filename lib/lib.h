@@ -98,8 +98,10 @@ struct _OneVideoLocalPeer {
   GstElement *playback;
   /* Address we're listening on */
   GInetSocketAddress *addr;
-  /* String representation of the above address */
+  /* String representation of the above address (for logging, etc) */
   gchar *addr_s;
+  /* Unique id string representing this host */
+  gchar *id;
 
   OneVideoLocalPeerState state;
 
@@ -114,8 +116,11 @@ struct _OneVideoRemotePeer {
   GstElement *receive;
   /* Address of remote peer */
   GInetSocketAddress *addr;
-  /* String representation */
+  /* String representation (for logging, etc) */
   gchar *addr_s;
+  /* Unique id string representing this host
+   * Retrieved from the peer during negotiation */
+  gchar *id;
 
   OneVideoRemotePeerState state;
 
@@ -152,15 +157,17 @@ GSource*            one_video_local_peer_find_remotes_create_source (OneVideoLoc
                                                                      GError **error);
 
 /* Remote peers */
-OneVideoRemotePeer* one_video_remote_peer_new           (OneVideoLocalPeer *local,
-                                                         const gchar *addr_s);
-void                one_video_remote_peer_free          (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_pause         (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_resume        (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_remove        (OneVideoRemotePeer *remote);
+OneVideoRemotePeer* one_video_remote_peer_new               (OneVideoLocalPeer *local,
+                                                             GInetSocketAddress *addr);
+OneVideoRemotePeer* one_video_remote_peer_new_from_string   (OneVideoLocalPeer *local,
+                                                             const gchar *addr_s);
+void                one_video_remote_peer_free              (OneVideoRemotePeer *remote);
+void                one_video_remote_peer_pause             (OneVideoRemotePeer *remote);
+void                one_video_remote_peer_resume            (OneVideoRemotePeer *remote);
+void                one_video_remote_peer_remove            (OneVideoRemotePeer *remote);
 
-OneVideoRemotePeer* one_video_local_peer_get_remote_by_addr_s (OneVideoLocalPeer *local,
-                                                                const gchar * addr_s);
+OneVideoRemotePeer* one_video_local_peer_get_remote_by_id   (OneVideoLocalPeer *local,
+                                                             const gchar *peer_id);
 
 G_END_DECLS
 

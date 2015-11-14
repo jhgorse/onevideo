@@ -68,25 +68,24 @@ one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
 OneVideoLocalPeer *
 one_video_local_peer_new (GInetSocketAddress * listen_addr)
 {
+  gchar *guid;
   GstCaps *vcaps;
   OneVideoLocalPeer *local;
   guint16 tcp_port;
 
   g_return_val_if_fail (listen_addr != NULL, NULL);
-  if (g_inet_address_get_is_any (
-        g_inet_socket_address_get_address (listen_addr))) {
-    GST_ERROR ("Cannot listen on all interfaces!");
-    return NULL;
-  }
 
   if (onevideo_debug == NULL)
     GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
         "OneVideo VoIP library");
 
   local = g_new0 (OneVideoLocalPeer, 1);
-  local->addr = listen_addr;
-  g_object_ref (local->addr);
+  local->addr = g_object_ref (listen_addr);
   local->addr_s = one_video_inet_socket_address_to_string (local->addr);
+  guid = g_dbus_generate_guid (); /* Generate a UUIDesque string */
+  local->id = g_strdup_printf ("%s:%u-%s", g_get_host_name (),
+      g_inet_socket_address_get_port (local->addr), guid);
+  g_free (guid);
   local->state = ONE_VIDEO_LOCAL_STATE_NULL;
   local->priv = g_new0 (OneVideoLocalPeerPriv, 1);
 
@@ -175,6 +174,7 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   g_object_unref (local->playback);
   g_object_unref (local->addr);
   g_free (local->addr_s);
+  g_free (local->id);
 
   g_free (local->priv);
 
@@ -214,10 +214,9 @@ set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
   return TRUE;
 }
 
-/* This is NOT a public symbol */
 OneVideoRemotePeer *
 one_video_remote_peer_new (OneVideoLocalPeer * local,
-    const gchar * addr_s)
+    GInetSocketAddress * addr)
 {
   gchar *name;
   GstBus *bus;
@@ -227,8 +226,8 @@ one_video_remote_peer_new (OneVideoLocalPeer * local,
   remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
   remote->receive = gst_pipeline_new ("receive-%u");
   remote->local = local;
-  remote->addr = one_video_inet_socket_address_from_string (addr_s);
-  remote->addr_s = g_strdup (addr_s);
+  remote->addr = g_object_ref (addr);
+  remote->addr_s = one_video_inet_socket_address_to_string (remote->addr);
 
   remote->priv = g_new0 (OneVideoRemotePeerPriv, 1);
   name = g_strdup_printf ("audio-playback-bin-%s", remote->addr_s);
@@ -257,6 +256,20 @@ one_video_remote_peer_new (OneVideoLocalPeer * local,
   g_object_unref (bus);
 
   remote->state = ONE_VIDEO_REMOTE_STATE_ALLOCATED;
+
+  return remote;
+}
+
+OneVideoRemotePeer *
+one_video_remote_peer_new_from_string (OneVideoLocalPeer * local,
+    const gchar * addr_s)
+{
+  GInetSocketAddress *addr;
+  OneVideoRemotePeer *remote;
+  
+  addr = one_video_inet_socket_address_from_string (addr_s);
+  remote = one_video_remote_peer_new (local, addr);
+  g_object_unref (addr);
 
   return remote;
 }
@@ -724,8 +737,8 @@ one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
 }
 
 OneVideoRemotePeer *
-one_video_local_peer_get_remote_by_addr_s (OneVideoLocalPeer * local,
-    const gchar * addr_s)
+one_video_local_peer_get_remote_by_id (OneVideoLocalPeer * local,
+    const gchar * id)
 {
   guint ii;
   OneVideoRemotePeer *remote;
@@ -733,7 +746,7 @@ one_video_local_peer_get_remote_by_addr_s (OneVideoLocalPeer * local,
   g_rec_mutex_lock (&local->priv->lock);
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
     remote = g_ptr_array_index (local->priv->remote_peers, ii);
-    if (g_strcmp0 (addr_s, remote->addr_s))
+    if (g_strcmp0 (id, remote->id))
       break;
   }
   g_rec_mutex_unlock (&local->priv->lock);

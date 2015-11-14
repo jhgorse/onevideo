@@ -58,12 +58,15 @@ check_negotiate_timeout (OneVideoLocalPeer * local)
 
 static gboolean
 one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
-    GOutputStream * output, OneVideoTcpMsg * msg)
+    GSocketConnection * connection, OneVideoTcpMsg * msg)
 {
   guint64 call_id;
+  GOutputStream *output;
   OneVideoTcpMsg *reply;
-  gchar *negotiator_addr_s;
   const gchar *variant_type;
+  GSocketAddress *remote_addr, *negotiator_addr;
+  guint16 negotiator_port;
+  gchar *negotiator_id;
   gboolean ret = FALSE;
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
@@ -72,7 +75,8 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
     reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
     goto send_reply;
   }
-  g_variant_get (msg->variant, variant_type, &call_id, &negotiator_addr_s);
+  g_variant_get (msg->variant, variant_type, &call_id, &negotiator_id,
+      &negotiator_port);
 
   g_rec_mutex_lock (&local->priv->lock);
 
@@ -84,8 +88,18 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
 
   local->priv->negotiate = g_new0 (OneVideoNegotiate, 1);
   local->priv->negotiate->call_id = call_id;
+
+  /* We receive the port to use while talking to the negotiator, but we must
+   * derive the host to use from the connection itself because the negotiator
+   * does not always know what address we're resolving it as */
+  remote_addr = g_socket_connection_get_remote_address (connection, NULL);
+  negotiator_addr = g_inet_socket_address_new (
+      g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (remote_addr)),
+      negotiator_port);
   local->priv->negotiate->negotiator =
-    one_video_remote_peer_new (local, negotiator_addr_s);
+    one_video_remote_peer_new (local, G_INET_SOCKET_ADDRESS (negotiator_addr));
+  g_object_unref (negotiator_addr);
+  local->priv->negotiate->negotiator->id = negotiator_id;
 
   /* Set a rough timer for timing out the negotiation */
   timeout_value = 0;
@@ -96,17 +110,17 @@ one_video_local_peer_start_negotiate (OneVideoLocalPeer * local,
   local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
     ONE_VIDEO_LOCAL_STATE_NEGOTIATEE;
 
-  reply = one_video_tcp_msg_new_ack (msg->id);
+  reply = one_video_tcp_msg_new_ok_negotiate (msg->id, local->id);
 
   ret = TRUE;
 
 send_reply_unlock:
   g_rec_mutex_unlock (&local->priv->lock);
 send_reply:
+  output = g_io_stream_get_output_stream (G_IO_STREAM (connection));
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
-  g_free (negotiator_addr_s);
   return ret;
 }
 
@@ -114,7 +128,6 @@ static gboolean
 one_video_local_peer_cancel_negotiate (OneVideoLocalPeer * local,
     GOutputStream * output, OneVideoTcpMsg * msg)
 {
-  gchar *addr_s;
   guint64 call_id;
   OneVideoTcpMsg *reply;
   const gchar *variant_type;
@@ -126,7 +139,12 @@ one_video_local_peer_cancel_negotiate (OneVideoLocalPeer * local,
     reply = one_video_tcp_msg_new_error (msg->id, "Invalid message data");
     goto send_reply;
   }
-  g_variant_get (msg->variant, variant_type, &call_id, &addr_s);
+  g_variant_get (msg->variant, variant_type, &call_id, NULL);
+  
+  if (call_id != local->priv->negotiate->call_id) {
+    reply = one_video_tcp_msg_new_error (msg->id, "Invalid call id");
+    goto send_reply;
+  }
 
   GST_DEBUG ("Received a CANCEL_NEGOTIATE");
 
@@ -135,7 +153,7 @@ one_video_local_peer_cancel_negotiate (OneVideoLocalPeer * local,
    * should be the job of the negotiating thread to check this and handle it
    * gracefully. */
   if (!one_video_local_peer_negotiate_stop (local)) {
-    reply = one_video_tcp_msg_new_error (msg->id, "Invalid message");
+    reply = one_video_tcp_msg_new_error (msg->id, "Unable to stop negotiation");
     goto send_reply;
   }
 
@@ -147,7 +165,6 @@ send_reply:
   one_video_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   one_video_tcp_msg_free (reply);
-  g_free (addr_s);
   return ret;
 }
 
@@ -158,33 +175,34 @@ setup_negotiate_remote_peers (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   GVariantIter *iter;
   GHashTable *remotes;
   const gchar *variant_type;
-  gchar *addr_s, *negotiator_addr_s;
+  gchar *peer_id, *peer_addr_s;
 
   remotes = g_hash_table_new_full (g_str_hash, g_str_equal, NULL,
       (GDestroyNotify) one_video_remote_peer_free);
 
-  negotiator_addr_s = local->priv->negotiate->negotiator->addr_s;
+  /* Add the negotiator; it won't be in the list of remotes below because
+   * those are all new remotes */
+  g_hash_table_insert (remotes, local->priv->negotiate->negotiator->id,
+      local->priv->negotiate->negotiator);
 
   variant_type = one_video_tcp_msg_type_to_variant_type (
       ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS, ONE_VIDEO_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, NULL, &iter);
-  while (g_variant_iter_loop (iter, "s", &addr_s)) {
+  while (g_variant_iter_loop (iter, "(ss)", &peer_id, &peer_addr_s)) {
     OneVideoRemotePeer *remote;
 
-    if (g_hash_table_contains (remotes, addr_s)) {
-      GST_ERROR ("Query caps contains duplicate remote: %s", addr_s);
-      g_free (addr_s);
+    if (g_hash_table_contains (remotes, peer_id)) {
+      GST_ERROR ("Query caps contains duplicate remote: %s", peer_id);
+      g_free (peer_id);
       goto err;
     }
 
-    if (g_strcmp0 (addr_s, negotiator_addr_s) == 0)
-      remote = local->priv->negotiate->negotiator;
-    else
-      remote = one_video_remote_peer_new (local, addr_s);
-
+    /* FIXME: Check whether we can actually route to this peer at all before
+     * adding it */
+    remote = one_video_remote_peer_new_from_string (local, peer_addr_s);
     g_assert (remote != NULL);
 
-    g_hash_table_insert (remotes, remote->addr_s, remote);
+    g_hash_table_insert (remotes, remote->id, remote);
   }
   g_variant_iter_free (iter);
 
@@ -248,7 +266,7 @@ one_video_local_peer_query_reply_caps (OneVideoLocalPeer * local,
   peers = g_variant_builder_new (G_VARIANT_TYPE ("a(suuuu)"));
   g_hash_table_iter_init (&iter, local->priv->negotiate->remotes);
   while (g_hash_table_iter_next (&iter, NULL, (gpointer) &remote))
-    g_variant_builder_add (peers, "(suuuu)", remote->addr_s,
+    g_variant_builder_add (peers, "(suuuu)", remote->id,
         remote->priv->recv_ports[0], remote->priv->recv_ports[1],
         remote->priv->recv_ports[2], remote->priv->recv_ports[3]);
 
@@ -291,7 +309,7 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
 {
   GVariantIter *iter;
   const gchar *vtype;
-  gchar *addr_s, *acaps, *vcaps;
+  gchar *peer_id, *acaps, *vcaps;
   GHashTable *remotes = local->priv->negotiate->remotes;
   guint32 ports[6] = {};
 
@@ -309,13 +327,13 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   local->priv->send_vcaps = gst_caps_from_string (vcaps);
   g_free (acaps); g_free (vcaps);
 
-  while (g_variant_iter_loop (iter, "(sssuuuuuu)", &addr_s, &acaps, &vcaps,
+  while (g_variant_iter_loop (iter, "(sssuuuuuu)", &peer_id, &acaps, &vcaps,
         &ports[0], &ports[1], &ports[2], &ports[3], &ports[4], &ports[5])) {
     OneVideoRemotePeer *remote;
 
-    remote = g_hash_table_lookup (remotes, addr_s);
+    remote = g_hash_table_lookup (remotes, peer_id);
     if (!remote) {
-      GST_ERROR ("Call details contain invalid remote: %s", addr_s);
+      GST_ERROR ("Call details contain invalid remote: %s", peer_id);
       g_assert_not_reached ();
       goto err;
     }
@@ -342,7 +360,7 @@ set_call_details (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
   g_variant_iter_free (iter);
   return TRUE;
 err:
-  g_free (addr_s); g_free (acaps); g_free (vcaps);
+  g_free (peer_id); g_free (acaps); g_free (vcaps);
   g_variant_iter_free (iter);
   return FALSE;
 }
@@ -403,7 +421,7 @@ send_reply:
 static gboolean
 start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
 {
-  gchar *addr_s;
+  gchar *peer_id;
   const gchar *vtype;
   GVariantIter *iter;
   GHashTable *remotes = local->priv->negotiate->remotes;
@@ -415,18 +433,18 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
 
   g_variant_get (msg->variant, vtype, NULL, &iter);
   /* Move remote peers from the "negotiating" list to "negotiated" list */
-  while (g_variant_iter_loop (iter, "s", &addr_s)) {
+  while (g_variant_iter_loop (iter, "s", &peer_id)) {
     OneVideoRemotePeer *remote;
 
-    remote = g_hash_table_lookup (remotes, addr_s);
+    remote = g_hash_table_lookup (remotes, peer_id);
     if (!remote) {
-      GST_ERROR ("Start call contains invalid remote: %s", addr_s);
+      GST_ERROR ("Start call contains invalid remote: %s", peer_id);
       goto err;
     }
 
     /* Move from the negotiating hash table to the local peer */
     one_video_local_peer_add_remote (local, remote);
-    g_hash_table_steal (remotes, addr_s);
+    g_hash_table_steal (remotes, peer_id);
   }
   g_variant_iter_free (iter);
 
@@ -446,7 +464,7 @@ start_call (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
 
   return one_video_local_peer_start (local);
 err:
-  g_free (addr_s);
+  g_free (peer_id);
   g_variant_iter_free (iter);
   return FALSE;
 }
@@ -530,13 +548,13 @@ one_video_local_peer_remove_peer_from_call (OneVideoLocalPeer * local,
     goto send_reply_unlock;
   }
 
-  remote = one_video_local_peer_get_remote_by_addr_s (local, peer_id);
+  remote = one_video_local_peer_get_remote_by_id (local, peer_id);
   if (!remote) {
     reply = one_video_tcp_msg_new_error_call (call_id, "Invalid peer id");
     goto send_reply_unlock;
   }
 
-  GST_DEBUG ("Removing remote peer %s from the call", remote->addr_s);
+  GST_DEBUG ("Removing remote peer %s from the call", remote->id);
 
   /* Remove the specified peer from the call */
   one_video_remote_peer_remove (remote);
@@ -621,7 +639,7 @@ on_incoming_peer_tcp_connection (GSocketService * service,
 body_done:
   switch (msg->type) {
     case ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE:
-      one_video_local_peer_start_negotiate (local, output, msg);
+      one_video_local_peer_start_negotiate (local, connection, msg);
       break;
     case ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE:
       one_video_local_peer_cancel_negotiate (local, output, msg);
