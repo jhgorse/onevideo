@@ -108,10 +108,6 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
    * for this right now, and just get the list of all devices later. */
   gst_device_monitor_start (local->priv->dm);
 
-  /* Threaded socket service since we use blocking TCP network reads
-   * TODO: Use threads equal to number of remote peers? To ensure that peers
-   * never wait while communicating. */
-  local->priv->tcp_server = g_threaded_socket_service_new (10);
   /* NOTE: GArray and GPtrArray are not thread-safe; we must lock accesses */
   local->priv->used_ports = g_array_sized_new (FALSE, TRUE, sizeof (guint), 4);
   local->priv->remote_peers = g_ptr_array_new ();

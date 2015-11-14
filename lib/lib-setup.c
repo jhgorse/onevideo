@@ -276,18 +276,21 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
   GSocketAddress *multicast_addr;
   GError *error = NULL;
 
-  /* Listen for incoming TCP connections */
+  /*-- Listen for incoming TCP connections --*/
+
+  /* Threaded socket service since we use blocking TCP network reads
+   * TODO: Use threads equal to number of remote peers? To ensure that peers
+   * never wait while communicating. */
+  local->priv->tcp_server = g_threaded_socket_service_new (10);
+
   ret = g_socket_listener_add_address (
       G_SOCKET_LISTENER (local->priv->tcp_server),
       G_SOCKET_ADDRESS (local->addr), G_SOCKET_TYPE_STREAM,
       G_SOCKET_PROTOCOL_TCP, NULL, NULL, &error);
   if (!ret) {
-    gchar *name =
-      g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
-    GST_ERROR ("Unable to setup TCP server (%s:%u): %s", name,
-        g_inet_socket_address_get_port (local->addr), error->message);
+    GST_ERROR ("Unable to setup TCP server (%s): %s", local->addr_s,
+        error->message);
     g_error_free (error);
-    g_free (name);
     goto out_nofree;
   }
 
@@ -297,7 +300,7 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
   g_socket_service_start (local->priv->tcp_server);
   GST_DEBUG ("Listening for incoming TCP connections");
 
-  /* Listen for incoming UDP messages */
+  /*-- Listen for incoming UDP messages (multicast and unicast) --*/
   local->priv->mc_socket = g_socket_new (G_SOCKET_FAMILY_IPV4,
       G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, NULL);
   multicast_group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
