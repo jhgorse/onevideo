@@ -327,8 +327,6 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
     goto out;
   }
 
-  /* Take ownership of the socket */
-  g_object_ref (local->priv->mc_socket);
   /* Attach an event source to the default main context */
   local->priv->mc_socket_source =
     g_socket_create_source (local->priv->mc_socket, G_IO_IN, NULL);
