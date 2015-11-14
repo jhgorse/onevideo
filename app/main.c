@@ -183,7 +183,8 @@ device_is_in_use (GstDevice * device)
   src = gst_device_create_element (device, "test-src");
   sink = gst_element_factory_make ("fakesink", NULL);
   gst_bin_add_many (GST_BIN (check), src, sink, NULL);
-  g_assert (gst_element_link (src, sink));
+  ret = gst_element_link (src, sink);
+  g_assert (ret);
   gst_element_set_state (check, GST_STATE_PLAYING);
 
   /* Wait for upto 10 seconds in case the state change is ASYNC */
@@ -255,7 +256,8 @@ again:
         g_print ("Selected test video source, continuing...\n");
         break;
       }
-      g_assert ((device = g_list_nth (devices, index - 1)));
+      device = g_list_nth (devices, index - 1);
+      g_assert (device);
       name = gst_device_get_display_name (device->data);
       g_print ("Selected device %s, continuing...\n", name);
       g_free (name);
