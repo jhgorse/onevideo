@@ -716,12 +716,11 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   g_hash_table_unref (out);
 
   /* Unset return-on-cancel so we can do our own return */
-  if (g_task_set_return_on_cancel (task, FALSE)) {
-    local->priv->active_call_id = call_id;
-    g_task_return_boolean (task, TRUE);
-  } else {
+  if (!g_task_set_return_on_cancel (task, FALSE))
     goto cancelled;
-  }
+
+  local->priv->active_call_id = call_id;
+  g_task_return_boolean (task, TRUE);
 
 out:
   g_rec_mutex_unlock (&local->priv->lock);
