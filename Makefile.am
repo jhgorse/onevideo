@@ -1,4 +1,4 @@
-# Define sources/libs/etc for the library and the test client
+# Define sources/libs/etc for the library and the test cli client
 
 EXTRA_DIST = tests/supp/gst.supp
 
@@ -40,11 +40,11 @@ gst_proxy_libgstproxy_la_LIBTOOLFLAGS = --tag=disable-static
 onevideoincludedir = $(includedir)/onevideo/
 onevideoinclude_HEADERS = lib/lib.h
 
-bin_PROGRAMS = app/one-video-app
+bin_PROGRAMS = cli/one-video-cli
 
-app_one_video_app_SOURCES = app/main.c
-app_one_video_app_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I$(top_srcdir)/lib
-app_one_video_app_LDADD = \
+cli_one_video_cli_SOURCES = cli/main.c
+cli_one_video_cli_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I$(top_srcdir)/lib
+cli_one_video_cli_LDADD = \
 	$(top_srcdir)/lib/libonevideo.la \
 	$(top_srcdir)/gst/proxy/libgstproxy.la \
 	$(GLIB_LIBS) $(GST_LIBS)

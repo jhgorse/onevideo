@@ -27,4 +27,4 @@ Makefile.in
 /libtool
 
 # Output binaries
-/app/one-video-app
+/cli/one-video-app
