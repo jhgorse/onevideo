@@ -5,4 +5,4 @@ build_dir=$(dirname $0)
 
 . "${build_dir}/export-path.sh"
 
-"${build_dir}"/app/one-video-app "$@"
+"${build_dir}"/cli/one-video-cli "$@"
