@@ -40,11 +40,31 @@ gst_proxy_libgstproxy_la_LIBTOOLFLAGS = --tag=disable-static
 onevideoincludedir = $(includedir)/onevideo/
 onevideoinclude_HEADERS = lib/lib.h
 
-bin_PROGRAMS = cli/one-video-cli
+bin_PROGRAMS = cli/one-video-cli gui/one-video-gui
 
 cli_one_video_cli_SOURCES = cli/main.c
-cli_one_video_cli_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I$(top_srcdir)/lib
+cli_one_video_cli_CFLAGS = \
+	-I$(top_srcdir)/lib \
+	$(GLIB_CFLAGS) $(GST_CFLAGS)
 cli_one_video_cli_LDADD = \
 	$(top_srcdir)/lib/libonevideo.la \
 	$(top_srcdir)/gst/proxy/libgstproxy.la \
 	$(GLIB_LIBS) $(GST_LIBS)
+
+gui_resource_files = $(shell glib-compile-resources --sourcedir=$(srcdir)/gui --generate-dependencies $(srcdir)/gui/ovg.gresource.xml)
+gui/ovg-resources.c: gui/ovg.gresource.xml $(gui_resource_files)
+	glib-compile-resources --target=$@ --sourcedir=$(srcdir)/gui --generate-source --c-name ovg $(srcdir)/gui/ovg.gresource.xml
+gui/ovg-resources.h: gui/ovg.gresource.xml $(gui_resource_files)
+	glib-compile-resources --target=$@ --sourcedir=$(srcdir)/gui --generate-header --c-name ovg $(srcdir)/gui/ovg.gresource.xml
+
+gui_one_video_gui_SOURCES = \
+	gui/ovg-app.c gui/ovg-app.h \
+	gui/ovg-appwin.c gui/ovg-appwin.h \
+	gui/ovg-main.c gui/ovg-resources.c
+gui_one_video_gui_CFLAGS = \
+	-I$(top_srcdir)/lib \
+	$(GLIB_CFLAGS) $(GST_CFLAGS) $(GTK_CFLAGS)
+gui_one_video_gui_LDADD = \
+	$(top_srcdir)/lib/libonevideo.la \
+	$(top_srcdir)/gst/proxy/libgstproxy.la \
+	$(GLIB_LIBS) $(GST_LIBS) $(GTK_LIBS)

@@ -28,3 +28,4 @@ Makefile.in
 
 # Output binaries
 /cli/one-video-cli
+/gui/one-video-gui

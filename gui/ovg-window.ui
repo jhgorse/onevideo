@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <!-- interface-requires gtk+ 3.8 -->
+  <template class="OvgAppWindow" parent="GtkApplicationWindow">
+    <property name="icon-name">one-video-gui</property>
+    <property name="title">OneVideo GUI</property>
+    <child type="titlebar">
+      <object class="GtkHeaderBar" id="header_bar">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="vexpand">False</property>
+        <property name="show-close-button">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkPaned" id="outer_box">
+        <property name="visible">True</property>
+        <property name="can-focus">True</property>
+        <child>
+          <object class="GtkBox" id="grid_sidebar">
+            <property name="visible">True</property>
+            <property name="orientation">vertical</property>
+            <property name="margin">10</property>
+            <property name="spacing">10</property>
+            <child>
+              <object class="GtkBox" id="peers_d_box">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkLabel" id="peers_d_label">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="xalign">0</property>
+                    <property name="margin-start">6</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="label" translatable="yes">Peers discovered</property>
+                    <attributes>
+                      <attribute name="weight" value="bold"/>
+                    </attributes>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkFrame" id="peers_d_frame">
+                    <property name="visible">True</property>
+                    <property name="shadow-type">in</property>
+                    <child>
+                      <object class="GtkScrolledWindow" id="peers_d_scroll">
+                        <property name="visible">True</property>
+                        <property name="min-content-height">200</property>
+                        <child>
+                          <object class="GtkListBox" id="peers_d">
+                            <property name="selection-mode">GTK_SELECTION_NONE</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object><!-- peers_d_frame -->
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                  </packing>
+                </child>
+              </object><!-- peers_d_box -->
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkBox" id="peers_c_box">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkLabel" id="peers_c_label">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="xalign">0</property>
+                    <property name="margin-start">6</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="label" translatable="yes">Peers to connect</property>
+                    <attributes>
+                      <attribute name="weight" value="bold"/>
+                    </attributes>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkFrame" id="peers_c_frame">
+                    <property name="visible">True</property>
+                    <property name="shadow-type">in</property>
+                    <child>
+                      <object class="GtkScrolledWindow" id="peers_c_scroll">
+                        <property name="visible">True</property>
+                        <property name="min-content-height">200</property>
+                        <child>
+                          <object class="GtkListBox" id="peers_c">
+                            <property name="selection-mode">GTK_SELECTION_NONE</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object><!-- peers_c_frame -->
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkBox" id="peers_add">
+                    <property name="visible">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="margin-top">5</property>
+                    <child>
+                      <object class="GtkEntry" id="peer_entry">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="placeholder-text">Enter peer address…</property>
+                        <signal name="activate" handler="on_peer_entry_activated" object="OvgAppWindow" swapped="yes"/>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="fill">True</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="peer_entry_button">
+                        <property name="visible">True</property>
+                        <property name="hexpand">False</property>
+                        <property name="can-focus">False</property>
+                        <signal name="clicked" handler="on_peer_entry_activated" object="OvgAppWindow" swapped="yes"/>
+                        <child>
+                          <object class="GtkImage" id="peer_entry_image">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="icon-name">list-add-symbolic</property>
+                            <property name="icon-size">4</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <style>
+                      <class name="linked"/>
+                    </style>
+                  </object><!-- peers_add -->
+                </child>
+              </object><!-- peers_c_box -->
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="start_call">
+                <property name="visible">True</property>
+                <property name="label">Call Peers</property>
+              </object>
+              <packing>
+                <property name="pack_type">end</property>
+              </packing>
+            </child>
+          </object><!-- grid_sidebar -->
+          <packing>
+            <property name="shrink">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkFlowBox" id="peers_video">
+          </object>
+        </child>
+      </object><!-- outer_box -->
+    </child>
+  </template>
+</interface>

@@ -14,6 +14,7 @@ AM_INIT_AUTOMAKE([-Wno-portability 1.14 no-dist-gzip dist-xz tar-ustar subdir-ob
 
 GLIB_REQ=2.32.0
 GST_REQ=1.5.2
+GTK_REQ=3.10
 
 # Checks for programs.
 AC_PROG_CC
@@ -46,6 +47,7 @@ AC_SUBST(plugindir)
 # Check for libraries
 PKG_CHECK_MODULES(GLIB, glib-2.0 >= $GLIB_REQ gio-2.0 >= GLIB_REQ)
 PKG_CHECK_MODULES(GST, gstreamer-1.0 >= $GST_REQ)
+PKG_CHECK_MODULES(GTK, gtk+-3.0 >= $GTK_REQ)
 
 # Check for header files
 #AC_CHECKHEADERS([stdlib.h])
