@@ -115,8 +115,9 @@
                       <object class="GtkEntry" id="peer_entry">
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
-                        <property name="placeholder-text">Enter peer address…</property>
-                        <signal name="activate" handler="on_peer_entry_activated" object="OvgAppWindow" swapped="yes"/>
+                        <property name="placeholder-text">Enter peer IP address…</property>
+                        <signal name="notify::text" handler="on_peer_entry_text_changed" object="OvgAppWindow" swapped="yes"/>
+                        <signal name="icon-press" handler="on_peer_entry_clear_pressed" object="OvgAppWindow" swapped="yes"/>
                       </object>
                       <packing>
                         <property name="expand">True</property>
@@ -128,7 +129,8 @@
                         <property name="visible">True</property>
                         <property name="hexpand">False</property>
                         <property name="can-focus">False</property>
-                        <signal name="clicked" handler="on_peer_entry_activated" object="OvgAppWindow" swapped="yes"/>
+                        <property name="sensitive">False</property>
+                        <signal name="clicked" handler="on_peer_entry_button_clicked" object="OvgAppWindow" swapped="yes"/>
                         <child>
                           <object class="GtkImage" id="peer_entry_image">
                             <property name="visible">True</property>

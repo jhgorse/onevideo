@@ -27,6 +27,8 @@
 
 #include "ovg-appwin.h"
 
+#include <string.h>
+
 #define MAX_ROWS_VISIBLE 5
 
 struct _OvgAppWindow
@@ -45,6 +47,7 @@ struct _OvgAppWindowPrivate
   GtkWidget *peers_d;
   GtkWidget *peers_c;
   GtkWidget *peer_entry;
+  GtkWidget *peer_entry_button;
   GtkWidget *peers_video;
 };
 
@@ -59,6 +62,17 @@ static GtkWidget* ovg_app_window_peers_c_row_new (OvgAppWindow *win,
     const gchar *label);
 static GtkWidget* ovg_app_window_peers_c_row_get (OvgAppWindow *win,
     const gchar * label);
+
+static void
+widget_set_error (GtkWidget * w, gboolean error)
+{
+  if (error)
+    gtk_style_context_add_class (gtk_widget_get_style_context (w),
+        GTK_STYLE_CLASS_ERROR);
+  else
+    gtk_style_context_remove_class (gtk_widget_get_style_context (w),
+        GTK_STYLE_CLASS_ERROR);
+}
 
 static void
 update_header_func (GtkListBoxRow * row, GtkListBoxRow * before,
@@ -232,17 +246,52 @@ ovg_app_window_peers_c_row_get (OvgAppWindow * win, const gchar * label)
 }
 
 static void
-on_peer_entry_activated (OvgAppWindow * win)
+on_peer_entry_button_clicked (OvgAppWindow * win)
 {
   const gchar *label;
   OvgAppWindowPrivate *priv;
 
   priv = ovg_app_window_get_instance_private (win);
+
   label = gtk_entry_get_text (GTK_ENTRY (priv->peer_entry));
-  if (g_strcmp0 (label, "") == 0)
-    return;
+
   if (!add_peer (win, label))
     g_warning ("User tried to add duplicate peer address");
+}
+
+static void
+on_peer_entry_text_changed (OvgAppWindow * win)
+{
+  GtkEntry *entry;
+  const gchar *text;
+  gboolean text_valid;
+  OvgAppWindowPrivate *priv;
+
+  priv = ovg_app_window_get_instance_private (win);
+  entry = GTK_ENTRY (priv->peer_entry);
+  text = gtk_entry_get_text (entry);
+
+  if (strlen (text) > 0)
+    gtk_entry_set_icon_from_icon_name (entry, GTK_ENTRY_ICON_SECONDARY,
+        "edit-clear-symbolic");
+  else
+    gtk_entry_set_icon_from_icon_name (entry, GTK_ENTRY_ICON_SECONDARY, NULL);
+
+  text_valid = g_hostname_is_ip_address (text);
+
+  if (g_strcmp0 (text, "") == 0)
+    /* Empty text entry is not an error */
+    widget_set_error (priv->peer_entry, FALSE);
+  else
+    widget_set_error (priv->peer_entry, !text_valid);
+  gtk_widget_set_sensitive (priv->peer_entry_button, text_valid);
+}
+
+static void
+on_peer_entry_clear_pressed (OvgAppWindow * win, GtkEntryIconPosition icon_pos,
+    GdkEvent * event, GtkEntry * entry)
+{
+  gtk_entry_set_text (entry, "");
 }
 
 static void
@@ -292,10 +341,16 @@ ovg_app_window_class_init (OvgAppWindowClass *class)
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       peer_entry);
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
+      peer_entry_button);
+  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       peers_video);
 
   gtk_widget_class_bind_template_callback (widget_class,
-      on_peer_entry_activated);
+      on_peer_entry_button_clicked);
+  gtk_widget_class_bind_template_callback (widget_class,
+      on_peer_entry_text_changed);
+  gtk_widget_class_bind_template_callback (widget_class,
+      on_peer_entry_clear_pressed);
 }
 
 GtkWidget *
