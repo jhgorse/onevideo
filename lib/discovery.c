@@ -211,6 +211,12 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
     goto out;
 
   GST_DEBUG ("Incoming UDP message: %s", msg->data);
+  
+  if (one_video_inet_socket_address_equal (G_INET_SOCKET_ADDRESS (from),
+        local->addr)) {
+    GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u", msg->type);
+    goto out;
+  }
 
   switch (msg->type) {
     case ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER:
