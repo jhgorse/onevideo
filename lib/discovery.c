@@ -198,14 +198,14 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 {
   gboolean ret;
   OneVideoUdpMsg *msg;
-  GSocketAddress *addr = NULL;
+  GSocketAddress *from = NULL;
 
   msg = g_new0 (OneVideoUdpMsg, 1);
 
   /* For now, the only UDP messages we care about are those that want to
    * discover us. If this is extended, something like OneVideoTcpMsg will be
    * implemented. */
-  ret = one_video_udp_msg_read_message_from (msg, &addr, local->priv->mc_socket,
+  ret = one_video_udp_msg_read_message_from (msg, &from, local->priv->mc_socket,
       NULL, NULL);
   if (!ret)
     goto out;
@@ -214,7 +214,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 
   switch (msg->type) {
     case ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER:
-      one_video_local_peer_send_info (local, addr, msg);
+      one_video_local_peer_send_info (local, from, msg);
       break;
     default:
       GST_ERROR ("Received unknown udp msg type: %u", msg->type);
@@ -222,7 +222,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 
 out:
   one_video_udp_msg_free (msg);
-  g_object_unref (addr);
+  g_object_unref (from);
   return G_SOURCE_CONTINUE;
 }
 
