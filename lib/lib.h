@@ -45,15 +45,18 @@ typedef struct _OneVideoRemotePeer OneVideoRemotePeer;
 typedef struct _OneVideoRemotePeerPriv OneVideoRemotePeerPriv;
 typedef enum _OneVideoRemotePeerState OneVideoRemotePeerState;
 
+typedef struct _OneVideoDiscoveredPeer OneVideoDiscoveredPeer;
+
 /**
  * OneVideoRemoteFoundCallback:
- * @address: (transfer none): the #GSocketAddress of the found remote peer
+ * @remote: (transfer full): a #OneVideoDiscoveredPeer representing the found
+ * remote peer
  * @user_data: the user data passed
  *
  * See the documentation for one_video_local_peer_find_remotes_create_source()
  */
-typedef gboolean (*OneVideoRemoteFoundCallback)   (GSocketAddress *remote,
-                                                   gpointer user_data);
+typedef gboolean (*OneVideoRemoteFoundCallback) (OneVideoDiscoveredPeer *peer,
+                                                 gpointer user_data);
 
 enum _OneVideoLocalPeerState {
   ONE_VIDEO_LOCAL_STATE_NULL          = 0,
@@ -127,6 +130,17 @@ struct _OneVideoRemotePeer {
   OneVideoRemotePeerPriv *priv;
 };
 
+/* Represents a discovered peer */
+struct _OneVideoDiscoveredPeer {
+  /* Address of the discovered peer */
+  GInetSocketAddress *addr;
+  /* String representation; contains port if non-default port */
+  gchar *addr_s;
+
+  /* Monotonic time when this peer was discovered */
+  gint64 discover_time;
+};
+
 /* Local peer (us) */
 OneVideoLocalPeer*  one_video_local_peer_new              (GSocketAddress *addr);
 void                one_video_local_peer_free             (OneVideoLocalPeer *local);
@@ -168,6 +182,10 @@ void                one_video_remote_peer_remove            (OneVideoRemotePeer 
 
 OneVideoRemotePeer* one_video_local_peer_get_remote_by_id   (OneVideoLocalPeer *local,
                                                              const gchar *peer_id);
+
+/* Discovered peers */
+OneVideoDiscoveredPeer*   one_video_discovered_peer_new   (GInetSocketAddress *addr);
+void                      one_video_discovered_peer_free  (OneVideoDiscoveredPeer *peer);
 
 G_END_DECLS
 

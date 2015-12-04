@@ -42,10 +42,9 @@ typedef struct {
 } FindRemotesData;
 
 static gboolean
-found_remote_cb (GSocketAddress * remote, gpointer user_data)
+found_remote_cb (OneVideoDiscoveredPeer * d, gpointer user_data)
 {
   guint len;
-  GInetAddress *addr;
   FindRemotesData *data = user_data;
 
   if (data->remotes == NULL)
@@ -56,10 +55,10 @@ found_remote_cb (GSocketAddress * remote, gpointer user_data)
   /* Expand to include another gchar* pointer */
   data->remotes = g_realloc_n (data->remotes, sizeof (gchar*), len + 1);
 
-  addr = g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (remote));
-  data->remotes[len - 1] = g_inet_address_to_string (addr);
+  data->remotes[len - 1] = one_video_inet_socket_address_to_string (d->addr);
   data->remotes[len] = NULL;
 
+  one_video_discovered_peer_free (d);
   return TRUE;
 }
 

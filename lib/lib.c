@@ -503,6 +503,33 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
   g_free (remote);
 }
 
+OneVideoDiscoveredPeer *
+one_video_discovered_peer_new (GInetSocketAddress * addr)
+{
+  OneVideoDiscoveredPeer *d;
+
+  d = g_new0 (OneVideoDiscoveredPeer, 1);
+  d->addr = g_object_ref (addr);
+  d->discover_time = g_get_monotonic_time ();
+
+  if (g_inet_socket_address_get_port (addr) == ONE_VIDEO_DEFAULT_COMM_PORT)
+    d->addr_s =
+      g_inet_address_to_string (g_inet_socket_address_get_address (addr));
+  else
+    d->addr_s =
+      one_video_inet_socket_address_to_string (addr);
+
+  return d;
+}
+
+void
+one_video_discovered_peer_free (OneVideoDiscoveredPeer * peer)
+{
+  g_object_unref (peer->addr);
+  g_free (peer->addr_s);
+  g_free (peer);
+}
+
 static GstCaps *
 one_video_media_type_to_caps (OneVideoMediaType type)
 {
@@ -650,6 +677,7 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
   gboolean ret;
   OneVideoUdpMsg msg;
   GSocketAddress *from;
+  OneVideoDiscoveredPeer *d;
   OneVideoDiscoveryReplyData *data = user_data;
   GCancellable *cancellable = data->cancellable;
   GError *error = NULL;
@@ -673,12 +701,18 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
 
   if (msg.type != ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE) {
     GST_WARNING ("Invalid discovery reply");
-    g_object_unref (from);
-    return G_SOURCE_CONTINUE;
+    ret = G_SOURCE_CONTINUE;
+    goto out;
   }
 
-  GST_DEBUG ("Found a remote peer");
-  ret = data->callback (from, data->callback_data);
+  d = one_video_discovered_peer_new (G_INET_SOCKET_ADDRESS (from));
+  GST_DEBUG ("Found a remote peer: %s. Calling user-provided callback.",
+      d->addr_s);
+
+  /* Call user-provided callback */
+  ret = data->callback (d, data->callback_data);
+
+out:
   g_object_unref (from);
   return ret;
 }
