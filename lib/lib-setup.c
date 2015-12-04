@@ -29,6 +29,7 @@
 #include "lib-setup.h"
 #include "incoming.h"
 #include "comms.h"
+#include "utils.h"
 #include "discovery.h"
 
 #include <string.h>
@@ -289,6 +290,7 @@ gboolean
 one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
 {
   gboolean ret;
+  gchar *addr_s;
   GInetAddress *multicast_group;
   GSocketAddress *multicast_addr;
   GError *error = NULL;
@@ -315,7 +317,7 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
       G_CALLBACK (on_incoming_peer_tcp_connection), local);
 
   g_socket_service_start (local->priv->tcp_server);
-  GST_DEBUG ("Listening for incoming TCP connections");
+  GST_DEBUG ("Listening for incoming TCP connections on %s", local->addr_s);
 
   /*-- Listen for incoming UDP messages (multicast and unicast) --*/
   local->priv->mc_socket = g_socket_new (G_SOCKET_FAMILY_IPV4,
@@ -350,7 +352,11 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
   g_source_set_callback (local->priv->mc_socket_source,
       (GSourceFunc) on_incoming_udp_message, local, NULL);
   g_source_attach (local->priv->mc_socket_source, NULL);
-  GST_DEBUG ("Listening for incoming UDP messages");
+
+  addr_s = one_video_inet_socket_address_to_string (
+      G_INET_SOCKET_ADDRESS (multicast_addr));
+  GST_DEBUG ("Listening for incoming UDP messages on %s", addr_s);
+  g_free (addr_s);
 
 out:
   g_object_unref (local->priv->mc_socket);
