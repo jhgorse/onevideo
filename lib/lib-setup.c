@@ -323,14 +323,15 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
   local->priv->mc_socket = g_socket_new (G_SOCKET_FAMILY_IPV4,
       G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, NULL);
   multicast_group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
+  /* Use this hard-coded port for UDP messages; it's our canonical port */
   multicast_addr = g_inet_socket_address_new (multicast_group,
-      g_inet_socket_address_get_port (local->addr));
+      ONE_VIDEO_DEFAULT_COMM_PORT);
   ret = g_socket_bind (local->priv->mc_socket, multicast_addr, TRUE, &error);
   if (!ret) {
     gchar *name =
       g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
     GST_ERROR ("Unable to bind to multicast addr/port (%s:%u): %s", name,
-        g_inet_socket_address_get_port (local->addr), error->message);
+        ONE_VIDEO_DEFAULT_COMM_PORT, error->message);
     g_error_free (error);
     goto out;
   }
