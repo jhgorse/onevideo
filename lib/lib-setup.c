@@ -333,6 +333,7 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
     GST_ERROR ("Unable to bind to multicast addr/port (%s:%u): %s", name,
         ONE_VIDEO_DEFAULT_COMM_PORT, error->message);
     g_error_free (error);
+    g_free (name);
     goto out;
   }
 
