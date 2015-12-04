@@ -700,7 +700,7 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
  * source with g_source_destroy(), or return %FALSE from @callback. The caller
  * keeps full ownership of @callback_data.
  *
- * On failure to initiate searching for peers, %FALSE is returned and @error is
+ * On failure to initiate searching for peers, %NULL is returned and @error is
  * set.
  *
  * Returns: (transfer full): a newly allocated #GSource, free with
