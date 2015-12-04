@@ -68,7 +68,7 @@ one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
 }
 
 OneVideoLocalPeer *
-one_video_local_peer_new (GInetSocketAddress * listen_addr)
+one_video_local_peer_new (GSocketAddress * listen_addr)
 {
   gchar *guid;
   GstCaps *vcaps;
@@ -76,14 +76,23 @@ one_video_local_peer_new (GInetSocketAddress * listen_addr)
   guint16 tcp_port;
   gboolean ret;
 
-  g_return_val_if_fail (listen_addr != NULL, NULL);
-
   if (onevideo_debug == NULL)
     GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
         "OneVideo VoIP library");
 
+  if (listen_addr == NULL) {
+    GInetAddress *addr;
+    //addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
+    addr = g_inet_address_new_loopback (G_SOCKET_FAMILY_IPV4);
+    listen_addr = g_inet_socket_address_new (addr, ONE_VIDEO_DEFAULT_COMM_PORT);
+    g_object_unref (addr);
+  } else {
+    /* Take a ref because we will be using this directly */
+    g_object_ref (listen_addr);
+  }
+
   local = g_new0 (OneVideoLocalPeer, 1);
-  local->addr = g_object_ref (listen_addr);
+  local->addr = G_INET_SOCKET_ADDRESS (listen_addr);
   local->addr_s = one_video_inet_socket_address_to_string (local->addr);
   guid = g_dbus_generate_guid (); /* Generate a UUIDesque string */
   local->id = g_strdup_printf ("%s:%u-%s", g_get_host_name (),

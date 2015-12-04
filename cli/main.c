@@ -390,7 +390,7 @@ main (int   argc,
   g_object_unref (inet_addr);
 
   g_print ("Probing devices...\n");
-  local = one_video_local_peer_new (G_INET_SOCKET_ADDRESS (listen_addr));
+  local = one_video_local_peer_new (listen_addr);
   g_object_unref (listen_addr);
 
   devices = one_video_local_peer_get_video_devices (local);

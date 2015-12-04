@@ -128,7 +128,7 @@ struct _OneVideoRemotePeer {
 };
 
 /* Local peer (us) */
-OneVideoLocalPeer*  one_video_local_peer_new              (GInetSocketAddress *addr);
+OneVideoLocalPeer*  one_video_local_peer_new              (GSocketAddress *addr);
 void                one_video_local_peer_free             (OneVideoLocalPeer *local);
 void                one_video_local_peer_add_remote       (OneVideoLocalPeer *local,
                                                            OneVideoRemotePeer *remote);
