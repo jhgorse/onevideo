@@ -132,6 +132,16 @@ ovg_app_command_line (GApplication * app, GApplicationCommandLine * cmdline)
 }
 
 static void
+ovg_app_shutdown (GApplication * app)
+{
+  OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (app));
+
+  one_video_local_peer_stop (priv->ov_local);
+
+  G_APPLICATION_CLASS (ovg_app_parent_class)->shutdown (app);
+}
+
+static void
 ovg_app_dispose (GObject * object)
 {
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (object));
@@ -150,6 +160,8 @@ ovg_app_class_init (OvgAppClass * class)
   application_class->activate = ovg_app_activate;
   application_class->startup = ovg_app_startup;
   application_class->command_line = ovg_app_command_line;
+  /* NOTE: This does not get called during termination due to signals */
+  application_class->shutdown = ovg_app_shutdown;
 
   object_class->dispose = ovg_app_dispose;
 }
