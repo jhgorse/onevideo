@@ -291,10 +291,11 @@ on_peer_entry_button_clicked (OvgAppWindow * win)
 static void
 on_peer_entry_text_changed (OvgAppWindow * win)
 {
+  gchar **split;
   GtkEntry *entry;
   const gchar *text;
-  gboolean text_valid;
   OvgAppWindowPrivate *priv;
+  gboolean text_valid = FALSE;
 
   priv = ovg_app_window_get_instance_private (win);
   entry = GTK_ENTRY (priv->peer_entry);
@@ -306,7 +307,21 @@ on_peer_entry_text_changed (OvgAppWindow * win)
   else
     gtk_entry_set_icon_from_icon_name (entry, GTK_ENTRY_ICON_SECONDARY, NULL);
 
-  text_valid = g_hostname_is_ip_address (text);
+  split = g_strsplit (text, ":", 2);
+
+  switch (g_strv_length (split)) {
+    case 1:
+      text_valid = g_hostname_is_ip_address (split[0]);
+      break;
+    case 2:
+      text_valid = g_hostname_is_ip_address (split[0]) && 
+        /* XXX: We don't check if it's a valid port; we just check if it's an
+         * unsigned integer */
+        g_ascii_strtoull (split[1], NULL, 10);
+      break;
+    default:
+      break;
+  }
 
   if (g_strcmp0 (text, "") == 0)
     /* Empty text entry is not an error */
@@ -314,6 +329,7 @@ on_peer_entry_text_changed (OvgAppWindow * win)
   else
     widget_set_error (priv->peer_entry, !text_valid);
   gtk_widget_set_sensitive (priv->peer_entry_button, text_valid);
+  g_strfreev (split);
 }
 
 static void
@@ -335,13 +351,11 @@ ovg_app_window_peers_d_rows_clean_timed_out (OvgAppWindow * win)
   children = gtk_container_get_children (GTK_CONTAINER (priv->peers_d));
 
   for (l = children; l != NULL; l = l->next) {
-    gint64 diff;
     OneVideoDiscoveredPeer *d;
 
     d = g_object_get_data (G_OBJECT (l->data), "peer-data");
     /* If this peer was discovered more than 2 discovery-intervals ago, it has
      * timed out */
-    diff = current_time - d->discover_time;
     if ((current_time - d->discover_time) >
         2 * G_USEC_PER_SEC * PEER_DISCOVER_INTERVAL)
       gtk_container_remove (GTK_CONTAINER (priv->peers_d),
