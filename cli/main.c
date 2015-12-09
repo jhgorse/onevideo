@@ -95,8 +95,6 @@ quit:
 static gboolean
 on_app_exit (OneVideoLocalPeer * local)
 {
-  if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATING)
-    one_video_local_peer_negotiate_stop (local);
   one_video_local_peer_stop (local);
   g_main_loop_quit (loop);
 

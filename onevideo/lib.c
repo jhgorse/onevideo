@@ -1049,12 +1049,20 @@ one_video_local_peer_stop (OneVideoLocalPeer * local)
 {
   GST_DEBUG ("Stopping local peer");
   g_rec_mutex_lock (&local->priv->lock);
+  /* Stop negotiating if negotiating */
+  if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
+    GST_DEBUG ("Cancelling call negotiation");
+    one_video_local_peer_negotiate_stop (local);
+  }
+
+  /* Signal end of call if we're in a call */
   if (local->state >= ONE_VIDEO_LOCAL_STATE_READY &&
       local->priv->remote_peers->len > 0) {
     GST_DEBUG ("Sending END_CALL to remote peers");
     one_video_local_peer_end_call (local);
   }
 
+  /* Remove all the remote peers added to the local peer */
   if (local->priv->remote_peers->len > 0) {
     g_ptr_array_foreach (local->priv->remote_peers,
         (GFunc) one_video_remote_peer_remove_not_array, NULL);
