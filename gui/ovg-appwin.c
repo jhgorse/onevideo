@@ -25,11 +25,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "ovg-app.h"
 #include "ovg-appwin.h"
 
 #include <string.h>
 
 #define MAX_ROWS_VISIBLE 5
+#define PEER_DISCOVER_INTERVAL 5
 
 struct _OvgAppWindow
 {
@@ -49,6 +51,7 @@ struct _OvgAppWindowPrivate
   GtkWidget *peer_entry;
   GtkWidget *peer_entry_button;
   GtkWidget *peers_video;
+  GSource *peers_source;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (OvgAppWindow, ovg_app_window,
@@ -75,7 +78,7 @@ widget_set_error (GtkWidget * w, gboolean error)
 }
 
 static void
-update_header_func (GtkListBoxRow * row, GtkListBoxRow * before,
+ovg_list_box_update_header_func (GtkListBoxRow * row, GtkListBoxRow * before,
     gpointer user_data)
 {
   GtkWidget *current;
@@ -94,7 +97,33 @@ update_header_func (GtkListBoxRow * row, GtkListBoxRow * before,
 }
 
 static gboolean
-add_peer (OvgAppWindow * win, const gchar * label)
+add_peer_to_discovered (OneVideoDiscoveredPeer * d, gpointer user_data)
+{
+  GtkWidget *row;
+  OvgAppWindowPrivate *priv;
+  OvgAppWindow *win = user_data;
+
+  g_return_val_if_fail (OVG_IS_APP_WINDOW (win), FALSE);
+
+  priv = ovg_app_window_get_instance_private (win);
+
+  row = ovg_app_window_peers_d_row_get (win, d->addr_s);
+  if (row)
+    goto out;
+
+  row = ovg_app_window_peers_d_row_new (win, d->addr_s);
+  gtk_list_box_insert (GTK_LIST_BOX (priv->peers_d), row, -1);
+  gtk_widget_show_all (priv->peers_d);
+
+out:
+  /* Attach the latest DiscoveredPeer data to the row */
+  g_object_set_data_full (G_OBJECT (row), "peer-data", d,
+      (GDestroyNotify) one_video_discovered_peer_free);
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean
+add_peer_to_connect (OvgAppWindow * win, const gchar * label)
 {
   GtkWidget *row;
   OvgAppWindowPrivate *priv;
@@ -111,7 +140,7 @@ add_peer (OvgAppWindow * win, const gchar * label)
 }
 
 static void
-on_peers_d_add (GtkButton * b, OvgAppWindow * win)
+on_peers_d_restore (GtkButton * b, OvgAppWindow * win)
 {
   gchar *label;
   GtkWidget *row1;
@@ -120,7 +149,7 @@ on_peers_d_add (GtkButton * b, OvgAppWindow * win)
   gtk_widget_set_sensitive (row1, FALSE);
 
   label = g_object_get_data (G_OBJECT (row1), "peer-name");
-  add_peer (win, label);
+  add_peer_to_connect (win, label);
 }
 
 static GtkWidget *
@@ -147,7 +176,7 @@ ovg_app_window_peers_d_row_new (OvgAppWindow * win, const gchar * label)
   w = gtk_button_new_from_icon_name ("list-add-symbolic", GTK_ICON_SIZE_BUTTON);
   gtk_widget_set_margin_start (w, 8);
   gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
-  g_signal_connect (w, "clicked", G_CALLBACK (on_peers_d_add), win);
+  g_signal_connect (w, "clicked", G_CALLBACK (on_peers_d_restore), win);
   g_object_set_data (G_OBJECT (w), "parent-row", row);
   gtk_box_pack_end (GTK_BOX (box), w, FALSE, FALSE, 0);
   gtk_widget_show_all (row);
@@ -255,7 +284,7 @@ on_peer_entry_button_clicked (OvgAppWindow * win)
 
   label = gtk_entry_get_text (GTK_ENTRY (priv->peer_entry));
 
-  if (!add_peer (win, label))
+  if (!add_peer_to_connect (win, label))
     g_warning ("User tried to add duplicate peer address");
 }
 
@@ -295,34 +324,88 @@ on_peer_entry_clear_pressed (OvgAppWindow * win, GtkEntryIconPosition icon_pos,
 }
 
 static void
-ovg_app_window_init (OvgAppWindow *win)
+ovg_app_window_peers_d_rows_clean_timed_out (OvgAppWindow * win)
 {
-  GtkWidget *row;
-  GtkListBox *peers_d, *peers_c;
+  gint64 current_time;
+  GList *children, *l;
+  OvgAppWindowPrivate *priv;
+
+  current_time = g_get_monotonic_time ();
+  priv = ovg_app_window_get_instance_private (win);
+  children = gtk_container_get_children (GTK_CONTAINER (priv->peers_d));
+
+  for (l = children; l != NULL; l = l->next) {
+    gint64 diff;
+    OneVideoDiscoveredPeer *d;
+
+    d = g_object_get_data (G_OBJECT (l->data), "peer-data");
+    /* If this peer was discovered more than 2 discovery-intervals ago, it has
+     * timed out */
+    diff = current_time - d->discover_time;
+    if ((current_time - d->discover_time) >
+        2 * G_USEC_PER_SEC * PEER_DISCOVER_INTERVAL)
+      gtk_container_remove (GTK_CONTAINER (priv->peers_d),
+          GTK_WIDGET (l->data));
+  }
+
+  g_list_free (children);
+}
+
+static gboolean
+do_peer_discovery (gpointer user_data)
+{
+  GtkApplication *app;
+  OneVideoLocalPeer *local;
+  OvgAppWindowPrivate *priv;
+  OvgAppWindow *win = user_data;
+  GError *error = NULL;
+
+  app = gtk_window_get_application (GTK_WINDOW (win));
+  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+
+  priv = ovg_app_window_get_instance_private (win);
+
+  if (priv->peers_source)
+    /* Cancel existing stuff */
+    g_source_unref (priv->peers_source);
+
+  priv->peers_source =
+    one_video_local_peer_find_remotes_create_source (local, NULL,
+      add_peer_to_discovered, win, &error);
+
+  ovg_app_window_peers_d_rows_clean_timed_out (win);
+
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean
+do_peer_discovery_once (gpointer user_data)
+{
+  do_peer_discovery (user_data);
+
+  g_timeout_add_seconds (PEER_DISCOVER_INTERVAL, do_peer_discovery, user_data);
+
+  return G_SOURCE_REMOVE;
+}
+
+static void
+ovg_app_window_init (OvgAppWindow * win)
+{
   OvgAppWindowPrivate *priv;
 
   gtk_widget_init_template (GTK_WIDGET (win));
 
   priv = ovg_app_window_get_instance_private (win);
-  peers_d = GTK_LIST_BOX (priv->peers_d);
-  peers_c = GTK_LIST_BOX (priv->peers_c);
 
   gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar), "Connect");
 
-  gtk_list_box_set_header_func (peers_d, update_header_func, NULL, NULL);
-  gtk_list_box_set_header_func (peers_c, update_header_func, NULL, NULL);
+  gtk_list_box_set_header_func (GTK_LIST_BOX (priv->peers_d),
+      ovg_list_box_update_header_func, NULL, NULL);
+  gtk_list_box_set_header_func (GTK_LIST_BOX (priv->peers_c),
+      ovg_list_box_update_header_func, NULL, NULL);
 
-  row = ovg_app_window_peers_d_row_new (win, "192.168.1.44");
-  gtk_list_box_insert (peers_d, row, -1);
-  row = ovg_app_window_peers_d_row_new (win, "192.168.1.32");
-  gtk_list_box_insert (peers_d, row, -1);
-  row = ovg_app_window_peers_d_row_new (win, "192.168.1.154");
-  gtk_list_box_insert (peers_d, row, -1);
-  row = ovg_app_window_peers_d_row_new (win, "192.168.1.98");
-  gtk_list_box_insert (peers_d, row, -1);
-  row = ovg_app_window_peers_d_row_new (win, "Fedora-PC1");
-  gtk_list_box_insert (peers_d, row, -1);
-  gtk_widget_show_all (priv->peers_d);
+  /* We can only initialize all this once the init is fully chained */
+  g_idle_add (do_peer_discovery_once, win);
 }
 
 static void
