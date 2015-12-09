@@ -158,6 +158,7 @@
               <object class="GtkButton" id="start_call">
                 <property name="visible">True</property>
                 <property name="label">Call Peers</property>
+                <signal name="clicked" handler="on_call_peers_button_clicked" object="OvgAppWindow" swapped="yes"/>
               </object>
               <packing>
                 <property name="pack_type">end</property>
