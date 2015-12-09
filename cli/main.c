@@ -36,7 +36,6 @@
 static GMainLoop *loop = NULL;
 
 typedef struct {
-  GSource *source;
   gchar **remotes;
   OneVideoLocalPeer *local;
 } FindRemotesData;
@@ -147,11 +146,6 @@ static gboolean
 aggregate_and_dial_remotes (gpointer user_data)
 {
   FindRemotesData *data = user_data;
-
-  if (!g_source_is_destroyed (data->source))
-    g_source_destroy (data->source);
-  else
-    g_source_unref (data->source);
 
   if (data->remotes == NULL) {
     g_print (" found no remotes. Exiting.\n");
@@ -421,7 +415,6 @@ main (int   argc,
       g_free (data);
       goto out;
     }
-    data->source = source;
     /* In a GUI, this would update a list of peers from which the user would
      * select a list of call them all. Since this program is not interactive,
      * we add a callback that waits for 2 seconds and dials whatever remotes
