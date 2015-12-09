@@ -28,6 +28,10 @@
 #include "ovg-app.h"
 #include "ovg-appwin.h"
 
+#ifdef G_OS_UNIX
+#include <glib-unix.h>
+#endif
+
 struct _OvgApp
 {
   GtkApplication parent;
@@ -50,6 +54,17 @@ quit_activated (GSimpleAction * action, GVariant * param, gpointer app)
 {
   g_application_quit (G_APPLICATION (app));
 }
+
+#ifdef G_OS_UNIX
+static gboolean
+on_ovg_app_sigint (GApplication * app)
+{
+  g_printerr ("SIGINT caught, quitting application...");
+  quit_activated (NULL, NULL, app);
+
+  return G_SOURCE_REMOVE;
+}
+#endif
 
 static GActionEntry app_entries[] =
 {
@@ -121,6 +136,10 @@ ovg_app_startup (GApplication * app)
   one_video_local_peer_set_video_device (priv->ov_local,
       GST_DEVICE (devices->data));
   g_list_free_full (devices, g_object_unref);
+
+#ifdef G_OS_UNIX
+  g_unix_signal_add (SIGINT, (GSourceFunc) on_ovg_app_sigint, app);
+#endif
 }
 
 static gint
@@ -160,7 +179,6 @@ ovg_app_class_init (OvgAppClass * class)
   application_class->activate = ovg_app_activate;
   application_class->startup = ovg_app_startup;
   application_class->command_line = ovg_app_command_line;
-  /* NOTE: This does not get called during termination due to signals */
   application_class->shutdown = ovg_app_shutdown;
 
   object_class->dispose = ovg_app_dispose;
