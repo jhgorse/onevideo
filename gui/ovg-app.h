@@ -29,7 +29,7 @@
 #ifndef __OVG_APP_H__
 #define __OVG_APP_H__
 
-#include "lib.h"
+#include "onevideo/lib.h"
 
 #include <gtk/gtk.h>
 

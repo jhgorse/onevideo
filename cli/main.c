@@ -25,8 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "utils.h"
+#include "onevideo/lib.h"
+#include "onevideo/utils.h"
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
