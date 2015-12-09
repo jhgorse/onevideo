@@ -700,7 +700,7 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
     g_free (msg.data);
 
   if (msg.type != ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE) {
-    GST_WARNING ("Invalid discovery reply");
+    GST_WARNING ("Invalid discovery reply: %u", msg.type);
     ret = G_SOURCE_CONTINUE;
     goto out;
   }
@@ -769,7 +769,6 @@ one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
   reply_data->callback_data = callback_data;
   reply_data->cancellable = cancellable;
 
-  GST_DEBUG ("Searching for remote peers");
   source = g_socket_create_source (recv_socket, G_IO_IN, cancellable);
   g_source_set_callback (source, (GSourceFunc) recv_discovery_reply, reply_data,
       g_free);

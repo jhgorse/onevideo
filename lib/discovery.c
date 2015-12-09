@@ -181,10 +181,15 @@ static void
 one_video_local_peer_send_info (OneVideoLocalPeer * local,
     GSocketAddress * addr, OneVideoUdpMsg * msg)
 {
+  gchar *tmp;
   OneVideoUdpMsg *send;
 
   send = one_video_udp_msg_new (ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE,
       NULL, 0);
+
+  tmp = one_video_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (addr));
+  GST_DEBUG ("Sending HI_THERE to %s, id: %lu", tmp, send->id);
+  g_free (tmp);
 
   one_video_udp_msg_send_to_from (send, addr, G_SOCKET_ADDRESS (local->addr),
       NULL, NULL);
@@ -196,6 +201,7 @@ gboolean
 on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
     OneVideoLocalPeer * local)
 {
+  gchar *tmp;
   gboolean ret;
   OneVideoUdpMsg *msg;
   GSocketAddress *from = NULL;
@@ -210,11 +216,14 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   if (!ret)
     goto out;
 
-  GST_DEBUG ("Incoming UDP message: %s", msg->data);
+  tmp = one_video_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (from));
+  GST_DEBUG ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
+  g_free (tmp);
   
   if (one_video_inet_socket_address_equal (G_INET_SOCKET_ADDRESS (from),
         local->addr)) {
-    GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u", msg->type);
+    GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
+        msg->type, msg->id);
     goto out;
   }
 
@@ -247,11 +256,13 @@ one_video_discovery_send_multicast_discover (OneVideoLocalPeer * local,
   mc_addr = g_inet_socket_address_new (group, ONE_VIDEO_DEFAULT_COMM_PORT);
   g_object_unref (group);
 
-  GST_DEBUG ("Sending multicast discover to %s:%u from %s",
-      ONE_VIDEO_MULTICAST_GROUP, ONE_VIDEO_DEFAULT_COMM_PORT, local->addr_s);
-
   msg = one_video_udp_msg_new (ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER,
       NULL, 0);
+
+  GST_DEBUG ("Sending multicast discover (id %lu) to %s:%u from %s",
+      msg->id, ONE_VIDEO_MULTICAST_GROUP, ONE_VIDEO_DEFAULT_COMM_PORT,
+      local->addr_s);
+
   ret = one_video_udp_msg_send_to_from (msg, mc_addr,
       G_SOCKET_ADDRESS (local->addr), cancellable, error);
   one_video_udp_msg_free (msg);
