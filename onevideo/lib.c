@@ -170,7 +170,7 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   gst_device_monitor_stop (local->priv->dm);
   g_object_unref (local->priv->dm);
 
-  g_source_unref (local->priv->mc_socket_source);
+  g_source_destroy (local->priv->mc_socket_source);
   g_object_unref (local->priv->mc_socket);
 
   g_object_unref (local->priv->tcp_server);
@@ -730,8 +730,8 @@ out:
  * argument and @callback_data as the second argument. The source is already
  * setup, so you do not need to do anything.
  *
- * To stop searching, call g_cancellable_cancel() on @cancellable, free the
- * source with g_source_unref(), or return %FALSE from @callback. The caller
+ * To stop searching, call g_cancellable_cancel() on @cancellable, destroy the
+ * source with g_source_destroy(), or return %FALSE from @callback. The caller
  * keeps full ownership of @callback_data.
  *
  * On failure to initiate searching for peers, %NULL is returned and @error is
@@ -780,7 +780,7 @@ one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
   /* Broadcast to the entire subnet to find listening peers */
   ret = one_video_discovery_send_multicast_discover (local, cancellable, error);
   if (!ret) {
-    g_source_unref (source);
+    g_source_destroy (source);
     return NULL;
   }
 
