@@ -201,6 +201,7 @@ setup_negotiate_remote_peers (OneVideoLocalPeer * local, OneVideoTcpMsg * msg)
      * adding it */
     remote = one_video_remote_peer_new_from_string (local, peer_addr_s);
     g_assert (remote != NULL);
+    remote->id = g_strdup (peer_id);
 
     g_hash_table_insert (remotes, remote->id, remote);
   }
