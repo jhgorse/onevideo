@@ -80,11 +80,19 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
   gboolean ret;
   GSocketClient *client;
   GSocketConnection *conn;
+  GSocketAddress *addr;
   GInputStream *input;
   GOutputStream *output;
   OneVideoTcpMsg *reply = NULL;
 
   client = g_socket_client_new ();
+  /* Set local address with random port to ensure that we connect from the same
+   * interface that we're listening on */
+  addr = g_inet_socket_address_new (
+      g_inet_socket_address_get_address (remote->local->addr), 0);
+  g_socket_client_set_local_address (client, addr);
+  g_object_unref (addr);
+  /* Set timeout */
   g_socket_client_set_timeout (client, ONE_VIDEO_TCP_TIMEOUT);
   conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
       cancellable, error);
@@ -125,9 +133,16 @@ one_video_remote_peer_send_tcp_msg_quick_noreply (OneVideoRemotePeer * remote,
   gchar *tmp;
   GSocketClient *client;
   GSocketConnection *conn;
+  GSocketAddress *addr;
   GOutputStream *output;
 
   client = g_socket_client_new ();
+  /* Set local address with random port to ensure that we connect from the same
+   * interface that we're listening on */
+  addr = g_inet_socket_address_new (
+      g_inet_socket_address_get_address (remote->local->addr), 0);
+  g_socket_client_set_local_address (client, addr);
+  g_object_unref (addr);
   /* Wait at most 1 second per client */
   g_socket_client_set_timeout (client, 1);
   conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
