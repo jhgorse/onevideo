@@ -282,7 +282,7 @@ get_all_remotes_addr_list_except_this (OneVideoRemotePeer * remote,
   g_variant_builder_unref (builder);
   
   tmp = g_variant_print (peers, FALSE);
-  GST_DEBUG ("Peers remote to peer %s: %s", remote->id, tmp);
+  GST_DEBUG ("Peers (other than us) remote to peer %s: %s", remote->id, tmp);
   g_free (tmp);
 
   return peers;
