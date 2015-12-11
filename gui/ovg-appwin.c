@@ -413,9 +413,13 @@ do_peer_discovery (gpointer user_data)
 
   priv = ovg_app_window_get_instance_private (win);
 
+  if (priv->peers_source && g_source_is_destroyed (priv->peers_source))
+    /* If already destroyed, just exit */
+    return G_SOURCE_REMOVE;
+
   if (priv->peers_source)
     /* Cancel existing stuff */
-    g_source_unref (priv->peers_source);
+    g_source_destroy (priv->peers_source);
 
   priv->peers_source =
     one_video_local_peer_find_remotes_create_source (local, NULL,
@@ -463,9 +467,13 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   GPtrArray *remotes;
   GtkApplication *app;
   OneVideoLocalPeer *local;
+  OvgAppWindowPrivate *priv;
 
   /* Make it so it can't be clicked twice */
   gtk_widget_set_sensitive (GTK_WIDGET (b), FALSE);
+
+  priv = ovg_app_window_get_instance_private (win);
+  g_source_destroy (priv->peers_source);
 
   app = gtk_window_get_application (GTK_WINDOW (win));
   local = ovg_app_get_ov_local_peer (OVG_APP (app));
