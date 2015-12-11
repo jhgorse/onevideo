@@ -63,15 +63,22 @@ one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 static void
 one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
 {
-  g_signal_handlers_disconnect_by_data (local->priv->tcp_server, local);
-  g_socket_service_stop (local->priv->tcp_server);
+  if (local->priv->tcp_server != NULL) {
+    g_signal_handlers_disconnect_by_data (local->priv->tcp_server, local);
+    g_socket_service_stop (local->priv->tcp_server);
+  }
+  if (local->priv->mc_socket_source != NULL)
+    /* This will also unref local->priv->mc_socket */
+    g_source_destroy (local->priv->mc_socket_source);
 }
 
 OneVideoLocalPeer *
-one_video_local_peer_new (GSocketAddress * listen_addr)
+one_video_local_peer_new (const gchar * iface, guint16 port)
 {
   gchar *guid;
   GstCaps *vcaps;
+  GInetAddress *addr;
+  GSocketAddress *listen_addr;
   OneVideoLocalPeer *local;
   guint16 tcp_port;
   gboolean ret;
@@ -80,18 +87,19 @@ one_video_local_peer_new (GSocketAddress * listen_addr)
     GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
         "OneVideo VoIP library");
 
-  if (listen_addr == NULL) {
-    GInetAddress *addr;
-    //addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
-    addr = g_inet_address_new_loopback (G_SOCKET_FAMILY_IPV4);
-    listen_addr = g_inet_socket_address_new (addr, ONE_VIDEO_DEFAULT_COMM_PORT);
-    g_object_unref (addr);
-  } else {
-    /* Take a ref because we will be using this directly */
-    g_object_ref (listen_addr);
-  }
+  if (iface == NULL)
+    addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
+  else
+    addr = one_video_get_inet_addr_for_iface (iface);
+  if (addr == NULL)
+    return NULL;
+
+  listen_addr = g_inet_socket_address_new (addr,
+      port ? port : ONE_VIDEO_DEFAULT_COMM_PORT);
+  g_object_unref (addr);
 
   local = g_new0 (OneVideoLocalPeer, 1);
+  local->iface = iface ? g_strdup (iface) : NULL;
   local->addr = G_INET_SOCKET_ADDRESS (listen_addr);
   local->addr_s = one_video_inet_socket_address_to_string (local->addr);
   guid = g_dbus_generate_guid (); /* Generate a UUIDesque string */
@@ -149,8 +157,10 @@ one_video_local_peer_new (GSocketAddress * listen_addr)
   g_assert (ret);
 
   /* Setup negotiation/comms */
-  ret = one_video_local_peer_setup_tcp_comms (local);
-  g_assert (ret);
+  if (!one_video_local_peer_setup_comms (local)) {
+    one_video_local_peer_free (local);
+    return NULL;
+  }
 
   local->state = ONE_VIDEO_LOCAL_STATE_INITIALISED;
 
@@ -160,8 +170,9 @@ one_video_local_peer_new (GSocketAddress * listen_addr)
 void
 one_video_local_peer_free (OneVideoLocalPeer * local)
 {
-  GST_DEBUG ("Stopping TCP communication");
+  GST_DEBUG ("Stopping communication");
   one_video_local_peer_stop_comms (local);
+
   GST_DEBUG ("Freeing local peer");
   g_ptr_array_free (local->priv->remote_peers, TRUE);
   g_array_free (local->priv->used_ports, TRUE);
@@ -170,20 +181,23 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   gst_device_monitor_stop (local->priv->dm);
   g_object_unref (local->priv->dm);
 
-  g_source_destroy (local->priv->mc_socket_source);
-  g_object_unref (local->priv->mc_socket);
-
-  g_object_unref (local->priv->tcp_server);
+  /* one_video_local_peer_setup_tcp_comms */
+  if (local->priv->tcp_server)
+    g_object_unref (local->priv->tcp_server);
 
   gst_caps_unref (local->priv->supported_send_acaps);
-  gst_caps_unref (local->priv->supported_send_vcaps);
+  /* Set in set_video_device, so check before unref */
+  if (local->priv->supported_send_vcaps)
+    gst_caps_unref (local->priv->supported_send_vcaps);
   gst_caps_unref (local->priv->supported_recv_acaps);
   gst_caps_unref (local->priv->supported_recv_vcaps);
 
-  g_object_unref (local->transmit);
+  if (local->transmit)
+    g_object_unref (local->transmit);
   g_object_unref (local->playback);
   g_object_unref (local->addr);
   g_free (local->addr_s);
+  g_free (local->iface);
   g_free (local->id);
 
   g_free (local->priv);

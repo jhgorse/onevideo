@@ -128,8 +128,15 @@ ovg_app_startup (GApplication * app)
 
   /* Initiate OneVideo library; listen on all interfaces and default port */
   gst_init (NULL, NULL);
+
   /* This probes available devices at start, so start-up can be slow */
-  priv->ov_local = one_video_local_peer_new (NULL);
+  priv->ov_local = one_video_local_peer_new (NULL, 0);
+  if (priv->ov_local == NULL) {
+    /* FIXME: Print some GUI message */
+    g_application_quit (app);
+    return;
+  }
+
   /* Just use the first device for now. Need to create GSettings for this. */
   devices = one_video_local_peer_get_video_devices (priv->ov_local);
   /* This currently always returns TRUE (aborts on error) */
@@ -155,7 +162,8 @@ ovg_app_shutdown (GApplication * app)
 {
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (app));
 
-  one_video_local_peer_stop (priv->ov_local);
+  if (priv->ov_local)
+    one_video_local_peer_stop (priv->ov_local);
 
   G_APPLICATION_CLASS (ovg_app_parent_class)->shutdown (app);
 }

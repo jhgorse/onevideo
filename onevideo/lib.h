@@ -103,6 +103,8 @@ struct _OneVideoLocalPeer {
   GInetSocketAddress *addr;
   /* String representation of the above address (for logging, etc) */
   gchar *addr_s;
+  /* Network interface we're listening on */
+  gchar *iface;
   /* Unique id string representing this host */
   gchar *id;
 
@@ -142,7 +144,8 @@ struct _OneVideoDiscoveredPeer {
 };
 
 /* Local peer (us) */
-OneVideoLocalPeer*  one_video_local_peer_new              (GSocketAddress *addr);
+OneVideoLocalPeer*  one_video_local_peer_new              (const gchar *iface,
+                                                           guint16 port);
 void                one_video_local_peer_free             (OneVideoLocalPeer *local);
 void                one_video_local_peer_add_remote       (OneVideoLocalPeer *local,
                                                            OneVideoRemotePeer *remote);

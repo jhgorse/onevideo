@@ -101,11 +101,48 @@ one_video_inet_socket_address_equal (GInetSocketAddress * addr1,
   return FALSE;
 }
 
-/* BEGIN: Copy of nice_interfaces_get_ip_for_interface() from libnice.
- * Replace with that if/when we use libnice */
-
 #ifdef G_OS_UNIX
 
+#include <net/if.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <ifaddrs.h>
+
+/* Copy of nice_interfaces_get_local_interfaces() from libnice.
+ * Same for win32 version below. */
+GList *
+one_video_get_network_interfaces (void)
+{
+  GList *interfaces = NULL;
+  struct ifaddrs *ifa, *results;
+
+  if (getifaddrs (&results) < 0) {
+    return NULL;
+  }
+
+  /* Loop and get each interface the system has, one by one... */
+  for (ifa = results; ifa; ifa = ifa->ifa_next) {
+    /* no ip address from interface that is down */
+    if ((ifa->ifa_flags & IFF_UP) == 0)
+      continue;
+
+    if (ifa->ifa_addr == NULL)
+      continue;
+
+    if (ifa->ifa_addr->sa_family == AF_INET || ifa->ifa_addr->sa_family == AF_INET6) {
+      GST_DEBUG ("Found interface : %s", ifa->ifa_name);
+      interfaces = g_list_prepend (interfaces, g_strdup (ifa->ifa_name));
+    }
+  }
+
+  freeifaddrs (results);
+
+  return interfaces;
+}
+
+/* Copy of nice_interfaces_get_ip_for_interface() from libnice.
+ * Replace with that if/when we use libnice. Same for win32 version below. */
 GInetAddress *
 one_video_get_inet_addr_for_iface (const gchar * iface_name)
 {
@@ -157,6 +194,32 @@ one_video_get_inet_addr_for_iface (const gchar * iface_name)
 #define MIB_IPADDR_DELETED 0x0040
 #endif
 
+GList *
+one_video_get_network_interfaces (void)
+{
+  ULONG size = 0;
+  PMIB_IFTABLE if_table;
+  GList * ret = NULL;
+
+  GetIfTable(NULL, &size, TRUE);
+
+  if (!size)
+    return NULL;
+
+  if_table = (PMIB_IFTABLE)g_malloc0(size);
+
+  if (GetIfTable(if_table, &size, TRUE) == ERROR_SUCCESS) {
+    DWORD i;
+    for (i = 0; i < if_table->dwNumEntries; i++) {
+      ret = g_list_prepend (ret, g_strdup ((gchar*)if_table->table[i].bDescr));
+    }
+  }
+
+  g_free(if_table);
+
+  return ret;
+}
+
 GInetAddress *
 one_video_get_inet_addr_for_iface (const gchar * iface_name)
 {
@@ -198,6 +261,3 @@ out:
 }
 
 #endif /* G_OS_UNIX/WIN32 */
-
-/* END: Copy of nice_interfaces_get_ip_for_interface() from libnice.
- * Replace with that if/when we use libnice */

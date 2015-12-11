@@ -286,8 +286,48 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   return TRUE;
 }
 
+static gboolean
+one_video_join_mc_group_iface (GSocket * socket, GInetAddress * group,
+    const gchar * iface)
+{
+  GList *ifaces, *l;
+  gboolean ret = FALSE;
+  GError *error = NULL;
+
+  if (iface) {
+    ret = g_socket_join_multicast_group (socket, group, FALSE, iface, &error);
+    if (!ret) {
+      GST_WARNING ("iface %s: %s", iface,
+          error->message);
+      g_error_free (error);
+    }
+    return ret;
+  }
+
+  /* Join MC groups on all interfaces. It's ok if we fail on some interfaces. */
+  ifaces = one_video_get_network_interfaces ();
+  if (ifaces == NULL)
+    return FALSE;
+
+  for (l = ifaces; l != NULL; l = l->next) {
+    gboolean res =
+      g_socket_join_multicast_group (socket, group, FALSE, l->data, &error);
+    /* Only return FALSE if all interfaces failed to join the MC group */
+    if (!res) {
+      GST_WARNING ("iface %s: %s",
+          (gchar*) l->data, error->message);
+      g_clear_error (&error);
+    } else {
+      ret = TRUE;
+    }
+  }
+
+  g_list_free_full (ifaces, g_free);
+  return ret;
+}
+
 gboolean
-one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
+one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
 {
   gboolean ret;
   gchar *addr_s;
@@ -339,12 +379,10 @@ one_video_local_peer_setup_tcp_comms (OneVideoLocalPeer * local)
 
   g_socket_set_broadcast (local->priv->mc_socket, TRUE);
 
-  ret = g_socket_join_multicast_group (local->priv->mc_socket, multicast_group,
-      FALSE, NULL, &error);
+  ret = one_video_join_mc_group_iface (local->priv->mc_socket, multicast_group,
+      local->iface);
   if (!ret) {
-    GST_ERROR ("Unable to join multicast group %s: %s",
-        ONE_VIDEO_MULTICAST_GROUP, error->message);
-    g_error_free (error);
+    GST_ERROR ("Unable to join multicast group on any interface");
     goto out;
   }
 

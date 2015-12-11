@@ -321,15 +321,13 @@ main (int   argc,
 {
   OneVideoLocalPeer *local;
   GOptionContext *optctx;
-  GInetAddress *inet_addr = NULL;
-  GSocketAddress *listen_addr;
   GError *error = NULL;
   GList *devices;
 
   guint exit_after = 0;
   gboolean auto_exit = FALSE;
   gboolean discover_peers = FALSE;
-  guint iface_port = ONE_VIDEO_DEFAULT_COMM_PORT;
+  guint16 iface_port = 0;
   gchar *iface_name = NULL;
   gchar *device_path = NULL;
   gchar **remotes = NULL;
@@ -367,22 +365,16 @@ main (int   argc,
 
   loop = g_main_loop_new (NULL, FALSE);
 
-  if (iface_name != NULL) {
-    inet_addr = one_video_get_inet_addr_for_iface (iface_name);
-  } else if (g_strcmp0 (iface_name, "any") == 0) {
-    inet_addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
-    g_printerr ("Listening on all interfaces\n");
-  } else {
-    inet_addr = g_inet_address_new_loopback (G_SOCKET_FAMILY_IPV4);
-    g_printerr ("Interface not specified, listening on localhost\n");
-  }
-
-  listen_addr = g_inet_socket_address_new (inet_addr, iface_port);
-  g_object_unref (inet_addr);
+  if (iface_name == NULL)
+    g_printerr ("Interface not specified, listening on all interfaces\n");
+  else
+    g_printerr ("Listening on all interface %s\n", iface_name);
 
   g_print ("Probing devices...\n");
-  local = one_video_local_peer_new (listen_addr);
-  g_object_unref (listen_addr);
+  local = one_video_local_peer_new (iface_name, iface_port);
+
+  if (local == NULL)
+    goto out;
 
   devices = one_video_local_peer_get_video_devices (local);
   g_print ("Probing finished\n");

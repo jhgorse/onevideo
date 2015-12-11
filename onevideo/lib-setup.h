@@ -42,7 +42,7 @@ GSocket*  one_video_get_socket_for_addr                  (const gchar *addr_s,
 gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local,
                                                           GstDevice *video_device);
 gboolean  one_video_local_peer_setup_playback_pipeline   (OneVideoLocalPeer *local);
-gboolean  one_video_local_peer_setup_tcp_comms           (OneVideoLocalPeer *local);
+gboolean  one_video_local_peer_setup_comms               (OneVideoLocalPeer *local);
 
 void      one_video_local_peer_setup_remote_receive      (OneVideoLocalPeer *local,
                                                           OneVideoRemotePeer *remote);

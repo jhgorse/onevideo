@@ -50,7 +50,8 @@ PKG_CHECK_MODULES(GST, gstreamer-1.0 >= $GST_REQ)
 PKG_CHECK_MODULES(GTK, gtk+-3.0 >= $GTK_REQ)
 
 # Check for header files
-#AC_CHECKHEADERS([stdlib.h])
+# FIXME: This is only for Linux
+AC_CHECK_HEADERS([arpa/inet.h netinet/in.h net/if.h ifaddrs.h])
 
 dnl FIXME: Properly tie this to the one-video version number
 ONE_VIDEO_LT_LDFLAGS="-version-info 0:1:0"

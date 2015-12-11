@@ -40,6 +40,7 @@ gboolean            one_video_inet_socket_address_equal       (GInetSocketAddres
 
 #if defined(G_OS_UNIX) || defined (G_OS_WIN32)
 GInetAddress* one_video_get_inet_addr_for_iface (const gchar *iface_name);
+GList*        one_video_get_network_interfaces  (void);
 #endif
 
 G_END_DECLS
