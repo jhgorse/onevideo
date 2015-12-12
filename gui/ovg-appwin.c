@@ -417,9 +417,16 @@ do_peer_discovery (gpointer user_data)
     /* If already destroyed, just exit */
     return G_SOURCE_REMOVE;
 
-  if (priv->peers_source)
-    /* Cancel existing stuff */
-    g_source_destroy (priv->peers_source);
+  if (priv->peers_source) {
+    /* Cancel existing stuff so we can send the discover message again */
+    /* TODO: We don't use g_source_destroy() here because of a strange bug that
+     * I wasn't able to track down. Destroying the source was causing all future
+     * sources attached to the same socket address to not fire events for
+     * incoming unicast UDP messages. It would still fire for incoming multicast
+     * messages. */
+    g_source_remove (g_source_get_id (priv->peers_source));
+    g_source_unref (priv->peers_source);
+  }
 
   priv->peers_source =
     one_video_local_peer_find_remotes_create_source (local, NULL,
