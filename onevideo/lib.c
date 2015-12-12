@@ -693,6 +693,7 @@ static gboolean
 recv_discovery_reply (GSocket * socket, GIOCondition condition,
     gpointer user_data)
 {
+  gchar *tmp;
   gboolean ret;
   OneVideoUdpMsg msg;
   GSocketAddress *from;
@@ -704,8 +705,6 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
   if (g_cancellable_is_cancelled (cancellable))
     return G_SOURCE_REMOVE;
 
-  GST_DEBUG ("Incoming potential discovery reply");
-
   ret = one_video_udp_msg_read_message_from (&msg, &from, socket,
       cancellable, &error);
   if (!ret) {
@@ -713,6 +712,10 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
     g_clear_error (&error);
     return G_SOURCE_CONTINUE;
   }
+
+  tmp = one_video_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (from));
+  GST_DEBUG ("Incoming potential discovery reply from %s", tmp);
+  g_free (tmp);
 
   /* We don't care about the payload of the message */
   if (msg.size > 0)
