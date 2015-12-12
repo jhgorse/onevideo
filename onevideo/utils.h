@@ -37,6 +37,9 @@ GInetSocketAddress* one_video_inet_socket_address_from_string (const gchar *addr
 gchar*              one_video_inet_socket_address_to_string   (const GInetSocketAddress *addr);
 gboolean            one_video_inet_socket_address_equal       (GInetSocketAddress *addr1,
                                                                GInetSocketAddress *addr2);
+gboolean            one_video_inet_socket_address_is_iface    (GInetSocketAddress *addr,
+                                                               GList *ifaces,
+                                                               guint16 port);
 
 #if defined(G_OS_UNIX) || defined (G_OS_WIN32)
 GInetAddress* one_video_get_inet_addr_for_iface (const gchar *iface_name);

@@ -96,6 +96,32 @@ one_video_inet_socket_address_equal (GInetSocketAddress * addr1,
   return FALSE;
 }
 
+gboolean
+one_video_inet_socket_address_is_iface (GInetSocketAddress * saddr,
+    GList * ifaces, guint16 port)
+{
+  GList *l;
+  GInetAddress *addr;
+  gboolean ret = TRUE;
+
+  for (l = ifaces; l != NULL; l = l->next) {
+    GInetSocketAddress *iface_saddr;
+    addr = one_video_get_inet_addr_for_iface (l->data);
+    iface_saddr =
+      G_INET_SOCKET_ADDRESS (g_inet_socket_address_new (addr, port));
+    g_object_unref (addr);
+    if (one_video_inet_socket_address_equal (saddr, iface_saddr)) {
+      g_object_unref (iface_saddr);
+      goto out;
+    }
+    g_object_unref (iface_saddr);
+  }
+
+  ret = FALSE;
+out:
+  return ret;
+}
+
 #ifdef G_OS_UNIX
 
 #include <net/if.h>
@@ -168,7 +194,7 @@ one_video_get_inet_addr_for_iface (const gchar * iface_name)
 
   g_close (sockfd, NULL);
   sa.addr = &ifr.ifr_addr;
-  GST_DEBUG ("Address for %s: %s", iface_name, inet_ntoa (sa.in->sin_addr));
+  GST_TRACE ("Address for %s: %s", iface_name, inet_ntoa (sa.in->sin_addr));
 
   return g_inet_address_new_from_string (inet_ntoa (sa.in->sin_addr));
 }

@@ -202,6 +202,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   gchar *tmp;
   gboolean ret;
   OneVideoUdpMsg *msg;
+  GInetSocketAddress *saddr;
   GSocketAddress *from = NULL;
 
   msg = g_new0 (OneVideoUdpMsg, 1);
@@ -214,16 +215,18 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   if (!ret)
     goto out;
 
-  tmp = one_video_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (from));
-  GST_DEBUG ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
+  saddr = G_INET_SOCKET_ADDRESS (from);
+  tmp = one_video_inet_socket_address_to_string (saddr);
   g_free (tmp);
   
-  if (one_video_inet_socket_address_equal (G_INET_SOCKET_ADDRESS (from),
-        local->addr)) {
+  if (one_video_inet_socket_address_is_iface (saddr, local->priv->mc_ifaces,
+        g_inet_socket_address_get_port (local->addr))) {
     GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
         msg->type, msg->id);
     goto out;
   }
+
+  GST_DEBUG ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
 
   switch (msg->type) {
     case ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER:
