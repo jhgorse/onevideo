@@ -95,14 +95,15 @@ struct _OneVideoLocalPeerPriv {
   GstElement *audiomixer;
   GstElement *audiosink;
 
-  /* TCP Server for communication */
-  GSocketService *tcp_server;
   /* A unique id representing an active call (0 if no active call) */
   guint64 active_call_id;
   /* Struct used for holding info while negotiating */
   OneVideoNegotiate *negotiate;
   /* The task used for doing negotiation when we're the negotiator */
   GTask *negotiator_task;
+
+  /* The V4L2 device monitor being used */
+  GstDeviceMonitor *dm;
 
   /* The caps that we support sending */
   GstCaps *supported_send_acaps;
@@ -113,20 +114,21 @@ struct _OneVideoLocalPeerPriv {
   /* The caps that we *will* send */
   GstCaps *send_acaps;
   GstCaps *send_vcaps;
+  
+  /* List of network interfaces we're listening for multicast on */
+  GList *mc_ifaces;
+  /* TCP Server for comms (listens on all interfaces if none are specified) */
+  GSocketService *tcp_server;
+  /* The UDP message listener for all interfaces */
+  GSource *mc_socket_source;
 
-  /* List of UDP ports that are either reserved or in use for receiving */
+  /* Array of UDP ports that are either reserved or in use for receiving */
   GArray *used_ports;
   /* Array of OneVideoRemotePeers: peers we want to connect to */
   GPtrArray *remote_peers;
+
   /* Lock to access non-thread-safe structures like GPtrArray */
   GRecMutex lock;
-
-  /* The V4L2 device monitor being used */
-  GstDeviceMonitor *dm;
-
-  /* The UDP message listener and multicast socket */
-  GSource *mc_socket_source;
-  GSocket *mc_socket;
 };
 
 struct _OneVideoRemotePeerPriv {

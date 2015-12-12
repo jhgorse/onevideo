@@ -286,53 +286,15 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   return TRUE;
 }
 
-static gboolean
-one_video_join_mc_group_iface (GSocket * socket, GInetAddress * group,
-    const gchar * iface)
-{
-  GList *ifaces, *l;
-  gboolean ret = FALSE;
-  GError *error = NULL;
-
-  if (iface) {
-    ret = g_socket_join_multicast_group (socket, group, FALSE, iface, &error);
-    if (!ret) {
-      GST_WARNING ("iface %s: %s", iface,
-          error->message);
-      g_error_free (error);
-    }
-    return ret;
-  }
-
-  /* Join MC groups on all interfaces. It's ok if we fail on some interfaces. */
-  ifaces = one_video_get_network_interfaces ();
-  if (ifaces == NULL)
-    return FALSE;
-
-  for (l = ifaces; l != NULL; l = l->next) {
-    gboolean res =
-      g_socket_join_multicast_group (socket, group, FALSE, l->data, &error);
-    /* Only return FALSE if all interfaces failed to join the MC group */
-    if (!res) {
-      GST_WARNING ("iface %s: %s",
-          (gchar*) l->data, error->message);
-      g_clear_error (&error);
-    } else {
-      ret = TRUE;
-    }
-  }
-
-  g_list_free_full (ifaces, g_free);
-  return ret;
-}
-
 gboolean
 one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
 {
+  GList *l;
   gboolean ret;
-  gchar *addr_s;
-  GInetAddress *multicast_group;
-  GSocketAddress *multicast_addr;
+  GSocket *mc_socket;
+  GSource *mc_source;
+  GInetAddress *mc_group;
+  GSocketAddress *mc_addr;
   GError *error = NULL;
 
   /*-- Listen for incoming TCP connections --*/
@@ -360,14 +322,15 @@ one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
   GST_DEBUG ("Listening for incoming TCP connections on %s", local->addr_s);
 
   /*-- Listen for incoming UDP messages (multicast and unicast) --*/
-  local->priv->mc_socket = g_socket_new (G_SOCKET_FAMILY_IPV4,
-      G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, NULL);
-  multicast_group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
+  mc_group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
   /* Use this hard-coded port for UDP messages; it's our canonical port */
-  multicast_addr = g_inet_socket_address_new (multicast_group,
-      ONE_VIDEO_DEFAULT_COMM_PORT);
-  ret = g_socket_bind (local->priv->mc_socket, multicast_addr, TRUE, &error);
-  if (!ret) {
+  mc_addr = g_inet_socket_address_new (mc_group, ONE_VIDEO_DEFAULT_COMM_PORT);
+  g_object_unref (mc_group);
+
+  /* Create and bind multicast socket */
+  mc_socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
+      G_SOCKET_PROTOCOL_UDP, NULL);
+  if (!g_socket_bind (mc_socket, mc_addr, TRUE, &error)) {
     gchar *name =
       g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
     GST_ERROR ("Unable to bind to multicast addr/port (%s:%u): %s", name,
@@ -377,31 +340,41 @@ one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
     goto out;
   }
 
-  g_socket_set_broadcast (local->priv->mc_socket, TRUE);
+  /* Attach an event source for incoming messages to the default main context */
+  mc_source = g_socket_create_source (mc_socket, G_IO_IN, NULL);
+  g_source_set_callback (mc_source, (GSourceFunc) on_incoming_udp_message,
+      local, NULL);
+  g_source_attach (mc_source, NULL);
+  local->priv->mc_socket_source = mc_source;
 
-  ret = one_video_join_mc_group_iface (local->priv->mc_socket, multicast_group,
-      local->iface);
-  if (!ret) {
-    GST_ERROR ("Unable to join multicast group on any interface");
-    goto out;
+  /* Join multicast groups on all interfaces */
+  ret = FALSE;
+  l = local->priv->mc_ifaces;
+  while (l != NULL) {
+    ret = g_socket_join_multicast_group (mc_socket, mc_group, FALSE, l->data,
+        &error);
+    if (!ret) {
+      GList *next = l->next;
+      /* Not listening on this interface; remove it from the list */
+      local->priv->mc_ifaces = g_list_delete_link (local->priv->mc_ifaces, l);
+      GST_WARNING ("Unable to setup a multicast listener on %s: %s",
+          (gchar*) l->data, error->message);
+      g_clear_error (&error);
+      l = next;
+    } else {
+      GST_DEBUG ("Listening for incoming multicast messages on %s",
+          (gchar*) l->data);
+      /* Return FALSE only if we couldn't listen on any interfaces */
+      ret = TRUE;
+      l = l->next;
+    }
   }
 
-  /* Attach an event source to the default main context */
-  local->priv->mc_socket_source =
-    g_socket_create_source (local->priv->mc_socket, G_IO_IN, NULL);
-  g_source_set_callback (local->priv->mc_socket_source,
-      (GSourceFunc) on_incoming_udp_message, local, NULL);
-  g_source_attach (local->priv->mc_socket_source, NULL);
-
-  addr_s = one_video_inet_socket_address_to_string (
-      G_INET_SOCKET_ADDRESS (multicast_addr));
-  GST_DEBUG ("Listening for incoming UDP messages on %s", addr_s);
-  g_free (addr_s);
-
 out:
-  g_object_unref (local->priv->mc_socket);
-  g_object_unref (multicast_group);
-  g_object_unref (multicast_addr);
+  g_object_unref (mc_addr);
+  g_object_unref (mc_socket);
+  if (!ret)
+    g_object_unref (mc_source);
 out_nofree:
   return ret;
 }

@@ -103,8 +103,6 @@ struct _OneVideoLocalPeer {
   GInetSocketAddress *addr;
   /* String representation of the above address (for logging, etc) */
   gchar *addr_s;
-  /* Network interface we're listening on */
-  gchar *iface;
   /* Unique id string representing this host */
   gchar *id;
 

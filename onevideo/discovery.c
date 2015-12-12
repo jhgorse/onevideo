@@ -211,7 +211,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   /* For now, the only UDP messages we care about are those that want to
    * discover us. If this is extended, something like OneVideoTcpMsg will be
    * implemented. */
-  ret = one_video_udp_msg_read_message_from (msg, &from, local->priv->mc_socket,
+  ret = one_video_udp_msg_read_message_from (msg, &from, socket,
       NULL, NULL);
   if (!ret)
     goto out;

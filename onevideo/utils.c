@@ -125,7 +125,9 @@ one_video_get_network_interfaces (void)
     if (ifa->ifa_addr == NULL)
       continue;
 
-    if (ifa->ifa_addr->sa_family == AF_INET || ifa->ifa_addr->sa_family == AF_INET6) {
+    if (ifa->ifa_addr->sa_family == AF_INET) {
+      if (g_strcmp0 (ifa->ifa_name, "lo") == 0)
+        continue;
       GST_DEBUG ("Found interface : %s", ifa->ifa_name);
       interfaces = g_list_prepend (interfaces, g_strdup (ifa->ifa_name));
     }
@@ -206,7 +208,9 @@ one_video_get_network_interfaces (void)
   if (GetIfTable(if_table, &size, TRUE) == ERROR_SUCCESS) {
     DWORD i;
     for (i = 0; i < if_table->dwNumEntries; i++) {
-      ret = g_list_prepend (ret, g_strdup ((gchar*)if_table->table[i].bDescr));
+      gchar *iface_name = if_table->table[i].bDescr;
+      GST_DEBUG ("Found interface : %s", iface_name);
+      ret = g_list_prepend (ret, g_strdup (iface_name));
     }
   }
 

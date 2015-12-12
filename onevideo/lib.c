@@ -68,7 +68,6 @@ one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
     g_socket_service_stop (local->priv->tcp_server);
   }
   if (local->priv->mc_socket_source != NULL)
-    /* This will also unref local->priv->mc_socket */
     g_source_destroy (local->priv->mc_socket_source);
 }
 
@@ -99,7 +98,6 @@ one_video_local_peer_new (const gchar * iface, guint16 port)
   g_object_unref (addr);
 
   local = g_new0 (OneVideoLocalPeer, 1);
-  local->iface = iface ? g_strdup (iface) : NULL;
   local->addr = G_INET_SOCKET_ADDRESS (listen_addr);
   local->addr_s = one_video_inet_socket_address_to_string (local->addr);
   guid = g_dbus_generate_guid (); /* Generate a UUIDesque string */
@@ -108,6 +106,12 @@ one_video_local_peer_new (const gchar * iface, guint16 port)
   g_free (guid);
   local->state = ONE_VIDEO_LOCAL_STATE_NULL;
   local->priv = g_new0 (OneVideoLocalPeerPriv, 1);
+
+  /* Set interfaces, or auto-detect them */
+  if (iface)
+    local->priv->mc_ifaces = g_list_append (NULL, g_strdup (iface));
+  else
+    local->priv->mc_ifaces = one_video_get_network_interfaces ();
 
   /* Allocate ports for recv RTCP RRs from all remotes */
   tcp_port = g_inet_socket_address_get_port (local->addr);
@@ -196,8 +200,9 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
     g_object_unref (local->transmit);
   g_object_unref (local->playback);
   g_object_unref (local->addr);
+
+  g_list_free_full (local->priv->mc_ifaces, g_free);
   g_free (local->addr_s);
-  g_free (local->iface);
   g_free (local->id);
 
   g_free (local->priv);
