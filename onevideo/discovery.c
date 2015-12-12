@@ -154,12 +154,10 @@ one_video_udp_msg_send_to_from (OneVideoUdpMsg * msg, GSocketAddress * to,
     return FALSE;
 
   /* FIXME: This will cause operations to return G_IO_ERROR_WOULD_BLOCK if
-   * there isn't enough space in the outgoing queue */
+   * there isn't enough space in the outgoing queue (very very unlikely) */
   g_socket_set_blocking (socket, FALSE);
 
   if (from != NULL) {
-    /* We bind to the same socket as our UDP multicast listener, and that's ok
-     * because we want to communicate using this port */
     ret = g_socket_bind (socket, from, TRUE, error);
     if (!ret)
       goto out;
