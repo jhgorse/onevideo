@@ -246,8 +246,8 @@ gboolean
 one_video_discovery_send_multicast_discover (OneVideoLocalPeer * local,
     GCancellable * cancellable, GError ** error)
 {
-  GInetAddress *group;
   OneVideoUdpMsg *msg;
+  GInetAddress *group, *addr;
   gboolean ret = FALSE;
   GSocketAddress *mc_addr = NULL;
 
@@ -260,12 +260,29 @@ one_video_discovery_send_multicast_discover (OneVideoLocalPeer * local,
   msg = one_video_udp_msg_new (ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER,
       NULL, 0);
 
-  GST_DEBUG ("Sending multicast discover (id %lu) to %s:%u from %s",
-      msg->id, ONE_VIDEO_MULTICAST_GROUP, ONE_VIDEO_DEFAULT_COMM_PORT,
-      local->addr_s);
+  GST_DEBUG ("Sending multicast discover (id %lu) to %s:%u",
+      msg->id, ONE_VIDEO_MULTICAST_GROUP, ONE_VIDEO_DEFAULT_COMM_PORT);
 
-  ret = one_video_udp_msg_send_to_from (msg, mc_addr,
-      G_SOCKET_ADDRESS (local->addr), cancellable, error);
+  addr = g_inet_socket_address_get_address (local->addr);
+  if (!g_inet_address_get_is_any (addr)) {
+    ret = one_video_udp_msg_send_to_from (msg, mc_addr,
+        G_SOCKET_ADDRESS (local->addr), cancellable, error);
+  } else {
+    GList *l;
+    gboolean res;
+    for (l = local->priv->mc_ifaces; l != NULL; l = l->next) {
+      GSocketAddress *saddr;
+      addr = one_video_get_inet_addr_for_iface (l->data);
+      saddr = g_inet_socket_address_new (addr,
+          g_inet_socket_address_get_port (local->addr));
+      res = one_video_udp_msg_send_to_from (msg, mc_addr, saddr, cancellable,
+          error);
+      g_object_unref (addr);
+      if (res)
+        /* We succeed if sending on any of the interfaces succeeds */
+        ret = TRUE;
+    }
+  }
   one_video_udp_msg_free (msg);
   if (!ret)
     goto out;
