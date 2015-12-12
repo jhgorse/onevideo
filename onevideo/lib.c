@@ -762,8 +762,9 @@ out:
  * Returns: (transfer full): a newly allocated #GSource, free with
  * g_source_unref()
  */
-/* FIXME: @callback should be a custom type, not GFunc since we want it to
- * return gboolean not void */
+/* FIXME: Replace this with an action-signal-based system so users of this API
+ * don't have to destroy and re-create the source every time they want to send
+ * another multicast discover. */
 GSource *
 one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
     GCancellable * cancellable, OneVideoRemoteFoundCallback callback,
