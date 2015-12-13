@@ -46,8 +46,10 @@ static void
 one_video_local_peer_stop_transmit (OneVideoLocalPeer * local)
 {
   GstStateChangeReturn ret;
-  ret = gst_element_set_state (local->transmit, GST_STATE_NULL);
-  g_assert (ret == GST_STATE_CHANGE_SUCCESS);
+  if (local->transmit != NULL) {
+    ret = gst_element_set_state (local->transmit, GST_STATE_NULL);
+    g_assert (ret == GST_STATE_CHANGE_SUCCESS);
+  }
   /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
   g_clear_object (&local->transmit);
   GST_DEBUG ("Stopped transmitting");
