@@ -325,6 +325,7 @@ ovg_app_window_peers_c_get_addrs (OvgAppWindow * win)
     }
   }
 
+  g_list_free (children);
   return remotes;
 }
 

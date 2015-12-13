@@ -275,9 +275,10 @@ one_video_discovery_send_multicast_discover (OneVideoLocalPeer * local,
       addr = one_video_get_inet_addr_for_iface (l->data);
       saddr = g_inet_socket_address_new (addr,
           g_inet_socket_address_get_port (local->addr));
+      g_object_unref (addr);
       res = one_video_udp_msg_send_to_from (msg, mc_addr, saddr, cancellable,
           error);
-      g_object_unref (addr);
+      g_object_unref (saddr);
       if (res)
         /* We succeed if sending on any of the interfaces succeeds */
         ret = TRUE;

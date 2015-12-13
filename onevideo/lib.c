@@ -529,6 +529,8 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
     gst_caps_unref (remote->priv->recv_vcaps);
   g_object_unref (remote->addr);
   g_free (remote->addr_s);
+  if (remote->id)
+    g_free (remote->id);
   g_free (remote->priv);
   g_free (remote);
 }
