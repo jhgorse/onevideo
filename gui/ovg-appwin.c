@@ -35,6 +35,8 @@
 
 #define MAX_ROWS_VISIBLE 5
 #define PEER_DISCOVER_INTERVAL 5
+#define CONNECT_WINDOW_TITLE "Connect"
+#define CALL_WINDOW_TITLE "Ongoing Call"
 
 struct _OvgAppWindow
 {
@@ -49,12 +51,14 @@ struct _OvgAppWindowClass
 struct _OvgAppWindowPrivate
 {
   GtkWidget *header_bar;
+  GtkWidget *end_call;
 
   GtkWidget *connect_sidebar;
   GtkWidget *peers_d;
   GtkWidget *peers_c;
   GtkWidget *peer_entry;
   GtkWidget *peer_entry_button;
+  GtkWidget *start_call;
 
   GtkWidget *peers_video;
 
@@ -140,6 +144,9 @@ add_peer_to_connect (OvgAppWindow * win, const gchar * label)
 
   priv = ovg_app_window_get_instance_private (win);
 
+  /* Peer was added, enable calling */
+  gtk_widget_set_sensitive (priv->start_call, TRUE);
+
   row = ovg_app_window_peers_c_row_new (win, label); 
   gtk_list_box_insert (GTK_LIST_BOX (priv->peers_c), row, -1);
   gtk_widget_show_all (priv->peers_c);
@@ -147,7 +154,7 @@ add_peer_to_connect (OvgAppWindow * win, const gchar * label)
 }
 
 static void
-on_peers_d_restore (GtkButton * b, OvgAppWindow * win)
+on_peers_d_add_to_connect (GtkButton * b, OvgAppWindow * win)
 {
   gchar *label;
   GtkWidget *row1;
@@ -183,7 +190,7 @@ ovg_app_window_peers_d_row_new (OvgAppWindow * win, const gchar * label)
   w = gtk_button_new_from_icon_name ("list-add-symbolic", GTK_ICON_SIZE_BUTTON);
   gtk_widget_set_margin_start (w, 8);
   gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
-  g_signal_connect (w, "clicked", G_CALLBACK (on_peers_d_restore), win);
+  g_signal_connect (w, "clicked", G_CALLBACK (on_peers_d_add_to_connect), win);
   g_object_set_data (G_OBJECT (w), "parent-row", row);
   gtk_box_pack_end (GTK_BOX (box), w, FALSE, FALSE, 0);
   gtk_widget_show_all (row);
@@ -218,6 +225,8 @@ on_peers_c_remove (GtkButton * b, OvgAppWindow * win)
 {
   gchar *label;
   GtkWidget *row1, *row2;
+  OvgAppWindowPrivate *priv;
+  GList *children;
 
   row1 = g_object_get_data (G_OBJECT (b), "parent-row");
   label = g_object_get_data (G_OBJECT (row1), "peer-name");
@@ -227,6 +236,13 @@ on_peers_c_remove (GtkButton * b, OvgAppWindow * win)
     gtk_widget_set_sensitive (row2, TRUE);
 
   gtk_widget_destroy (row1);
+
+  priv = ovg_app_window_get_instance_private (win);
+  children = gtk_container_get_children (GTK_CONTAINER (priv->peers_c));
+  if (children == NULL)
+    /* All peers were removed from to-connect list; disable calling */
+    gtk_widget_set_sensitive (priv->start_call, FALSE);
+  g_list_free (children);
 }
 
 static GtkWidget *
@@ -452,6 +468,57 @@ do_peer_discovery_once (gpointer user_data)
 }
 
 static void
+ovg_app_window_show_peers_video (OvgAppWindow * win)
+{
+  OvgAppWindowPrivate *priv;
+
+  priv = ovg_app_window_get_instance_private (win);
+
+  /* Hide */
+  gtk_widget_hide (priv->connect_sidebar);
+
+  /* Show */
+  gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar),
+      CALL_WINDOW_TITLE);
+  gtk_widget_show_all (priv->peers_video);
+  gtk_widget_show (priv->end_call);
+}
+
+static void
+ovg_app_window_reset_state (OvgAppWindow * win)
+{
+  GList *children, *l;
+  GtkSettings *settings;
+  OvgAppWindowPrivate *priv;
+
+  priv = ovg_app_window_get_instance_private (win);
+
+  /* Hide */
+  gtk_widget_hide (priv->end_call);
+  gtk_widget_hide (priv->peers_video);
+
+  /* Remove old flowbox children */
+  children = gtk_container_get_children (GTK_CONTAINER (priv->peers_video));
+  for (l = children; l != NULL; l = l->next)
+    gtk_container_remove (GTK_CONTAINER (priv->peers_video),
+        GTK_WIDGET (l->data));
+  g_list_free (children);
+
+  /* Show */
+  gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar),
+      CONNECT_WINDOW_TITLE);
+  gtk_widget_set_sensitive (priv->start_call, TRUE);
+  gtk_widget_show (priv->connect_sidebar);
+
+  settings = gtk_settings_get_default ();
+  g_object_set (G_OBJECT (settings), "gtk-application-prefer-dark-theme", FALSE,
+      NULL);
+
+  /* Start discovery again */
+  g_timeout_add_seconds (PEER_DISCOVER_INTERVAL, do_peer_discovery, win);
+}
+
+static void
 on_negotiate_done (GObject * source_object, GAsyncResult * res,
     gpointer user_data)
 {
@@ -464,10 +531,11 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
   if (ret) {
     g_print ("All remotes have replied.\n");
     one_video_local_peer_start (local);
-    return;
+    return ovg_app_window_show_peers_video (user_data);
   } else {
     if (error != NULL)
       g_printerr ("Error while negotiating: %s\n", error->message);
+    return ovg_app_window_reset_state (user_data);
   }
 }
 
@@ -498,8 +566,8 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   n_cols = (unsigned int) ceilf (sqrtf (remotes->len));
   gtk_flow_box_set_min_children_per_line (GTK_FLOW_BOX (priv->peers_video),
       n_cols);
-  gtk_widget_get_preferred_height_and_baseline_for_width (priv->connect_sidebar,
-      -1, NULL, &sidebar_height, NULL, NULL);
+  gtk_widget_get_preferred_height (priv->connect_sidebar, &sidebar_height,
+      NULL);
   /* Set child width from the min sidebar height assuming the video is 16:9
    * and taking into account the number of videos to show */
   child_width = (int) floorf ((sidebar_height * 16) / (remotes->len * 9));
@@ -514,18 +582,30 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
     remote = one_video_remote_peer_new (local, addr);
 
     child = gtk_flow_box_child_new ();
-    gtk_widget_set_size_request (child, child_width, 0);
+    gtk_widget_set_size_request (child, child_width, -1);
     area = one_video_remote_peer_add_gtkglsink (remote);
     gtk_container_add (GTK_CONTAINER (child), area);
     gtk_container_add (GTK_CONTAINER (priv->peers_video), child);
-    gtk_widget_realize (area);
 
     one_video_local_peer_add_remote (local, remote);
   }
-  gtk_widget_show_all (priv->peers_video);
+  g_ptr_array_free (remotes, TRUE);
 
   one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, win);
   g_print ("Started async negotiation with peers...");
+}
+
+static void
+on_end_call_button_clicked (OvgAppWindow * win, GtkButton * b)
+{
+  GtkApplication *app;
+  OneVideoLocalPeer *local;
+
+  app = gtk_window_get_application (GTK_WINDOW (win));
+  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+
+  one_video_local_peer_stop (local);
+  ovg_app_window_reset_state (win);
 }
 
 static void
@@ -537,7 +617,8 @@ ovg_app_window_init (OvgAppWindow * win)
 
   priv = ovg_app_window_get_instance_private (win);
 
-  gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar), "Connect");
+  gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar),
+      CONNECT_WINDOW_TITLE);
 
   gtk_list_box_set_header_func (GTK_LIST_BOX (priv->peers_d),
       ovg_list_box_update_header_func, NULL, NULL);
@@ -555,8 +636,12 @@ ovg_app_window_class_init (OvgAppWindowClass *class)
 
   gtk_widget_class_set_template_from_resource (widget_class,
       "/org/gtk/OneVideoGui/ovg-window.ui");
+
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       header_bar);
+  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
+      end_call);
+
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       connect_sidebar);
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
@@ -568,6 +653,9 @@ ovg_app_window_class_init (OvgAppWindowClass *class)
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       peer_entry_button);
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
+      start_call);
+
+  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       peers_video);
 
   gtk_widget_class_bind_template_callback (widget_class,
@@ -578,6 +666,8 @@ ovg_app_window_class_init (OvgAppWindowClass *class)
       on_peer_entry_clear_pressed);
   gtk_widget_class_bind_template_callback (widget_class,
       on_call_peers_button_clicked);
+  gtk_widget_class_bind_template_callback (widget_class,
+      on_end_call_button_clicked);
 }
 
 GtkWidget *

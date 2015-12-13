@@ -12,6 +12,19 @@
         <property name="can-focus">False</property>
         <property name="vexpand">False</property>
         <property name="show-close-button">True</property>
+        <child>
+          <object class="GtkButton" id="end_call">
+            <property name="visible">False</property>
+            <property name="label">End Call</property>
+            <signal name="clicked" handler="on_end_call_button_clicked" object="OvgAppWindow" swapped="yes"/>
+            <style>
+              <class name="text-button"/>
+            </style>
+          </object>
+          <packing>
+            <property name="pack_type">end</property>
+          </packing>
+        </child>
       </object>
     </child>
     <child>
@@ -19,6 +32,7 @@
         <property name="visible">True</property>
         <property name="can-focus">True</property>
         <property name="orientation">horizontal</property>
+        <property name="halign">start</property>
         <child>
           <object class="GtkBox" id="connect_sidebar">
             <property name="visible">True</property>
@@ -158,8 +172,12 @@
             <child>
               <object class="GtkButton" id="start_call">
                 <property name="visible">True</property>
+                <property name="sensitive">False</property>
                 <property name="label">Call Peers</property>
                 <signal name="clicked" handler="on_call_peers_button_clicked" object="OvgAppWindow" swapped="yes"/>
+                <style>
+                  <class name="text-button"/>
+                </style>
               </object>
               <packing>
                 <property name="pack_type">end</property>
