@@ -958,10 +958,13 @@ one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
   GTask *task;
   GCancellable *our_cancellable;
 
-  if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED) {
-    GST_ERROR ("Our state is %u instead of INITIALISED", local->state);
+  if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED &&
+      local->state != ONE_VIDEO_LOCAL_STATE_STOPPED) {
+    GST_ERROR ("State is %u instead of INITIALISED or STOPPED", local->state);
     return FALSE;
   }
+
+  local->state = ONE_VIDEO_LOCAL_STATE_INITIALISED;
 
   if (cancellable)
     our_cancellable = g_object_ref (cancellable);
