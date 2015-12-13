@@ -29,6 +29,8 @@
 #include "ovg-appwin.h"
 
 #include "onevideo/utils.h"
+
+#include <math.h>
 #include <string.h>
 
 #define MAX_ROWS_VISIBLE 5
@@ -48,10 +50,12 @@ struct _OvgAppWindowPrivate
 {
   GtkWidget *header_bar;
 
+  GtkWidget *connect_sidebar;
   GtkWidget *peers_d;
   GtkWidget *peers_c;
   GtkWidget *peer_entry;
   GtkWidget *peer_entry_button;
+
   GtkWidget *peers_video;
 
   GSource *peers_source;
@@ -470,11 +474,13 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
 static void
 on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
 {
-  guint ii;
   GPtrArray *remotes;
   GtkApplication *app;
+  GtkSettings *settings;
   OneVideoLocalPeer *local;
   OvgAppWindowPrivate *priv;
+  gint sidebar_height, child_width;
+  guint ii, n_cols;
 
   /* Make it so it can't be clicked twice */
   gtk_widget_set_sensitive (GTK_WIDGET (b), FALSE);
@@ -483,17 +489,40 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   g_source_destroy (priv->peers_source);
 
   app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+  settings = gtk_settings_get_default ();
+  g_object_set (G_OBJECT (settings), "gtk-application-prefer-dark-theme", TRUE,
+      NULL);
 
   remotes = ovg_app_window_peers_c_get_addrs (win);
+  /* We try to fit the videos into a rectangular grid */
+  n_cols = (unsigned int) ceilf (sqrtf (remotes->len));
+  gtk_flow_box_set_min_children_per_line (GTK_FLOW_BOX (priv->peers_video),
+      n_cols);
+  gtk_widget_get_preferred_height_and_baseline_for_width (priv->connect_sidebar,
+      -1, NULL, &sidebar_height, NULL, NULL);
+  /* Set child width from the min sidebar height assuming the video is 16:9
+   * and taking into account the number of videos to show */
+  child_width = (int) floorf ((sidebar_height * 16) / (remotes->len * 9));
+
+  local = ovg_app_get_ov_local_peer (OVG_APP (app));
   for (ii = 0; ii < remotes->len; ii++) {
+    GtkWidget *child, *area;
     GInetSocketAddress *addr;
     OneVideoRemotePeer *remote;
 
     addr = g_ptr_array_index (remotes, ii);
     remote = one_video_remote_peer_new (local, addr);
+
+    child = gtk_flow_box_child_new ();
+    gtk_widget_set_size_request (child, child_width, 0);
+    area = one_video_remote_peer_add_gtkglsink (remote);
+    gtk_container_add (GTK_CONTAINER (child), area);
+    gtk_container_add (GTK_CONTAINER (priv->peers_video), child);
+    gtk_widget_realize (area);
+
     one_video_local_peer_add_remote (local, remote);
   }
+  gtk_widget_show_all (priv->peers_video);
 
   one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, win);
   g_print ("Started async negotiation with peers...");
@@ -528,6 +557,8 @@ ovg_app_window_class_init (OvgAppWindowClass *class)
       "/org/gtk/OneVideoGui/ovg-window.ui");
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       header_bar);
+  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
+      connect_sidebar);
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
       peers_d);
   gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,

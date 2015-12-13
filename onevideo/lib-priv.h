@@ -161,6 +161,8 @@ struct _OneVideoRemotePeerPriv {
   /* Audio/Video proxysrcs inside aplayback/vplayback */
   GstElement *audio_proxysrc;
   GstElement *video_proxysrc;
+  /* Video sink */
+  GstElement *video_sink;
 };
 
 gboolean            one_video_local_peer_setup               (OneVideoLocalPeer *local);

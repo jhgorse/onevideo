@@ -177,6 +177,7 @@ OneVideoRemotePeer* one_video_remote_peer_new               (OneVideoLocalPeer *
 OneVideoRemotePeer* one_video_remote_peer_new_from_string   (OneVideoLocalPeer *local,
                                                              const gchar *addr_s);
 void                one_video_remote_peer_free              (OneVideoRemotePeer *remote);
+gpointer            one_video_remote_peer_add_gtkglsink     (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_pause             (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_resume            (OneVideoRemotePeer *remote);
 void                one_video_remote_peer_remove            (OneVideoRemotePeer *remote);

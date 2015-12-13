@@ -595,8 +595,6 @@ one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
   /* Setup pipeline (local->playback) to render video from each local to the
    * provided video sink */
   if (remote->priv->video_proxysink) {
-    GstElement *sink;
-
     remote->priv->video_proxysrc = 
       gst_element_factory_make ("proxysrc", "video-proxysrc-%u");
     g_assert (remote->priv->video_proxysrc != NULL);
@@ -605,12 +603,16 @@ one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
     g_object_set (remote->priv->video_proxysrc, "proxysink",
         remote->priv->video_proxysink, NULL);
 
-    sink = gst_element_factory_make ("xvimagesink", NULL);
+    /* If a remote_peer_add_sink wasn't used, use a fallback xvimagesink */
+    if (remote->priv->video_sink == NULL)
+      remote->priv->video_sink = gst_element_factory_make ("xvimagesink", NULL);
+
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
-        remote->priv->video_proxysrc, sink, NULL);
+        remote->priv->video_proxysrc, remote->priv->video_sink, NULL);
     res = gst_bin_add (GST_BIN (local->playback), remote->priv->vplayback);
     g_assert (res);
-    res = gst_element_link_many (remote->priv->video_proxysrc, sink, NULL);
+    res = gst_element_link_many (remote->priv->video_proxysrc,
+        remote->priv->video_sink, NULL);
     g_assert (res);
   }
 

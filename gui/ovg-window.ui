@@ -15,11 +15,12 @@
       </object>
     </child>
     <child>
-      <object class="GtkPaned" id="outer_box">
+      <object class="GtkBox" id="outer_box">
         <property name="visible">True</property>
         <property name="can-focus">True</property>
+        <property name="orientation">horizontal</property>
         <child>
-          <object class="GtkBox" id="grid_sidebar">
+          <object class="GtkBox" id="connect_sidebar">
             <property name="visible">True</property>
             <property name="orientation">vertical</property>
             <property name="margin">10</property>
@@ -164,13 +165,13 @@
                 <property name="pack_type">end</property>
               </packing>
             </child>
-          </object><!-- grid_sidebar -->
-          <packing>
-            <property name="shrink">False</property>
-          </packing>
+          </object><!-- connect_sidebar -->
         </child>
         <child>
           <object class="GtkFlowBox" id="peers_video">
+            <property name="visible">True</property>
+            <property name="homogeneous">True</property>
+            <property name="selection-mode">GTK_SELECTION_NONE</property>
           </object>
         </child>
       </object><!-- outer_box -->

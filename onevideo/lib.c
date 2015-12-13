@@ -307,6 +307,15 @@ one_video_remote_peer_new_from_string (OneVideoLocalPeer * local,
   return remote;
 }
 
+gpointer
+one_video_remote_peer_add_gtkglsink (OneVideoRemotePeer * remote)
+{
+  gpointer widget;
+  remote->priv->video_sink = gst_element_factory_make ("gtksink", NULL);
+  g_object_get (remote->priv->video_sink, "widget", &widget, NULL);
+  return widget;
+}
+
 void
 one_video_remote_peer_pause (OneVideoRemotePeer * remote)
 {
