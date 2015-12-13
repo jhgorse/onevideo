@@ -102,8 +102,10 @@ struct _OneVideoLocalPeerPriv {
   /* The task used for doing negotiation when we're the negotiator */
   GTask *negotiator_task;
 
-  /* The V4L2 device monitor being used */
+  /* The video device monitor being used */
   GstDeviceMonitor *dm;
+  /* Video device being used */
+  GstDevice *video_device;
 
   /* The caps that we support sending */
   GstCaps *supported_send_acaps;

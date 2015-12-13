@@ -39,8 +39,7 @@ void      one_video_on_gst_bus_error                     (GstBus *bus,
 GSocket*  one_video_get_socket_for_addr                  (const gchar *addr_s,
                                                           guint port);
 
-gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local,
-                                                          GstDevice *video_device);
+gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local);
 gboolean  one_video_local_peer_setup_playback_pipeline   (OneVideoLocalPeer *local);
 gboolean  one_video_local_peer_setup_comms               (OneVideoLocalPeer *local);
 

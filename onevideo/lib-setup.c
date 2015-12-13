@@ -131,8 +131,7 @@ one_video_local_peer_setup_playback_pipeline (OneVideoLocalPeer * local)
 }
 
 gboolean
-one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
-    GstDevice * video_device)
+one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
 {
   GstBus *bus;
   GstCaps *video_caps, *raw_audio_caps;
@@ -142,7 +141,9 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
   gboolean ret;
 
-  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED))
+  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED) &&
+      /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
+      !(local->state & ONE_VIDEO_LOCAL_STATE_READY))
     return FALSE;
 
   if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit)) {
@@ -176,7 +177,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
 
   /* FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
    * FIXME: Select the best format based on formats available on the camera */
-  if (video_device == NULL) {
+  if (local->priv->video_device == NULL) {
     vsrc = gst_element_factory_make ("videotestsrc", NULL);
     g_object_set (vsrc, "is-live", TRUE, NULL);
     vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
@@ -185,7 +186,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local,
     gst_caps_unref (video_caps);
     vqueue = gst_element_factory_make ("queue", "v4l2-queue");
   } else {
-    vsrc = gst_device_create_element (video_device, NULL);
+    vsrc = gst_device_create_element (local->priv->video_device, NULL);
     vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
     /* These have already been fixated */
     g_object_set (vfilter, "caps", local->priv->send_vcaps, NULL);

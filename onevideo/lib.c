@@ -48,6 +48,8 @@ one_video_local_peer_stop_transmit (OneVideoLocalPeer * local)
   GstStateChangeReturn ret;
   ret = gst_element_set_state (local->transmit, GST_STATE_NULL);
   g_assert (ret == GST_STATE_CHANGE_SUCCESS);
+  /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
+  g_clear_object (&local->transmit);
   GST_DEBUG ("Stopped transmitting");
 }
 
@@ -680,7 +682,8 @@ one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
   g_free (caps);
 
   /* Setup transmit pipeline */
-  return one_video_local_peer_setup_transmit_pipeline (local, device);
+  local->priv->video_device = device;
+  return one_video_local_peer_setup_transmit_pipeline (local);
 }
 
 typedef struct {
@@ -1022,6 +1025,11 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
   }
 
   g_rec_mutex_lock (&local->priv->lock);
+  if (local->transmit == NULL) {
+    /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
+    res = one_video_local_peer_setup_transmit_pipeline (local);
+    g_assert (res);
+  }
   res = one_video_local_peer_begin_transmit (local);
   g_assert (res);
 
