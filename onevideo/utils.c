@@ -122,6 +122,50 @@ out:
   return ret;
 }
 
+#ifdef __linux
+GstDevice *
+one_video_get_device_from_device_path (GList * devices,
+    const gchar * device_path)
+{
+  GList *device;
+  gboolean some_device_had_props = FALSE;
+
+  if (devices == NULL) {
+    GST_ERROR ("No video sources detected");
+    return NULL;
+  }
+
+  for (device = devices; device; device = device->next) {
+    const gchar *path;
+    GstStructure *props;
+
+    g_object_get (GST_DEVICE (device->data), "properties", &props, NULL);
+    if (props == NULL)
+      continue;
+
+    some_device_had_props = TRUE;
+    path = gst_structure_get_string (props, "device.path");
+
+    if (g_strcmp0 (path, device_path) == 0) {
+      GST_DEBUG ("Found device for path '%s'\n", device_path);
+      gst_structure_free (props);
+      return GST_DEVICE (device->data);
+    }
+
+    gst_structure_free (props);
+  }
+
+  if (!some_device_had_props)
+    GST_ERROR ("None of the probed devices had properties set; unable to"
+        " match with specified device path! Falling back to using the test"
+        " video source. Upgrade GStreamer or choose the device yourself.");
+  else
+    GST_ERROR ("Selected device path '%s' wasn't found", device_path);
+
+  return NULL;
+}
+#endif
+
 #ifdef G_OS_UNIX
 
 #include <net/if.h>

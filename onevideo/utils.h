@@ -46,6 +46,11 @@ GInetAddress* one_video_get_inet_addr_for_iface (const gchar *iface_name);
 GList*        one_video_get_network_interfaces  (void);
 #endif
 
+#ifdef __linux__
+GstDevice*    one_video_get_device_from_device_path   (GList *devices,
+                                                       const gchar *path);
+#endif
+
 G_END_DECLS
 
 #endif /* __ONE_VIDEO_UTILS_H__ */

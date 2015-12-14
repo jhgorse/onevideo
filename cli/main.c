@@ -275,44 +275,19 @@ again:
 static GstDevice *
 get_device (GList * devices, const gchar * device_path)
 {
-  GList *device;
-  gboolean some_device_had_props = FALSE;
+  GstDevice *device;
 
-  if (devices == NULL) {
-    g_printerr ("No video sources detected, ignoring device choice and using"
-        " the test video source\n");
-    return NULL;
-  }
+#ifdef __linux__
+  device = one_video_get_device_from_device_path (devices, device_path);
+#else
+  /* Just pick the first one */
+  device = devices ? GST_DEVICE (devices->data) : NULL;
+#endif
 
-  for (device = devices; device; device = device->next) {
-    const gchar *path;
-    GstStructure *props;
+  if (device == NULL)
+    g_printerr ("Selected video device was not found!\n");
 
-    g_object_get (GST_DEVICE (device->data), "properties", &props, NULL);
-    if (props == NULL)
-      continue;
-
-    some_device_had_props = TRUE;
-    path = gst_structure_get_string (props, "device.path");
-
-    if (g_strcmp0 (path, device_path) == 0) {
-      g_print ("Found device for path '%s'\n", device_path);
-      gst_structure_free (props);
-      return GST_DEVICE (device->data);
-    }
-
-    gst_structure_free (props);
-  }
-
-  if (!some_device_had_props)
-    g_printerr ("None of the probed devices had properties set; unable to match"
-        " with specified device path! Falling back to using the test video"
-        " source. Upgrade GStreamer or don't use the --device/-d argument.\n");
-  else
-    g_printerr ("Selected device path '%s' wasn't found, using test video"
-        " source...\n", device_path);
-
-  return NULL;
+  return device;
 }
 
 int

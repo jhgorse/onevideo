@@ -28,6 +28,8 @@
 #include "ovg-app.h"
 #include "ovg-appwin.h"
 
+#include "onevideo/utils.h"
+
 #ifdef G_OS_UNIX
 #include <glib-unix.h>
 #endif
@@ -49,11 +51,35 @@ struct _OvgAppPrivate
 
 G_DEFINE_TYPE_WITH_PRIVATE (OvgApp, ovg_app, GTK_TYPE_APPLICATION);
 
+#ifdef __linux__
+static gchar *device_path = NULL;
+#endif
+static gchar *iface_name = NULL;
+static guint16 iface_port = 0;
+
+static GOptionEntry app_options[] =
+{
+#ifdef __linux__
+  {"device", 'd', 0, G_OPTION_ARG_STRING, &device_path, "Path to the V4L2"
+          " (camera) device; example: /dev/video0", "PATH"},
+#endif
+  {"interface", 'i', 0, G_OPTION_ARG_STRING, &iface_name, "Network interface"
+        " to listen on (default: all)", "NAME"},
+  {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "Override the TCP port to"
+        " listen on for incoming connections", "PORT"},
+  {NULL}
+};
+
 static void
 quit_activated (GSimpleAction * action, GVariant * param, gpointer app)
 {
   g_application_quit (G_APPLICATION (app));
 }
+
+static GActionEntry app_entries[] =
+{
+  { "quit", quit_activated, NULL, NULL, NULL },
+};
 
 #ifdef G_OS_UNIX
 static gboolean
@@ -66,15 +92,13 @@ on_ovg_app_sigint (GApplication * app)
 }
 #endif
 
-static GActionEntry app_entries[] =
-{
-  { "quit", quit_activated, NULL, NULL, NULL },
-};
-
 static void
 ovg_app_init (OvgApp * app)
 {
-  g_set_application_name ("OneVideo GUI");
+  g_set_prgname ("OneVideo");
+  g_set_application_name ("OneVideo");
+  gtk_window_set_default_icon_name ("OneVideo");
+  g_application_add_main_option_entries (G_APPLICATION (app), app_options);
 }
 
 static void
@@ -106,6 +130,7 @@ static void
 ovg_app_startup (GApplication * app)
 {
   GList *devices;
+  GstDevice *device;
   GtkBuilder *builder;
   GMenuModel *app_menu;
   const gchar *quit_accels[2] = { "<Ctrl>Q", NULL };
@@ -130,7 +155,7 @@ ovg_app_startup (GApplication * app)
   gst_init (NULL, NULL);
 
   /* This probes available devices at start, so start-up can be slow */
-  priv->ov_local = one_video_local_peer_new (NULL, 0);
+  priv->ov_local = one_video_local_peer_new (iface_name, iface_port);
   if (priv->ov_local == NULL) {
     /* FIXME: Print some GUI message */
     g_application_quit (app);
@@ -139,9 +164,15 @@ ovg_app_startup (GApplication * app)
 
   /* Just use the first device for now. Need to create GSettings for this. */
   devices = one_video_local_peer_get_video_devices (priv->ov_local);
+#ifdef __linux__
+  device = one_video_get_device_from_device_path (devices, device_path);
+#else
+  /* TODO: Add a gsettings + a preferences UI for selecting this */
+  device = GST_DEVICE (devices->data);
+#endif
+
   /* This currently always returns TRUE (aborts on error) */
-  one_video_local_peer_set_video_device (priv->ov_local,
-      GST_DEVICE (devices->data));
+  one_video_local_peer_set_video_device (priv->ov_local, device);
   g_list_free_full (devices, g_object_unref);
 
 #ifdef G_OS_UNIX
