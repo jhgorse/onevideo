@@ -258,10 +258,13 @@ one_video_remote_peer_new (OneVideoLocalPeer * local,
 
   remote = g_new0 (OneVideoRemotePeer, 1);
   remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
-  remote->receive = gst_pipeline_new ("receive-%u");
   remote->local = local;
   remote->addr = g_object_ref (addr);
   remote->addr_s = one_video_inet_socket_address_to_string (remote->addr);
+
+  name = g_strdup_printf ("receive-%s", remote->addr_s);
+  remote->receive = gst_pipeline_new (name);
+  g_free (name);
 
   remote->priv = g_new0 (OneVideoRemotePeerPriv, 1);
   name = g_strdup_printf ("audio-playback-bin-%s", remote->addr_s);
