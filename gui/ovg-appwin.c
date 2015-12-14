@@ -551,6 +551,9 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   gint sidebar_height, child_width;
   guint ii, n_cols;
 
+  remotes = ovg_app_window_peers_c_get_addrs (win);
+  g_return_if_fail (remotes->len > 0);
+
   /* Make it so it can't be clicked twice */
   gtk_widget_set_sensitive (GTK_WIDGET (b), FALSE);
 
@@ -562,7 +565,6 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   g_object_set (G_OBJECT (settings), "gtk-application-prefer-dark-theme", TRUE,
       NULL);
 
-  remotes = ovg_app_window_peers_c_get_addrs (win);
   /* We try to fit the videos into a rectangular grid */
   n_cols = (unsigned int) ceilf (sqrtf (remotes->len));
   gtk_flow_box_set_min_children_per_line (GTK_FLOW_BOX (priv->peers_video),
