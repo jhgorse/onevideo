@@ -34,13 +34,13 @@
 #include <string.h>
 
 /* Takes ownership of @data */
-OneVideoUdpMsg *
-one_video_udp_msg_new (OneVideoUdpMsgType type, gchar * data, gsize size)
+OvUdpMsg *
+ov_udp_msg_new (OvUdpMsgType type, gchar * data, gsize size)
 {
-  OneVideoUdpMsg *msg;
+  OvUdpMsg *msg;
 
-  msg = g_new0 (OneVideoUdpMsg, 1);
-  msg->version = ONE_VIDEO_UDP_MAX_VERSION;
+  msg = g_new0 (OvUdpMsg, 1);
+  msg->version = OV_UDP_MAX_VERSION;
   /* FIXME: Collisions? */
   msg->id = g_get_monotonic_time ();
   msg->type = type;
@@ -54,7 +54,7 @@ one_video_udp_msg_new (OneVideoUdpMsgType type, gchar * data, gsize size)
 }
 
 void
-one_video_udp_msg_free (OneVideoUdpMsg * msg)
+ov_udp_msg_free (OvUdpMsg * msg)
 {
   if (!msg)
     return;
@@ -65,11 +65,11 @@ one_video_udp_msg_free (OneVideoUdpMsg * msg)
 }
 
 gchar *
-one_video_udp_msg_to_buffer (OneVideoUdpMsg * msg, gsize * size)
+ov_udp_msg_to_buffer (OvUdpMsg * msg, gsize * size)
 {
   gchar *buffer;
 
-  *size = msg->size + ONE_VIDEO_UDP_MSG_HEADER_SIZE;
+  *size = msg->size + OV_UDP_MSG_HEADER_SIZE;
 
   buffer = g_malloc0 (*size);
   
@@ -84,27 +84,27 @@ one_video_udp_msg_to_buffer (OneVideoUdpMsg * msg, gsize * size)
   return buffer;
 }
 
-/* Assumes that *buffer is at least ONE_VIDEO_UDP_MSG_HEADER_SIZE in size */
+/* Assumes that *buffer is at least OV_UDP_MSG_HEADER_SIZE in size */
 gboolean
-one_video_udp_msg_read_message_from (OneVideoUdpMsg * msg,
+ov_udp_msg_read_message_from (OvUdpMsg * msg,
     GSocketAddress ** addr, GSocket * socket, GCancellable * cancellable,
     GError ** error)
 {
   gssize size;
-  gchar buffer[ONE_VIDEO_UDP_MAX_SIZE];
+  gchar buffer[OV_UDP_MAX_SIZE];
   gboolean ret = FALSE;
 
   g_return_val_if_fail (msg != NULL, FALSE);
 
-  size = g_socket_receive_from (socket, addr, buffer, ONE_VIDEO_UDP_MAX_SIZE,
+  size = g_socket_receive_from (socket, addr, buffer, OV_UDP_MAX_SIZE,
       cancellable, error);
 
-  if (size < ONE_VIDEO_UDP_MSG_HEADER_SIZE) {
+  if (size < OV_UDP_MSG_HEADER_SIZE) {
     GST_DEBUG ("Received invalid UDP message, ignoring");
     goto err;
   }
 
-  if (size == ONE_VIDEO_UDP_MAX_SIZE)
+  if (size == OV_UDP_MAX_SIZE)
     GST_WARNING ("Buffer might have been bigger than the max UDP size. Data"
         " might have been discarded.");
 
@@ -121,14 +121,14 @@ one_video_udp_msg_read_message_from (OneVideoUdpMsg * msg,
   if (msg->size == 0)
     goto out;
 
-  if (size != (msg->size + ONE_VIDEO_UDP_MSG_HEADER_SIZE)) {
+  if (size != (msg->size + OV_UDP_MSG_HEADER_SIZE)) {
     GST_WARNING ("Invalid-sized UDP message, ignoring");
     goto err;
   }
 
   /* Our payload is supposed to be a NUL-terminated string */
   msg->data = g_malloc0 (msg->size);
-  memcpy (msg->data, buffer + ONE_VIDEO_UDP_MSG_HEADER_SIZE, msg->size);
+  memcpy (msg->data, buffer + OV_UDP_MSG_HEADER_SIZE, msg->size);
   /* Ensure NUL-terminated */
   msg->data[msg->size - 1] = '\0';
 
@@ -139,7 +139,7 @@ err:
 }
 
 gboolean
-one_video_udp_msg_send_to_from (OneVideoUdpMsg * msg, GSocketAddress * to,
+ov_udp_msg_send_to_from (OvUdpMsg * msg, GSocketAddress * to,
     GSocketAddress * from, GCancellable * cancellable, GError ** error)
 {
   gsize size;
@@ -163,7 +163,7 @@ one_video_udp_msg_send_to_from (OneVideoUdpMsg * msg, GSocketAddress * to,
       goto out;
   }
 
-  buffer = one_video_udp_msg_to_buffer (msg, &size);
+  buffer = ov_udp_msg_to_buffer (msg, &size);
   written = g_socket_send_to (socket, to, buffer, size, cancellable, error);
   g_free (buffer);
 
@@ -176,50 +176,50 @@ out:
 }
 
 static void
-one_video_local_peer_send_info (OneVideoLocalPeer * local,
-    GSocketAddress * addr, OneVideoUdpMsg * msg)
+ov_local_peer_send_info (OvLocalPeer * local, GSocketAddress * addr,
+    OvUdpMsg * msg)
 {
   gchar *tmp;
-  OneVideoUdpMsg *send;
+  OvUdpMsg *send;
 
-  send = one_video_udp_msg_new (ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE,
+  send = ov_udp_msg_new (OV_UDP_MSG_TYPE_UNICAST_HI_THERE,
       NULL, 0);
 
-  tmp = one_video_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (addr));
+  tmp = ov_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (addr));
   GST_DEBUG ("Sending HI_THERE to %s, id: %lu", tmp, send->id);
   g_free (tmp);
 
-  one_video_udp_msg_send_to_from (send, addr, G_SOCKET_ADDRESS (local->addr),
+  ov_udp_msg_send_to_from (send, addr, G_SOCKET_ADDRESS (local->addr),
       NULL, NULL);
 
-  one_video_udp_msg_free (send);
+  ov_udp_msg_free (send);
 }
 
 gboolean
 on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
-    OneVideoLocalPeer * local)
+    OvLocalPeer * local)
 {
   gchar *tmp;
   gboolean ret;
-  OneVideoUdpMsg *msg;
+  OvUdpMsg *msg;
   GInetSocketAddress *saddr;
   GSocketAddress *from = NULL;
 
-  msg = g_new0 (OneVideoUdpMsg, 1);
+  msg = g_new0 (OvUdpMsg, 1);
 
   /* For now, the only UDP messages we care about are those that want to
-   * discover us. If this is extended, something like OneVideoTcpMsg will be
+   * discover us. If this is extended, something like OvTcpMsg will be
    * implemented. */
-  ret = one_video_udp_msg_read_message_from (msg, &from, socket,
+  ret = ov_udp_msg_read_message_from (msg, &from, socket,
       NULL, NULL);
   if (!ret)
     goto out;
 
   saddr = G_INET_SOCKET_ADDRESS (from);
-  tmp = one_video_inet_socket_address_to_string (saddr);
+  tmp = ov_inet_socket_address_to_string (saddr);
   g_free (tmp);
   
-  if (one_video_inet_socket_address_is_iface (saddr, local->priv->mc_ifaces,
+  if (ov_inet_socket_address_is_iface (saddr, local->priv->mc_ifaces,
         g_inet_socket_address_get_port (local->addr))) {
     GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
         msg->type, msg->id);
@@ -229,54 +229,54 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   GST_DEBUG ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
 
   switch (msg->type) {
-    case ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER:
-      one_video_local_peer_send_info (local, from, msg);
+    case OV_UDP_MSG_TYPE_MULTICAST_DISCOVER:
+      ov_local_peer_send_info (local, from, msg);
       break;
     default:
       GST_ERROR ("Received unknown udp msg type: %u", msg->type);
   }
 
 out:
-  one_video_udp_msg_free (msg);
+  ov_udp_msg_free (msg);
   g_object_unref (from);
   return G_SOURCE_CONTINUE;
 }
 
 gboolean
-one_video_discovery_send_multicast_discover (OneVideoLocalPeer * local,
+ov_discovery_send_multicast_discover (OvLocalPeer * local,
     GCancellable * cancellable, GError ** error)
 {
-  OneVideoUdpMsg *msg;
+  OvUdpMsg *msg;
   GInetAddress *group, *addr;
   gboolean ret = FALSE;
   GSocketAddress *mc_addr = NULL;
 
-  group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
+  group = g_inet_address_new_from_string (OV_MULTICAST_GROUP);
   /* The multicast port is always the default comms port since
    * we need the group + port combo to be a canonical address. */
-  mc_addr = g_inet_socket_address_new (group, ONE_VIDEO_DEFAULT_COMM_PORT);
+  mc_addr = g_inet_socket_address_new (group, OV_DEFAULT_COMM_PORT);
   g_object_unref (group);
 
-  msg = one_video_udp_msg_new (ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER,
+  msg = ov_udp_msg_new (OV_UDP_MSG_TYPE_MULTICAST_DISCOVER,
       NULL, 0);
 
   GST_DEBUG ("Sending multicast discover (id %lu) to %s:%u",
-      msg->id, ONE_VIDEO_MULTICAST_GROUP, ONE_VIDEO_DEFAULT_COMM_PORT);
+      msg->id, OV_MULTICAST_GROUP, OV_DEFAULT_COMM_PORT);
 
   addr = g_inet_socket_address_get_address (local->addr);
   if (!g_inet_address_get_is_any (addr)) {
-    ret = one_video_udp_msg_send_to_from (msg, mc_addr,
+    ret = ov_udp_msg_send_to_from (msg, mc_addr,
         G_SOCKET_ADDRESS (local->addr), cancellable, error);
   } else {
     GList *l;
     gboolean res;
     for (l = local->priv->mc_ifaces; l != NULL; l = l->next) {
       GSocketAddress *saddr;
-      addr = one_video_get_inet_addr_for_iface (l->data);
+      addr = ov_get_inet_addr_for_iface (l->data);
       saddr = g_inet_socket_address_new (addr,
           g_inet_socket_address_get_port (local->addr));
       g_object_unref (addr);
-      res = one_video_udp_msg_send_to_from (msg, mc_addr, saddr, cancellable,
+      res = ov_udp_msg_send_to_from (msg, mc_addr, saddr, cancellable,
           error);
       g_object_unref (saddr);
       if (res)
@@ -284,7 +284,7 @@ one_video_discovery_send_multicast_discover (OneVideoLocalPeer * local,
         ret = TRUE;
     }
   }
-  one_video_udp_msg_free (msg);
+  ov_udp_msg_free (msg);
   if (!ret)
     goto out;
 

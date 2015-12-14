@@ -32,18 +32,18 @@
 #include <string.h>
 
 static const struct {
-  OneVideoTcpMsgType type;
+  OvTcpMsgType type;
   const char *type_string;
   const char *type_variant_string;
 } type_strings[] = {
   /* Format: msg_id */
-  {ONE_VIDEO_TCP_MSG_TYPE_ACK,              "acknowledged",       "x"},
+  {OV_TCP_MSG_TYPE_ACK,              "acknowledged",       "x"},
 
   /* Format: (msg_id, error string) */
-  {ONE_VIDEO_TCP_MSG_TYPE_ERROR,            "error",              "(xs)"},
+  {OV_TCP_MSG_TYPE_ERROR,            "error",              "(xs)"},
 
   /* Format: (call_id, error string) */
-  {ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,       "error during call",  "(xs)"},
+  {OV_TCP_MSG_TYPE_ERROR_CALL,       "error during call",  "(xs)"},
 
   /* Format:
    * (call_id, arecv_rtcprr_port, vrecv_rtcprr_port,
@@ -53,26 +53,26 @@ static const struct {
    *   ...])
    *
    *   Note that the rtcprr ports are shared between all peers */
-  {ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xuussssa(suuuu))"},
+  {OV_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xuussssa(suuuu))"},
 
   /* Format: (call_id, peer_id_str, peer_port)
    * peer_id_str is of the form "$hostname:$port-$guid" */
-  {ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xsq)"},
+  {OV_TCP_MSG_TYPE_START_NEGOTIATE,  "start negotiating",  "(xsq)"},
 
   /* Format: (call_id, peer_id_str)
    * This is sent in reply to a START_NEGOTIATE */
-  {ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE,     "ok, can negotiate",  "(xs)"},
+  {OV_TCP_MSG_TYPE_OK_NEGOTIATE,     "ok, can negotiate",  "(xs)"},
 
   /* Format: (call_id, peer_id_str)
    * Can be sent by any peer during the negotiation process to cancel it.
    * The call initiator sends it to all peers and the other peers send it
    * only to the call initiator. */
-  {ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, "cancel negotiating", "(xs)"},
+  {OV_TCP_MSG_TYPE_CANCEL_NEGOTIATE, "cancel negotiating", "(xs)"},
 
   /* Format: (call_id, [(peer1_id, peer1_addr), (peer2_d, peer2_addr), ...])
    *
    * The peer_addresses here are as resolved by the negotiator */
-  {ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xa(ss))"},
+  {OV_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xa(ss))"},
 
   /* Format:
    * (call_id, send_acaps, send_vcaps,
@@ -83,32 +83,32 @@ static const struct {
    *    arecv_port2, arecv_rtcpsr_port2, arecv_rtcprr_port1,
    *    vrecv_port2, vrecv_rtcpsr_port2),
    *   ...]) */
-  {ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuuuu))"},
+  {OV_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuuuu))"},
 
   /* Format: (call_id, [peer1_id, peer2_id, ...]) */
-  {ONE_VIDEO_TCP_MSG_TYPE_START_CALL,       "start call",         "(xas)"},
+  {OV_TCP_MSG_TYPE_START_CALL,       "start call",         "(xas)"},
 
   /* Format: call_id, peer_id_str */
-  {ONE_VIDEO_TCP_MSG_TYPE_PAUSE_CALL,       "pause call",         "(xs)"},
+  {OV_TCP_MSG_TYPE_PAUSE_CALL,       "pause call",         "(xs)"},
 
   /* Format: call_id, peer_id_str */
-  {ONE_VIDEO_TCP_MSG_TYPE_RESUME_CALL,      "resume call",        "(xs)"},
+  {OV_TCP_MSG_TYPE_RESUME_CALL,      "resume call",        "(xs)"},
 
   /* Format: call_id, peer_id_str */
-  {ONE_VIDEO_TCP_MSG_TYPE_END_CALL,         "end call",           "(xs)"},
+  {OV_TCP_MSG_TYPE_END_CALL,         "end call",           "(xs)"},
 
   {0}
 };
 
 const char *
-one_video_tcp_msg_type_to_string (OneVideoTcpMsgType type, guint version)
+ov_tcp_msg_type_to_string (OvTcpMsgType type, guint version)
 {
   int ii, len;
 
-  len = sizeof (one_video_versions) / sizeof (one_video_versions[0]);
+  len = sizeof (ov_versions) / sizeof (ov_versions[0]);
 
   for (ii = 0; ii < len; ii++)
-    if (version == one_video_versions[ii])
+    if (version == ov_versions[ii])
       goto supported;
 
   GST_ERROR ("Unsupported version: %u", version);
@@ -123,14 +123,14 @@ supported:
 }
 
 const char *
-one_video_tcp_msg_type_to_variant_type (OneVideoTcpMsgType type, guint version)
+ov_tcp_msg_type_to_variant_type (OvTcpMsgType type, guint version)
 {
   int ii, len;
 
-  len = sizeof (one_video_versions) / sizeof (one_video_versions[0]);
+  len = sizeof (ov_versions) / sizeof (ov_versions[0]);
 
   for (ii = 0; ii < len; ii++)
-    if (version == one_video_versions[ii])
+    if (version == ov_versions[ii])
       goto supported;
 
   GST_ERROR ("Unsupported version: %u", version);
@@ -145,13 +145,13 @@ supported:
   return NULL;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new (OneVideoTcpMsgType type, GVariant * data)
+OvTcpMsg *
+ov_tcp_msg_new (OvTcpMsgType type, GVariant * data)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
 
-  msg = g_new0 (OneVideoTcpMsg, 1);
-  msg->version = ONE_VIDEO_TCP_MAX_VERSION;
+  msg = g_new0 (OvTcpMsg, 1);
+  msg->version = OV_TCP_MAX_VERSION;
   /* FIXME: Collisions? */
   msg->id = g_get_monotonic_time ();
   msg->type = type;
@@ -166,7 +166,7 @@ one_video_tcp_msg_new (OneVideoTcpMsgType type, GVariant * data)
 }
 
 void
-one_video_tcp_msg_free (OneVideoTcpMsg * msg)
+ov_tcp_msg_free (OvTcpMsg * msg)
 {
   if (!msg)
     return;
@@ -175,93 +175,93 @@ one_video_tcp_msg_free (OneVideoTcpMsg * msg)
   g_free (msg);
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new_error (guint64 id, const gchar * error_msg)
+OvTcpMsg *
+ov_tcp_msg_new_error (guint64 id, const gchar * error_msg)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_ERROR, ONE_VIDEO_TCP_MIN_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_ERROR,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_ERROR, OV_TCP_MIN_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_ERROR,
       g_variant_new (variant_type, id, error_msg));
 
   return msg;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new_error_call (guint64 id, const gchar * error_msg)
+OvTcpMsg *
+ov_tcp_msg_new_error_call (guint64 id, const gchar * error_msg)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL, ONE_VIDEO_TCP_MIN_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_ERROR_CALL,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_ERROR_CALL, OV_TCP_MIN_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_ERROR_CALL,
       g_variant_new (variant_type, id, error_msg));
 
   return msg;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new_ack (guint64 id)
+OvTcpMsg *
+ov_tcp_msg_new_ack (guint64 id)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_ACK, ONE_VIDEO_TCP_MIN_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_ACK,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_ACK, OV_TCP_MIN_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_ACK,
       g_variant_new (variant_type, id));
 
   return msg;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new_start_negotiate (guint64 call_id, gchar * local_id,
+OvTcpMsg *
+ov_tcp_msg_new_start_negotiate (guint64 call_id, gchar * local_id,
     guint16 local_port)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_START_NEGOTIATE,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_START_NEGOTIATE, OV_TCP_MIN_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_START_NEGOTIATE,
       g_variant_new (variant_type, call_id, local_id, local_port));
 
   return msg;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new_ok_negotiate (guint64 call_id, gchar * local_id)
+OvTcpMsg *
+ov_tcp_msg_new_ok_negotiate (guint64 call_id, gchar * local_id)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_OK_NEGOTIATE, OV_TCP_MIN_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_OK_NEGOTIATE,
       g_variant_new (variant_type, call_id, local_id));
 
   return msg;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_new_cancel_negotiate (guint64 call_id, gchar * local_id)
+OvTcpMsg *
+ov_tcp_msg_new_cancel_negotiate (guint64 call_id, gchar * local_id)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE, ONE_VIDEO_TCP_MIN_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_CANCEL_NEGOTIATE,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_CANCEL_NEGOTIATE, OV_TCP_MIN_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_CANCEL_NEGOTIATE,
       g_variant_new (variant_type, call_id, local_id));
 
   return msg;
 }
 
 gchar *
-one_video_tcp_msg_print (OneVideoTcpMsg * msg)
+ov_tcp_msg_print (OvTcpMsg * msg)
 {
   gchar *tmp;
 
@@ -271,8 +271,8 @@ one_video_tcp_msg_print (OneVideoTcpMsg * msg)
 }
 
 gboolean
-one_video_tcp_msg_write_to_stream (GOutputStream * output,
-    OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
+ov_tcp_msg_write_to_stream (GOutputStream * output, OvTcpMsg * msg,
+    GCancellable * cancellable, GError ** error)
 {
   gchar *tmp;
   gboolean ret;
@@ -280,9 +280,9 @@ one_video_tcp_msg_write_to_stream (GOutputStream * output,
   guint64 tmp2;
   GVariant *variant;
 
-  tmp = one_video_tcp_msg_print (msg);
+  tmp = ov_tcp_msg_print (msg);
   GST_DEBUG ("Writing msg type %s to the network; contents: %s",
-      one_video_tcp_msg_type_to_string (msg->type, ONE_VIDEO_TCP_MAX_VERSION),
+      ov_tcp_msg_type_to_string (msg->type, OV_TCP_MAX_VERSION),
       tmp);
   g_free (tmp);
 
@@ -328,54 +328,54 @@ one_video_tcp_msg_write_to_stream (GOutputStream * output,
 out:
   return ret;
 err:
-  tmp = one_video_tcp_msg_print (msg);
+  tmp = ov_tcp_msg_print (msg);
   GST_ERROR ("Unable to write header for msg: %s", tmp);
   g_free (tmp);
   goto out;
 }
 
 gboolean
-one_video_tcp_msg_write_new_error_to_stream (GOutputStream * output,
+ov_tcp_msg_write_new_error_to_stream (GOutputStream * output,
     guint64 id, const gchar * error_msg, GCancellable * cancellable,
     GError ** error)
 {
   gboolean ret;
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
 
-  msg = one_video_tcp_msg_new_error (id, error_msg);
-  ret = one_video_tcp_msg_write_to_stream (output, msg, cancellable, error);
-  one_video_tcp_msg_free (msg);
+  msg = ov_tcp_msg_new_error (id, error_msg);
+  ret = ov_tcp_msg_write_to_stream (output, msg, cancellable, error);
+  ov_tcp_msg_free (msg);
 
   return ret;
 }
 
 gboolean
-one_video_tcp_msg_write_new_ack_to_stream (GOutputStream * output,
-    guint64 id, GCancellable * cancellable, GError ** error)
+ov_tcp_msg_write_new_ack_to_stream (GOutputStream * output, guint64 id,
+    GCancellable * cancellable, GError ** error)
 {
   gboolean ret;
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
 
-  msg = one_video_tcp_msg_new_ack (id);
-  ret = one_video_tcp_msg_write_to_stream (output, msg, cancellable, error);
-  one_video_tcp_msg_free (msg);
+  msg = ov_tcp_msg_new_ack (id);
+  ret = ov_tcp_msg_write_to_stream (output, msg, cancellable, error);
+  ov_tcp_msg_free (msg);
 
   return ret;
 }
 
 /* Does a blocking read for the header */
 gboolean
-one_video_tcp_msg_read_header_from_stream (GInputStream * input,
-    OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
+ov_tcp_msg_read_header_from_stream (GInputStream * input, OvTcpMsg * msg,
+    GCancellable * cancellable, GError ** error)
 {
   gboolean ret;
-  char tmp[ONE_VIDEO_TCP_MSG_HEADER_SIZE];
+  char tmp[OV_TCP_MSG_HEADER_SIZE];
   gsize bytes_read;
 
   g_return_val_if_fail (msg != NULL, FALSE);
 
   /* Read message length prefix */
-  ret = g_input_stream_read_all (input, tmp, ONE_VIDEO_TCP_MSG_HEADER_SIZE,
+  ret = g_input_stream_read_all (input, tmp, OV_TCP_MSG_HEADER_SIZE,
       &bytes_read, cancellable, error);
   if (!ret)
     return FALSE;
@@ -402,8 +402,8 @@ one_video_tcp_msg_read_header_from_stream (GInputStream * input,
 /* Does a blocking read and returns a (transfer-full) buffer with the contents
  * of the body */
 gboolean
-one_video_tcp_msg_read_body_from_stream (GInputStream * input,
-    OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
+ov_tcp_msg_read_body_from_stream (GInputStream * input, OvTcpMsg * msg,
+    GCancellable * cancellable, GError ** error)
 {
   GBytes *bytes;
   GVariant *variant;
@@ -420,7 +420,7 @@ one_video_tcp_msg_read_body_from_stream (GInputStream * input,
     return FALSE;
   }
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (msg->type,
+  variant_type = ov_tcp_msg_type_to_variant_type (msg->type,
       msg->version);
   variant = g_variant_new_from_bytes (G_VARIANT_TYPE (variant_type), bytes,
       FALSE);
@@ -443,16 +443,16 @@ one_video_tcp_msg_read_body_from_stream (GInputStream * input,
   return TRUE;
 }
 
-OneVideoTcpMsg *
-one_video_tcp_msg_read_from_stream (GInputStream * input,
-    GCancellable * cancellable, GError ** error)
+OvTcpMsg *
+ov_tcp_msg_read_from_stream (GInputStream * input, GCancellable * cancellable,
+    GError ** error)
 {
   gboolean ret;
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
 
-  msg = g_new0 (OneVideoTcpMsg, 1);
+  msg = g_new0 (OvTcpMsg, 1);
 
-  ret = one_video_tcp_msg_read_header_from_stream (input, msg, cancellable,
+  ret = ov_tcp_msg_read_header_from_stream (input, msg, cancellable,
       error);
   if (ret != TRUE) {
     GST_ERROR ("Unable to read message length prefix: %s",
@@ -461,14 +461,14 @@ one_video_tcp_msg_read_from_stream (GInputStream * input,
   }
 
   GST_DEBUG ("Reading message type %s and version %u of length %u bytes",
-      one_video_tcp_msg_type_to_string (msg->type, msg->version),
+      ov_tcp_msg_type_to_string (msg->type, msg->version),
       msg->version, msg->size);
 
   if (msg->size == 0)
     goto out;
 
   /* Read the rest of the message */
-  ret = one_video_tcp_msg_read_body_from_stream (input, msg, cancellable,
+  ret = ov_tcp_msg_read_body_from_stream (input, msg, cancellable,
       error);
   if (ret != TRUE) {
     GST_ERROR ("Unable to read message body: %s", (*error)->message);

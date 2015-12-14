@@ -25,8 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_INCOMING_H__
-#define __ONE_VIDEO_INCOMING_H__
+#ifndef __OV_INCOMING_H__
+#define __OV_INCOMING_H__
 
 #include <gio/gio.h>
 
@@ -35,8 +35,8 @@ G_BEGIN_DECLS
 gboolean on_incoming_peer_tcp_connection (GSocketService *service,
                                           GSocketConnection *connection,
                                           GObject *source_object,
-                                          OneVideoLocalPeer *local);
+                                          OvLocalPeer *local);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_INCOMING_H__ */
+#endif /* __OV_INCOMING_H__ */

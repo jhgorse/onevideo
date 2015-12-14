@@ -25,76 +25,77 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_LIB_H__
-#define __ONE_VIDEO_LIB_H__
+#ifndef __OV_LIB_H__
+#define __OV_LIB_H__
 
 #include <gst/gst.h>
 #include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-#define ONE_VIDEO_DEFAULT_COMM_PORT 5000
+typedef struct _OvLocalPeer       OvLocalPeer;
+typedef struct _OvLocalPeerPriv   OvLocalPeerPriv;
+
+typedef struct _OvRemotePeer      OvRemotePeer;
+typedef struct _OvRemotePeerPriv  OvRemotePeerPriv;
+
+typedef enum _OvLocalPeerState    OvLocalPeerState;
+typedef enum _OvRemotePeerState   OvRemotePeerState;
+
+typedef struct _OvDiscoveredPeer OvDiscoveredPeer;
+
+#define OV_DEFAULT_COMM_PORT 5000
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
-typedef struct _OneVideoLocalPeer OneVideoLocalPeer;
-typedef struct _OneVideoLocalPeerPriv OneVideoLocalPeerPriv;
-typedef enum _OneVideoLocalPeerState OneVideoLocalPeerState;
-
-typedef struct _OneVideoRemotePeer OneVideoRemotePeer;
-typedef struct _OneVideoRemotePeerPriv OneVideoRemotePeerPriv;
-typedef enum _OneVideoRemotePeerState OneVideoRemotePeerState;
-
-typedef struct _OneVideoDiscoveredPeer OneVideoDiscoveredPeer;
-
 /**
- * OneVideoRemoteFoundCallback:
- * @remote: (transfer full): a #OneVideoDiscoveredPeer representing the found
+ * OvRemoteFoundCallback:
+ * @remote: (transfer full): a #OvDiscoveredPeer representing the found
  * remote peer
  * @user_data: the user data passed
  *
- * See the documentation for one_video_local_peer_find_remotes_create_source()
+ * See the documentation for ov_local_peer_find_remotes_create_source()
  */
-typedef gboolean (*OneVideoRemoteFoundCallback) (OneVideoDiscoveredPeer *peer,
-                                                 gpointer user_data);
+typedef gboolean (*OvRemoteFoundCallback) (OvDiscoveredPeer *peer,
+                                           gpointer user_data);
 
-enum _OneVideoLocalPeerState {
-  ONE_VIDEO_LOCAL_STATE_NULL          = 0,
+enum _OvLocalPeerState {
+  OV_LOCAL_STATE_NULL          = 0,
 
   /**~ Special states ~**/
   /* These are ORed with other states to signal a special state */
   /* This is ORed with the current state to signal failure */
-  ONE_VIDEO_LOCAL_STATE_FAILED        = 1 << 0,
-  ONE_VIDEO_LOCAL_STATE_TIMEOUT       = 1 << 1,
+  OV_LOCAL_STATE_FAILED        = 1 << 0,
+  OV_LOCAL_STATE_TIMEOUT       = 1 << 1,
   /* One of these is ORed with the current state when we're taking on the role
    * of either negotiator or negotiatee */
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATOR    = 1 << 7,
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATEE    = 1 << 8,
+  OV_LOCAL_STATE_NEGOTIATOR    = 1 << 7,
+  OV_LOCAL_STATE_NEGOTIATEE    = 1 << 8,
 
   /* Ordinary states. These are not ORed with each other. */
-  ONE_VIDEO_LOCAL_STATE_INITIALISED   = 1 << 9,
+  OV_LOCAL_STATE_INITIALISED   = 1 << 9,
 
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATING   = 1 << 10,
-  ONE_VIDEO_LOCAL_STATE_NEGOTIATED    = 1 << 11,
+  OV_LOCAL_STATE_NEGOTIATING   = 1 << 10,
+  OV_LOCAL_STATE_NEGOTIATED    = 1 << 11,
 
-  ONE_VIDEO_LOCAL_STATE_READY         = 1 << 12,
-  ONE_VIDEO_LOCAL_STATE_PLAYING       = 1 << 13,
-  ONE_VIDEO_LOCAL_STATE_PAUSED        = 1 << 14,
-  ONE_VIDEO_LOCAL_STATE_STOPPED       = 1 << 15,
+  OV_LOCAL_STATE_READY         = 1 << 12,
+  OV_LOCAL_STATE_PLAYING       = 1 << 13,
+  OV_LOCAL_STATE_PAUSED        = 1 << 14,
+  OV_LOCAL_STATE_STOPPED       = 1 << 15,
 };
 
-enum _OneVideoRemotePeerState {
-  ONE_VIDEO_REMOTE_STATE_NULL,
-  ONE_VIDEO_REMOTE_STATE_FAILED,
-  ONE_VIDEO_REMOTE_STATE_ALLOCATED,
+enum _OvRemotePeerState {
+  OV_REMOTE_STATE_NULL,
+  OV_REMOTE_STATE_FAILED,
+  OV_REMOTE_STATE_ALLOCATED,
 
-  ONE_VIDEO_REMOTE_STATE_READY,
-  ONE_VIDEO_REMOTE_STATE_PLAYING,
-  ONE_VIDEO_REMOTE_STATE_PAUSED,
+  OV_REMOTE_STATE_READY,
+  OV_REMOTE_STATE_PLAYING,
+  OV_REMOTE_STATE_PAUSED,
 };
 
 /* Represents us; the library and the client implementing this local */
-struct _OneVideoLocalPeer {
+struct _OvLocalPeer {
   /* Transmit pipeline */
   GstElement *transmit;
   /* Playback pipeline */
@@ -106,14 +107,16 @@ struct _OneVideoLocalPeer {
   /* Unique id string representing this host */
   gchar *id;
 
-  OneVideoLocalPeerState state;
+  OvLocalPeerState state;
 
-  OneVideoLocalPeerPriv *priv;
+  /* < private > */
+  OvLocalPeerPriv *priv;
+  gpointer _gst_reserved[GST_PADDING];
 };
 
 /* Represents a remote local */
-struct _OneVideoRemotePeer {
-  OneVideoLocalPeer *local;
+struct _OvRemotePeer {
+  OvLocalPeer *local;
 
   /* Receive pipeline */
   GstElement *receive;
@@ -125,13 +128,14 @@ struct _OneVideoRemotePeer {
    * Retrieved from the peer during negotiation */
   gchar *id;
 
-  OneVideoRemotePeerState state;
+  OvRemotePeerState state;
 
-  OneVideoRemotePeerPriv *priv;
+  /* < private > */
+  OvRemotePeerPriv *priv;
 };
 
 /* Represents a discovered peer */
-struct _OneVideoDiscoveredPeer {
+struct _OvDiscoveredPeer {
   /* Address of the discovered peer */
   GInetSocketAddress *addr;
   /* String representation; contains port if non-default port */
@@ -142,53 +146,53 @@ struct _OneVideoDiscoveredPeer {
 };
 
 /* Local peer (us) */
-OneVideoLocalPeer*  one_video_local_peer_new              (const gchar *iface,
-                                                           guint16 port);
-void                one_video_local_peer_free             (OneVideoLocalPeer *local);
-void                one_video_local_peer_add_remote       (OneVideoLocalPeer *local,
-                                                           OneVideoRemotePeer *remote);
+OvLocalPeer*  ov_local_peer_new               (const gchar *iface,
+                                               guint16 port);
+void                ov_local_peer_free              (OvLocalPeer *local);
+void                ov_local_peer_add_remote        (OvLocalPeer *local,
+                                                     OvRemotePeer *remote);
 /* Asynchronously negotiate with all setup remote peers */
-gboolean            one_video_local_peer_negotiate_async  (OneVideoLocalPeer *local,
-                                                           GCancellable *cancellable,
-                                                           GAsyncReadyCallback callback,
-                                                           gpointer callback_data);
-gboolean            one_video_local_peer_negotiate_finish (OneVideoLocalPeer *local,
-                                                           GAsyncResult *result,
-                                                           GError **error);
-gboolean            one_video_local_peer_negotiate_stop   (OneVideoLocalPeer *local);
-gboolean            one_video_local_peer_start            (OneVideoLocalPeer *local);
-void                one_video_local_peer_stop             (OneVideoLocalPeer *local);
+gboolean            ov_local_peer_negotiate_async   (OvLocalPeer *local,
+                                                     GCancellable *cancellable,
+                                                     GAsyncReadyCallback callback,
+                                                     gpointer callback_data);
+gboolean            ov_local_peer_negotiate_finish  (OvLocalPeer *local,
+                                                     GAsyncResult *result,
+                                                     GError **error);
+gboolean            ov_local_peer_negotiate_stop    (OvLocalPeer *local);
+gboolean            ov_local_peer_start             (OvLocalPeer *local);
+void                ov_local_peer_stop              (OvLocalPeer *local);
 
 /* Device discovery */
-GList*              one_video_local_peer_get_video_devices  (OneVideoLocalPeer *local);
-gboolean            one_video_local_peer_set_video_device   (OneVideoLocalPeer *local,
-                                                             GstDevice *device);
+GList*              ov_local_peer_get_video_devices (OvLocalPeer *local);
+gboolean            ov_local_peer_set_video_device  (OvLocalPeer *local,
+                                                     GstDevice *device);
 
 /* Peer discovery */
-GSource*            one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer *local,
-                                                                     GCancellable *cancellable,
-                                                                     OneVideoRemoteFoundCallback callback,
-                                                                     gpointer callback_data,
-                                                                     GError **error);
+GSource*            ov_local_peer_find_remotes_create_source  (OvLocalPeer *local,
+                                                               GCancellable *cancellable,
+                                                               OvRemoteFoundCallback callback,
+                                                               gpointer callback_data,
+                                                               GError **error);
 
 /* Remote peers */
-OneVideoRemotePeer* one_video_remote_peer_new               (OneVideoLocalPeer *local,
-                                                             GInetSocketAddress *addr);
-OneVideoRemotePeer* one_video_remote_peer_new_from_string   (OneVideoLocalPeer *local,
-                                                             const gchar *addr_s);
-void                one_video_remote_peer_free              (OneVideoRemotePeer *remote);
-gpointer            one_video_remote_peer_add_gtkglsink     (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_pause             (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_resume            (OneVideoRemotePeer *remote);
-void                one_video_remote_peer_remove            (OneVideoRemotePeer *remote);
+OvRemotePeer*       ov_remote_peer_new                (OvLocalPeer *local,
+                                                       GInetSocketAddress *addr);
+OvRemotePeer*       ov_remote_peer_new_from_string    (OvLocalPeer *local,
+                                                       const gchar *addr_s);
+void                ov_remote_peer_free               (OvRemotePeer *remote);
+gpointer            ov_remote_peer_add_gtkglsink      (OvRemotePeer *remote);
+void                ov_remote_peer_pause              (OvRemotePeer *remote);
+void                ov_remote_peer_resume             (OvRemotePeer *remote);
+void                ov_remote_peer_remove             (OvRemotePeer *remote);
 
-OneVideoRemotePeer* one_video_local_peer_get_remote_by_id   (OneVideoLocalPeer *local,
-                                                             const gchar *peer_id);
+OvRemotePeer*       ov_local_peer_get_remote_by_id    (OvLocalPeer *local,
+                                                       const gchar *peer_id);
 
 /* Discovered peers */
-OneVideoDiscoveredPeer*   one_video_discovered_peer_new   (GInetSocketAddress *addr);
-void                      one_video_discovered_peer_free  (OneVideoDiscoveredPeer *peer);
+OvDiscoveredPeer*   ov_discovered_peer_new    (GInetSocketAddress *addr);
+void                ov_discovered_peer_free   (OvDiscoveredPeer *peer);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_LIB_H__ */
+#endif /* __OV_LIB_H__ */

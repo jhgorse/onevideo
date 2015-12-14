@@ -38,12 +38,12 @@
 GST_DEBUG_CATEGORY (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-static gboolean one_video_local_peer_begin_transmit (OneVideoLocalPeer *local);
+static gboolean ov_local_peer_begin_transmit (OvLocalPeer *local);
 
-#define on_remote_receive_error one_video_on_gst_bus_error
+#define on_remote_receive_error ov_on_gst_bus_error
 
 static void
-one_video_local_peer_stop_transmit (OneVideoLocalPeer * local)
+ov_local_peer_stop_transmit (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
   if (local->transmit != NULL) {
@@ -56,7 +56,7 @@ one_video_local_peer_stop_transmit (OneVideoLocalPeer * local)
 }
 
 static void
-one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
+ov_local_peer_stop_playback (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
   ret = gst_element_set_state (local->playback, GST_STATE_NULL);
@@ -65,7 +65,7 @@ one_video_local_peer_stop_playback (OneVideoLocalPeer * local)
 }
 
 static void
-one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
+ov_local_peer_stop_comms (OvLocalPeer * local)
 {
   if (local->priv->tcp_server != NULL) {
     g_signal_handlers_disconnect_by_data (local->priv->tcp_server, local);
@@ -75,47 +75,47 @@ one_video_local_peer_stop_comms (OneVideoLocalPeer * local)
     g_source_destroy (local->priv->mc_socket_source);
 }
 
-OneVideoLocalPeer *
-one_video_local_peer_new (const gchar * iface, guint16 port)
+OvLocalPeer *
+ov_local_peer_new (const gchar * iface, guint16 port)
 {
   gchar *guid;
   GstCaps *vcaps;
   GInetAddress *addr;
   GSocketAddress *listen_addr;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
   guint16 tcp_port;
   gboolean ret;
 
   if (onevideo_debug == NULL)
     GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
-        "OneVideo VoIP library");
+        "Ov VoIP library");
 
   if (iface == NULL)
     addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
   else
-    addr = one_video_get_inet_addr_for_iface (iface);
+    addr = ov_get_inet_addr_for_iface (iface);
   if (addr == NULL)
     return NULL;
 
   listen_addr = g_inet_socket_address_new (addr,
-      port ? port : ONE_VIDEO_DEFAULT_COMM_PORT);
+      port ? port : OV_DEFAULT_COMM_PORT);
   g_object_unref (addr);
 
-  local = g_new0 (OneVideoLocalPeer, 1);
+  local = g_new0 (OvLocalPeer, 1);
   local->addr = G_INET_SOCKET_ADDRESS (listen_addr);
-  local->addr_s = one_video_inet_socket_address_to_string (local->addr);
+  local->addr_s = ov_inet_socket_address_to_string (local->addr);
   guid = g_dbus_generate_guid (); /* Generate a UUIDesque string */
   local->id = g_strdup_printf ("%s:%u-%s", g_get_host_name (),
       g_inet_socket_address_get_port (local->addr), guid);
   g_free (guid);
-  local->state = ONE_VIDEO_LOCAL_STATE_NULL;
-  local->priv = g_new0 (OneVideoLocalPeerPriv, 1);
+  local->state = OV_LOCAL_STATE_NULL;
+  local->priv = g_new0 (OvLocalPeerPriv, 1);
 
   /* Set interfaces, or auto-detect them */
   if (iface)
     local->priv->mc_ifaces = g_list_append (NULL, g_strdup (iface));
   else
-    local->priv->mc_ifaces = one_video_get_network_interfaces ();
+    local->priv->mc_ifaces = ov_get_network_interfaces ();
 
   /* Allocate ports for recv RTCP RRs from all remotes */
   tcp_port = g_inet_socket_address_get_port (local->addr);
@@ -161,25 +161,25 @@ one_video_local_peer_new (const gchar * iface, guint16 port)
   /* Transmit pipeline is setup in set_video_device() */
 
   /* Setup components of the playback pipeline */
-  ret = one_video_local_peer_setup_playback_pipeline (local);
+  ret = ov_local_peer_setup_playback_pipeline (local);
   g_assert (ret);
 
   /* Setup negotiation/comms */
-  if (!one_video_local_peer_setup_comms (local)) {
-    one_video_local_peer_free (local);
+  if (!ov_local_peer_setup_comms (local)) {
+    ov_local_peer_free (local);
     return NULL;
   }
 
-  local->state = ONE_VIDEO_LOCAL_STATE_INITIALISED;
+  local->state = OV_LOCAL_STATE_INITIALISED;
 
   return local;
 }
 
 void
-one_video_local_peer_free (OneVideoLocalPeer * local)
+ov_local_peer_free (OvLocalPeer * local)
 {
   GST_DEBUG ("Stopping communication");
-  one_video_local_peer_stop_comms (local);
+  ov_local_peer_stop_comms (local);
 
   GST_DEBUG ("Freeing local peer");
   g_ptr_array_free (local->priv->remote_peers, TRUE);
@@ -189,7 +189,7 @@ one_video_local_peer_free (OneVideoLocalPeer * local)
   gst_device_monitor_stop (local->priv->dm);
   g_object_unref (local->priv->dm);
 
-  /* one_video_local_peer_setup_tcp_comms */
+  /* ov_local_peer_setup_tcp_comms */
   if (local->priv->tcp_server)
     g_object_unref (local->priv->tcp_server);
 
@@ -222,7 +222,7 @@ compare_ints (const void * a, const void * b)
 
 /* Called with the lock TAKEN */
 static gboolean
-set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
+set_free_recv_ports (OvLocalPeer * local, guint (*recv_ports)[4])
 {
   guint ii, start;
 
@@ -247,26 +247,25 @@ set_free_recv_ports (OneVideoLocalPeer * local, guint (*recv_ports)[4])
   return TRUE;
 }
 
-OneVideoRemotePeer *
-one_video_remote_peer_new (OneVideoLocalPeer * local,
-    GInetSocketAddress * addr)
+OvRemotePeer *
+ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
 {
   gchar *name;
   GstBus *bus;
   gboolean ret;
-  OneVideoRemotePeer *remote;
+  OvRemotePeer *remote;
 
-  remote = g_new0 (OneVideoRemotePeer, 1);
-  remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
+  remote = g_new0 (OvRemotePeer, 1);
+  remote->state = OV_REMOTE_STATE_NULL;
   remote->local = local;
   remote->addr = g_object_ref (addr);
-  remote->addr_s = one_video_inet_socket_address_to_string (remote->addr);
+  remote->addr_s = ov_inet_socket_address_to_string (remote->addr);
 
   name = g_strdup_printf ("receive-%s", remote->addr_s);
   remote->receive = gst_pipeline_new (name);
   g_free (name);
 
-  remote->priv = g_new0 (OneVideoRemotePeerPriv, 1);
+  remote->priv = g_new0 (OvRemotePeerPriv, 1);
   name = g_strdup_printf ("audio-playback-bin-%s", remote->addr_s);
   remote->priv->aplayback = gst_bin_new (name);
   g_free (name);
@@ -293,27 +292,26 @@ one_video_remote_peer_new (OneVideoLocalPeer * local,
       G_CALLBACK (on_remote_receive_error), remote);
   g_object_unref (bus);
 
-  remote->state = ONE_VIDEO_REMOTE_STATE_ALLOCATED;
+  remote->state = OV_REMOTE_STATE_ALLOCATED;
 
   return remote;
 }
 
-OneVideoRemotePeer *
-one_video_remote_peer_new_from_string (OneVideoLocalPeer * local,
-    const gchar * addr_s)
+OvRemotePeer *
+ov_remote_peer_new_from_string (OvLocalPeer * local, const gchar * addr_s)
 {
   GInetSocketAddress *addr;
-  OneVideoRemotePeer *remote;
+  OvRemotePeer *remote;
   
-  addr = one_video_inet_socket_address_from_string (addr_s);
-  remote = one_video_remote_peer_new (local, addr);
+  addr = ov_inet_socket_address_from_string (addr_s);
+  remote = ov_remote_peer_new (local, addr);
   g_object_unref (addr);
 
   return remote;
 }
 
 gpointer
-one_video_remote_peer_add_gtkglsink (OneVideoRemotePeer * remote)
+ov_remote_peer_add_gtkglsink (OvRemotePeer * remote)
 {
   gpointer widget;
   remote->priv->video_sink = gst_element_factory_make ("gtksink", NULL);
@@ -322,13 +320,13 @@ one_video_remote_peer_add_gtkglsink (OneVideoRemotePeer * remote)
 }
 
 void
-one_video_remote_peer_pause (OneVideoRemotePeer * remote)
+ov_remote_peer_pause (OvRemotePeer * remote)
 {
   GstStateChangeReturn ret;
   gchar *addr_only;
-  OneVideoLocalPeer *local = remote->local;
+  OvLocalPeer *local = remote->local;
 
-  g_assert (remote->state == ONE_VIDEO_REMOTE_STATE_PLAYING);
+  g_assert (remote->state == OV_REMOTE_STATE_PLAYING);
 
   /* Stop transmitting */
   addr_only = g_inet_address_to_string (
@@ -372,19 +370,19 @@ one_video_remote_peer_pause (OneVideoRemotePeer * remote)
     GST_DEBUG ("Paused video of %s", remote->addr_s);
   }
 
-  remote->state = ONE_VIDEO_REMOTE_STATE_PAUSED;
+  remote->state = OV_REMOTE_STATE_PAUSED;
   GST_DEBUG ("Fully paused remote peer %s", remote->addr_s);
 }
 
 void
-one_video_remote_peer_resume (OneVideoRemotePeer * remote)
+ov_remote_peer_resume (OvRemotePeer * remote)
 {
   gboolean res;
   GstStateChangeReturn ret;
   gchar *addr_only;
-  OneVideoLocalPeer *local = remote->local;
+  OvLocalPeer *local = remote->local;
 
-  g_assert (remote->state == ONE_VIDEO_REMOTE_STATE_PAUSED);
+  g_assert (remote->state == OV_REMOTE_STATE_PAUSED);
 
   /* Start transmitting */
   addr_only = g_inet_address_to_string (
@@ -417,21 +415,21 @@ one_video_remote_peer_resume (OneVideoRemotePeer * remote)
   /* Resume receiving */
   ret = gst_element_set_state (remote->receive, GST_STATE_PLAYING);
   g_assert (ret == GST_STATE_CHANGE_SUCCESS);
-  remote->state = ONE_VIDEO_REMOTE_STATE_PLAYING;
+  remote->state = OV_REMOTE_STATE_PLAYING;
   GST_DEBUG ("Fully resumed remote peer %s", remote->addr_s);
 }
 
-/* Does not do any operations that involve taking the OneVideoLocalPeer lock.
- * See: one_video_remote_peer_remove() 
+/* Does not do any operations that involve taking the OvLocalPeer lock.
+ * See: ov_remote_peer_remove() 
  *
  * NOT a public symbol */
 void
-one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
+ov_remote_peer_remove_not_array (OvRemotePeer * remote)
 {
   gboolean res;
   GstStateChangeReturn ret;
   gchar *tmp, *addr_only;
-  OneVideoLocalPeer *local = remote->local;
+  OvLocalPeer *local = remote->local;
 
   /* Stop transmitting */
   addr_only = g_inet_address_to_string (
@@ -486,30 +484,30 @@ one_video_remote_peer_remove_not_array (OneVideoRemotePeer * remote)
   /* Stop receiving */
   ret = gst_element_set_state (remote->receive, GST_STATE_NULL);
   g_assert (ret == GST_STATE_CHANGE_SUCCESS);
-  remote->state = ONE_VIDEO_REMOTE_STATE_NULL;
+  remote->state = OV_REMOTE_STATE_NULL;
 
   tmp = g_strdup (remote->addr_s);
-  one_video_remote_peer_free (remote);
+  ov_remote_peer_free (remote);
   GST_DEBUG ("Freed everything for remote peer %s", tmp);
   g_free (tmp);
 }
 
 void
-one_video_remote_peer_remove (OneVideoRemotePeer * remote)
+ov_remote_peer_remove (OvRemotePeer * remote)
 {
   /* Remove from the peers list first so nothing else tries to use it */
   g_rec_mutex_lock (&remote->local->priv->lock);
   g_ptr_array_remove (remote->local->priv->remote_peers, remote);
   g_rec_mutex_unlock (&remote->local->priv->lock);
 
-  one_video_remote_peer_remove_not_array (remote);
+  ov_remote_peer_remove_not_array (remote);
 }
 
 void
-one_video_remote_peer_free (OneVideoRemotePeer * remote)
+ov_remote_peer_free (OvRemotePeer * remote)
 {
   guint ii;
-  OneVideoLocalPeer *local = remote->local;
+  OvLocalPeer *local = remote->local;
 
   GST_DEBUG ("Freeing remote %s", remote->addr_s);
   g_rec_mutex_lock (&local->priv->lock);
@@ -540,27 +538,27 @@ one_video_remote_peer_free (OneVideoRemotePeer * remote)
   g_free (remote);
 }
 
-OneVideoDiscoveredPeer *
-one_video_discovered_peer_new (GInetSocketAddress * addr)
+OvDiscoveredPeer *
+ov_discovered_peer_new (GInetSocketAddress * addr)
 {
-  OneVideoDiscoveredPeer *d;
+  OvDiscoveredPeer *d;
 
-  d = g_new0 (OneVideoDiscoveredPeer, 1);
+  d = g_new0 (OvDiscoveredPeer, 1);
   d->addr = g_object_ref (addr);
   d->discover_time = g_get_monotonic_time ();
 
-  if (g_inet_socket_address_get_port (addr) == ONE_VIDEO_DEFAULT_COMM_PORT)
+  if (g_inet_socket_address_get_port (addr) == OV_DEFAULT_COMM_PORT)
     d->addr_s =
       g_inet_address_to_string (g_inet_socket_address_get_address (addr));
   else
     d->addr_s =
-      one_video_inet_socket_address_to_string (addr);
+      ov_inet_socket_address_to_string (addr);
 
   return d;
 }
 
 void
-one_video_discovered_peer_free (OneVideoDiscoveredPeer * peer)
+ov_discovered_peer_free (OvDiscoveredPeer * peer)
 {
   g_object_unref (peer->addr);
   g_free (peer->addr_s);
@@ -568,15 +566,15 @@ one_video_discovered_peer_free (OneVideoDiscoveredPeer * peer)
 }
 
 static GstCaps *
-one_video_media_type_to_caps (OneVideoMediaType type)
+ov_media_type_to_caps (OvMediaType type)
 {
   switch (type) {
-    case ONE_VIDEO_MEDIA_TYPE_JPEG:
+    case OV_MEDIA_TYPE_JPEG:
       return gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
-    case ONE_VIDEO_MEDIA_TYPE_YUY2:
+    case OV_MEDIA_TYPE_YUY2:
       return gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING,
           "YUY2", NULL);
-    case ONE_VIDEO_MEDIA_TYPE_H264:
+    case OV_MEDIA_TYPE_H264:
       return gst_caps_new_empty_simple (VIDEO_FORMAT_H264);
     default:
       g_assert_not_reached ();
@@ -591,7 +589,7 @@ one_video_media_type_to_caps (OneVideoMediaType type)
  *
  * Currently only returns image/jpeg caps */
 static GstCaps *
-one_video_device_get_usable_caps (GstDevice * device, OneVideoMediaType * type)
+ov_device_get_usable_caps (GstDevice * device, OvMediaType * type)
 {
   gchar *tmp;
   gint ii, len;
@@ -600,10 +598,10 @@ one_video_device_get_usable_caps (GstDevice * device, OneVideoMediaType * type)
   retcaps = gst_device_get_caps (device);
 
   /* Try extracting jpeg-only structures first */
-  *type = ONE_VIDEO_MEDIA_TYPE_JPEG;
+  *type = OV_MEDIA_TYPE_JPEG;
 
 extract_caps:
-  caps2 = one_video_media_type_to_caps (*type);
+  caps2 = ov_media_type_to_caps (*type);
   caps1 = gst_caps_intersect (retcaps, caps2);
   g_clear_pointer (&caps2, gst_caps_unref);
 
@@ -613,11 +611,11 @@ extract_caps:
       /* Device does not support JPEG, try YUY2
        * We don't try other RAW formats because those are all emulated by libv4l2
        * by converting/decoding from JPEG or YUY2 */
-      case ONE_VIDEO_MEDIA_TYPE_JPEG:
+      case OV_MEDIA_TYPE_JPEG:
         /* TODO: Not supported yet (needs support in the transmit pipeline) */
         g_assert_not_reached ();
         /* With YUY2, we will encode to JPEG before transmitting */
-        *type = ONE_VIDEO_MEDIA_TYPE_YUY2;
+        *type = OV_MEDIA_TYPE_YUY2;
         goto extract_caps; /* try again */
       default:
         tmp = gst_caps_to_string (retcaps);
@@ -656,8 +654,8 @@ extract_caps:
     /* Remove framerates less than 15; those look too choppy */
     gst_structure_get_fraction (s, "framerate", &n1, &n2);
     gst_util_fraction_to_double (n1, n2, &dest);
-    if ((*type == ONE_VIDEO_MEDIA_TYPE_JPEG && dest < 30) ||
-        (*type == ONE_VIDEO_MEDIA_TYPE_YUY2 && dest < 15))
+    if ((*type == OV_MEDIA_TYPE_JPEG && dest < 30) ||
+        (*type == OV_MEDIA_TYPE_YUY2 && dest < 15))
       goto remove;
 
     continue;
@@ -670,24 +668,24 @@ remove:
 }
 
 GList *
-one_video_local_peer_get_video_devices (OneVideoLocalPeer * local)
+ov_local_peer_get_video_devices (OvLocalPeer * local)
 {
   return gst_device_monitor_get_devices (local->priv->dm);
 }
 
 gboolean
-one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
+ov_local_peer_set_video_device (OvLocalPeer * local,
     GstDevice * device)
 {
   gchar *caps;
-  OneVideoMediaType video_media_type;
+  OvMediaType video_media_type;
 
   /* TODO: Currently, we can only get a device that outputs JPEG and our
    * transmit code assumes that. When we fix that to also support YUY2 and
    * H.264, we need to fix all this code too. */
   if (device) {
     local->priv->supported_send_vcaps =
-      one_video_device_get_usable_caps (device, &video_media_type);
+      ov_device_get_usable_caps (device, &video_media_type);
   } else {
     local->priv->supported_send_vcaps =
       gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_SEP VIDEO_CAPS_STR);
@@ -699,14 +697,14 @@ one_video_local_peer_set_video_device (OneVideoLocalPeer * local,
 
   /* Setup transmit pipeline */
   local->priv->video_device = device;
-  return one_video_local_peer_setup_transmit_pipeline (local);
+  return ov_local_peer_setup_transmit_pipeline (local);
 }
 
 typedef struct {
-  OneVideoRemoteFoundCallback callback;
+  OvRemoteFoundCallback callback;
   gpointer callback_data;
   GCancellable *cancellable;
-} OneVideoDiscoveryReplyData;
+} OvDiscoveryReplyData;
 
 static gboolean
 recv_discovery_reply (GSocket * socket, GIOCondition condition,
@@ -714,17 +712,17 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
 {
   gchar *tmp;
   gboolean ret;
-  OneVideoUdpMsg msg;
+  OvUdpMsg msg;
   GSocketAddress *from;
-  OneVideoDiscoveredPeer *d;
-  OneVideoDiscoveryReplyData *data = user_data;
+  OvDiscoveredPeer *d;
+  OvDiscoveryReplyData *data = user_data;
   GCancellable *cancellable = data->cancellable;
   GError *error = NULL;
 
   if (g_cancellable_is_cancelled (cancellable))
     return G_SOURCE_REMOVE;
 
-  ret = one_video_udp_msg_read_message_from (&msg, &from, socket,
+  ret = ov_udp_msg_read_message_from (&msg, &from, socket,
       cancellable, &error);
   if (!ret) {
     GST_WARNING ("Error reading discovery reply: %s", error->message);
@@ -732,7 +730,7 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
     return G_SOURCE_CONTINUE;
   }
 
-  tmp = one_video_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (from));
+  tmp = ov_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (from));
   GST_DEBUG ("Incoming potential discovery reply from %s", tmp);
   g_free (tmp);
 
@@ -740,13 +738,13 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
   if (msg.size > 0)
     g_free (msg.data);
 
-  if (msg.type != ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE) {
+  if (msg.type != OV_UDP_MSG_TYPE_UNICAST_HI_THERE) {
     GST_WARNING ("Invalid discovery reply: %u", msg.type);
     ret = G_SOURCE_CONTINUE;
     goto out;
   }
 
-  d = one_video_discovered_peer_new (G_INET_SOCKET_ADDRESS (from));
+  d = ov_discovered_peer_new (G_INET_SOCKET_ADDRESS (from));
   GST_DEBUG ("Found a remote peer: %s. Calling user-provided callback.",
       d->addr_s);
 
@@ -759,8 +757,8 @@ out:
 }
 
 /**
- * one_video_local_peer_find_remotes_create_source:
- * @local: a #OneVideoLocalPeer
+ * ov_local_peer_find_remotes_create_source:
+ * @local: a #OvLocalPeer
  * @cancellable: a #GCancellable
  * @callback: a #GFunc called for every remote peer found
  * @callback_data: the data passed to @callback
@@ -785,14 +783,14 @@ out:
  * don't have to destroy and re-create the source every time they want to send
  * another multicast discover. */
 GSource *
-one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
-    GCancellable * cancellable, OneVideoRemoteFoundCallback callback,
+ov_local_peer_find_remotes_create_source (OvLocalPeer * local,
+    GCancellable * cancellable, OvRemoteFoundCallback callback,
     gpointer callback_data, GError ** error)
 {
   gboolean ret;
   GSource *source;
   GSocket *recv_socket;
-  OneVideoDiscoveryReplyData *reply_data;
+  OvDiscoveryReplyData *reply_data;
 
   recv_socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
       G_SOCKET_PROTOCOL_UDP, error);
@@ -806,7 +804,7 @@ one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
     return NULL;
   }
 
-  reply_data = g_new0 (OneVideoDiscoveryReplyData, 1);
+  reply_data = g_new0 (OvDiscoveryReplyData, 1);
   reply_data->callback = callback;
   reply_data->callback_data = callback_data;
   reply_data->cancellable = cancellable;
@@ -820,7 +818,7 @@ one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
   GST_DEBUG ("Searching for remote peers");
 
   /* Broadcast to the entire subnet to find listening peers */
-  ret = one_video_discovery_send_multicast_discover (local, cancellable, error);
+  ret = ov_discovery_send_multicast_discover (local, cancellable, error);
   if (!ret) {
     g_source_destroy (source);
     return NULL;
@@ -829,12 +827,12 @@ one_video_local_peer_find_remotes_create_source (OneVideoLocalPeer * local,
   return source;
 }
 
-OneVideoRemotePeer *
-one_video_local_peer_get_remote_by_id (OneVideoLocalPeer * local,
+OvRemotePeer *
+ov_local_peer_get_remote_by_id (OvLocalPeer * local,
     const gchar * id)
 {
   guint ii;
-  OneVideoRemotePeer *remote;
+  OvRemotePeer *remote;
 
   g_rec_mutex_lock (&local->priv->lock);
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
@@ -850,7 +848,7 @@ one_video_local_peer_get_remote_by_id (OneVideoLocalPeer * local,
 static void
 append_clients (gpointer data, gpointer user_data)
 {
-  OneVideoRemotePeer *remote = data;
+  OvRemotePeer *remote = data;
   GString **clients = user_data;
   gchar *addr_s;
 
@@ -871,7 +869,7 @@ append_clients (gpointer data, gpointer user_data)
 
 /* Called with the lock TAKEN */
 static gboolean
-one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
+ov_local_peer_begin_transmit (OvLocalPeer * local)
 {
   GSocket *socket;
   GString **clients;
@@ -892,7 +890,7 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
   /* Send audio RTP to all remote peers */
   g_object_set (local->priv->asend_rtp_sink, "clients", clients[0]->str, NULL);
   /* Send audio RTCP SRs to all remote peers */
-  socket = one_video_get_socket_for_addr (local_addr_s,
+  socket = ov_get_socket_for_addr (local_addr_s,
       local->priv->recv_rtcp_ports[0]);
   g_object_set (local->priv->asend_rtcp_sink, "clients", clients[1]->str,
       "socket", socket, NULL);
@@ -903,7 +901,7 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
   /* Send video RTP to all remote peers */
   g_object_set (local->priv->vsend_rtp_sink, "clients", clients[2]->str, NULL);
   /* Send video RTCP SRs to all remote peers */
-  socket = one_video_get_socket_for_addr (local_addr_s,
+  socket = ov_get_socket_for_addr (local_addr_s,
       local->priv->recv_rtcp_ports[1]);
   g_object_set (local->priv->vsend_rtcp_sink, "clients", clients[3]->str,
       "socket", socket, NULL);
@@ -926,8 +924,8 @@ one_video_local_peer_begin_transmit (OneVideoLocalPeer * local)
 }
 
 void
-one_video_local_peer_add_remote (OneVideoLocalPeer * local,
-    OneVideoRemotePeer * remote)
+ov_local_peer_add_remote (OvLocalPeer * local,
+    OvRemotePeer * remote)
 {
   /* Add to our list of remote peers */
   g_rec_mutex_lock (&local->priv->lock);
@@ -936,13 +934,13 @@ one_video_local_peer_add_remote (OneVideoLocalPeer * local,
 }
 
 static gboolean
-one_video_local_peer_setup_remote (OneVideoLocalPeer * local,
-    OneVideoRemotePeer * remote)
+ov_local_peer_setup_remote (OvLocalPeer * local,
+    OvRemotePeer * remote)
 {
-  one_video_local_peer_setup_remote_receive (local, remote);
-  one_video_local_peer_setup_remote_playback (local, remote);
+  ov_local_peer_setup_remote_receive (local, remote);
+  ov_local_peer_setup_remote_playback (local, remote);
   
-  remote->state = ONE_VIDEO_REMOTE_STATE_READY;
+  remote->state = OV_REMOTE_STATE_READY;
 
   return TRUE;
 }
@@ -951,23 +949,23 @@ one_video_local_peer_setup_remote (OneVideoLocalPeer * local,
  * remote peer replies with the recv/send caps it supports. Once all the peers
  * have replied, we'll decide caps for everyone and send them to everyone. All
  * this will happen asynchronously. The caller should just call 
- * one_video_local_peer_start() when it wants to start the call, and it will 
+ * ov_local_peer_start() when it wants to start the call, and it will 
  * start when everyone is ready. */
 gboolean
-one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
+ov_local_peer_negotiate_async (OvLocalPeer * local,
     GCancellable * cancellable, GAsyncReadyCallback callback,
     gpointer callback_data)
 {
   GTask *task;
   GCancellable *our_cancellable;
 
-  if (local->state != ONE_VIDEO_LOCAL_STATE_INITIALISED &&
-      local->state != ONE_VIDEO_LOCAL_STATE_STOPPED) {
+  if (local->state != OV_LOCAL_STATE_INITIALISED &&
+      local->state != OV_LOCAL_STATE_STOPPED) {
     GST_ERROR ("State is %u instead of INITIALISED or STOPPED", local->state);
     return FALSE;
   }
 
-  local->state = ONE_VIDEO_LOCAL_STATE_INITIALISED;
+  local->state = OV_LOCAL_STATE_INITIALISED;
 
   if (cancellable)
     our_cancellable = g_object_ref (cancellable);
@@ -978,7 +976,7 @@ one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
   g_task_set_task_data (task, local, NULL);
   g_task_set_return_on_cancel (task, TRUE);
   g_task_run_in_thread (task,
-      (GTaskThreadFunc) one_video_local_peer_negotiate_thread);
+      (GTaskThreadFunc) ov_local_peer_negotiate_thread);
   local->priv->negotiator_task = task;
   g_object_unref (our_cancellable); /* Hand over ref to the task */
   g_object_unref (task);
@@ -987,7 +985,7 @@ one_video_local_peer_negotiate_async (OneVideoLocalPeer * local,
 }
 
 gboolean
-one_video_local_peer_negotiate_finish (OneVideoLocalPeer * local,
+ov_local_peer_negotiate_finish (OvLocalPeer * local,
     GAsyncResult * result, GError ** error)
 {
   local->priv->negotiator_task = NULL;
@@ -995,50 +993,50 @@ one_video_local_peer_negotiate_finish (OneVideoLocalPeer * local,
 }
 
 gboolean
-one_video_local_peer_negotiate_stop (OneVideoLocalPeer * local)
+ov_local_peer_negotiate_stop (OvLocalPeer * local)
 {
   g_rec_mutex_lock (&local->priv->lock);
 
-  if (!(local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATING) &&
-      !(local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATED)) {
+  if (!(local->state & OV_LOCAL_STATE_NEGOTIATING) &&
+      !(local->state & OV_LOCAL_STATE_NEGOTIATED)) {
     GST_ERROR ("Can't stop negotiating when not negotiating");
     g_rec_mutex_unlock (&local->priv->lock);
     return FALSE;
   }
 
-  if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATOR) {
+  if (local->state & OV_LOCAL_STATE_NEGOTIATOR) {
     g_assert (local->priv->negotiator_task != NULL);
     GST_DEBUG ("Stopping negotiation as the negotiator");
     g_cancellable_cancel (
         g_task_get_cancellable (local->priv->negotiator_task));
     /* Unlock mutex so that the other thread gets access */
-  } else if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATEE) {
+  } else if (local->state & OV_LOCAL_STATE_NEGOTIATEE) {
     GST_DEBUG ("Stopping negotiation as the negotiatee");
     g_source_remove (local->priv->negotiate->check_timeout_id);
     g_clear_pointer (&local->priv->negotiate->remotes,
         (GDestroyNotify) g_hash_table_unref);
     g_clear_pointer (&local->priv->negotiate, g_free);
     /* Reset state so we accept incoming connections again */
-    local->state = ONE_VIDEO_LOCAL_STATE_INITIALISED;
+    local->state = OV_LOCAL_STATE_INITIALISED;
   } else {
     g_assert_not_reached ();
   }
 
-  local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
+  local->state |= OV_LOCAL_STATE_FAILED;
 
   g_rec_mutex_unlock (&local->priv->lock);
   return TRUE;
 }
 
 gboolean
-one_video_local_peer_start (OneVideoLocalPeer * local)
+ov_local_peer_start (OvLocalPeer * local)
 {
   guint index;
   gboolean res;
   GstStateChangeReturn ret;
-  OneVideoRemotePeer *remote;
+  OvRemotePeer *remote;
 
-  if (!(local->state & ONE_VIDEO_LOCAL_STATE_READY)) {
+  if (!(local->state & OV_LOCAL_STATE_READY)) {
     GST_ERROR ("Negotiation hasn't been done yet!");
     return FALSE;
   }
@@ -1046,17 +1044,17 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
   g_rec_mutex_lock (&local->priv->lock);
   if (local->transmit == NULL) {
     /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
-    res = one_video_local_peer_setup_transmit_pipeline (local);
+    res = ov_local_peer_setup_transmit_pipeline (local);
     g_assert (res);
   }
-  res = one_video_local_peer_begin_transmit (local);
+  res = ov_local_peer_begin_transmit (local);
   g_assert (res);
 
   for (index = 0; index < local->priv->remote_peers->len; index++) {
     remote = g_ptr_array_index (local->priv->remote_peers, index);
     
     /* Call details have all been set, so we can do the setup */
-    res = one_video_local_peer_setup_remote (local, remote);
+    res = ov_local_peer_setup_remote (local, remote);
     g_assert (res);
 
     /* Start PLAYING the pipelines */
@@ -1068,7 +1066,7 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
         remote->addr_s, remote->priv->recv_ports[0],
         remote->priv->recv_ports[1], remote->priv->recv_ports[2],
         remote->priv->recv_ports[3]);
-    remote->state = ONE_VIDEO_REMOTE_STATE_PLAYING;
+    remote->state = OV_REMOTE_STATE_PLAYING;
   }
 
   ret = gst_element_set_state (local->playback, GST_STATE_PLAYING);
@@ -1077,7 +1075,7 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
 
   GST_DEBUG ("Ready to playback data from all remotes");
   /* The difference between negotiator and negotiatee ends with playback */
-  local->state = ONE_VIDEO_LOCAL_STATE_PLAYING;
+  local->state = OV_LOCAL_STATE_PLAYING;
   g_rec_mutex_unlock (&local->priv->lock);
   return TRUE;
 
@@ -1095,38 +1093,38 @@ one_video_local_peer_start (OneVideoLocalPeer * local)
 }
 
 void
-one_video_local_peer_stop (OneVideoLocalPeer * local)
+ov_local_peer_stop (OvLocalPeer * local)
 {
   GST_DEBUG ("Stopping local peer");
   g_rec_mutex_lock (&local->priv->lock);
   /* Stop negotiating if negotiating */
-  if (local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATING) {
+  if (local->state & OV_LOCAL_STATE_NEGOTIATING) {
     GST_DEBUG ("Cancelling call negotiation");
-    one_video_local_peer_negotiate_stop (local);
+    ov_local_peer_negotiate_stop (local);
   }
 
   /* Signal end of call if we're in a call */
-  if (local->state >= ONE_VIDEO_LOCAL_STATE_READY &&
+  if (local->state >= OV_LOCAL_STATE_READY &&
       local->priv->remote_peers->len > 0) {
     GST_DEBUG ("Sending END_CALL to remote peers");
-    one_video_local_peer_end_call (local);
+    ov_local_peer_end_call (local);
   }
 
   /* Remove all the remote peers added to the local peer */
   if (local->priv->remote_peers->len > 0) {
     g_ptr_array_foreach (local->priv->remote_peers,
-        (GFunc) one_video_remote_peer_remove_not_array, NULL);
+        (GFunc) ov_remote_peer_remove_not_array, NULL);
     g_ptr_array_free (local->priv->remote_peers, TRUE);
     local->priv->remote_peers = g_ptr_array_new ();
   }
 
-  if (local->state >= ONE_VIDEO_LOCAL_STATE_PLAYING) {
+  if (local->state >= OV_LOCAL_STATE_PLAYING) {
     GST_DEBUG ("Stopping transmit and playback");
-    one_video_local_peer_stop_transmit (local);
-    one_video_local_peer_stop_playback (local);
+    ov_local_peer_stop_transmit (local);
+    ov_local_peer_stop_playback (local);
   }
 
-  local->state = ONE_VIDEO_LOCAL_STATE_STOPPED;
+  local->state = OV_LOCAL_STATE_STOPPED;
   g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
   g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);
   g_rec_mutex_unlock (&local->priv->lock);

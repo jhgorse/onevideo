@@ -30,51 +30,51 @@
 #include "outgoing.h"
 
 static void
-handle_tcp_msg_ack (OneVideoTcpMsg * msg)
+handle_tcp_msg_ack (OvTcpMsg * msg)
 {
   guint64 ack_id;
   const gchar *variant_type;
 
   variant_type =
-    one_video_tcp_msg_type_to_variant_type (ONE_VIDEO_TCP_MSG_TYPE_ACK,
-        ONE_VIDEO_TCP_MAX_VERSION);
+    ov_tcp_msg_type_to_variant_type (OV_TCP_MSG_TYPE_ACK,
+        OV_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &ack_id);
   /* Does nothing right now */
 }
 
 static gchar *
-handle_tcp_msg_error (OneVideoTcpMsg * msg)
+handle_tcp_msg_error (OvTcpMsg * msg)
 {
   guint64 ack_id;
   gchar *error_msg;
   const gchar *variant_type;
 
   variant_type =
-    one_video_tcp_msg_type_to_variant_type (ONE_VIDEO_TCP_MSG_TYPE_ERROR,
-        ONE_VIDEO_TCP_MAX_VERSION);
+    ov_tcp_msg_type_to_variant_type (OV_TCP_MSG_TYPE_ERROR,
+        OV_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &ack_id, &error_msg);
 
   return error_msg;
 }
 
 static gchar *
-handle_tcp_msg_ok_negotiate (OneVideoTcpMsg * msg)
+handle_tcp_msg_ok_negotiate (OvTcpMsg * msg)
 {
   guint64 ack_id;
   gchar *peer_id;
   const gchar *variant_type;
 
   variant_type =
-    one_video_tcp_msg_type_to_variant_type (ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE,
-        ONE_VIDEO_TCP_MAX_VERSION);
+    ov_tcp_msg_type_to_variant_type (OV_TCP_MSG_TYPE_OK_NEGOTIATE,
+        OV_TCP_MAX_VERSION);
   g_variant_get (msg->variant, variant_type, &ack_id, &peer_id);
 
   return peer_id;
 }
 
-OneVideoTcpMsg *
-one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
-    OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
+OvTcpMsg *
+ov_remote_peer_send_tcp_msg (OvRemotePeer * remote, OvTcpMsg * msg,
+    GCancellable * cancellable, GError ** error)
 {
   gchar *tmp;
   gboolean ret;
@@ -83,7 +83,7 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
   GSocketAddress *addr;
   GInputStream *input;
   GOutputStream *output;
-  OneVideoTcpMsg *reply = NULL;
+  OvTcpMsg *reply = NULL;
 
   client = g_socket_client_new ();
   /* Set local address with random port to ensure that we connect from the same
@@ -93,7 +93,7 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
   g_socket_client_set_local_address (client, addr);
   g_object_unref (addr);
   /* Set timeout */
-  g_socket_client_set_timeout (client, ONE_VIDEO_TCP_TIMEOUT);
+  g_socket_client_set_timeout (client, OV_TCP_TIMEOUT);
   conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
       cancellable, error);
   if (!conn) {
@@ -102,19 +102,19 @@ one_video_remote_peer_send_tcp_msg (OneVideoRemotePeer * remote,
     goto no_conn;
   }
 
-  tmp = one_video_tcp_msg_print (msg);
+  tmp = ov_tcp_msg_print (msg);
   GST_TRACE ("Sending to '%s' a '%s' msg of size %u: %s", remote->id,
-      one_video_tcp_msg_type_to_string (msg->type, msg->version),
+      ov_tcp_msg_type_to_string (msg->type, msg->version),
       msg->size, tmp);
   g_free (tmp);
 
   output = g_io_stream_get_output_stream (G_IO_STREAM (conn));
-  ret = one_video_tcp_msg_write_to_stream (output, msg, cancellable, error);
+  ret = ov_tcp_msg_write_to_stream (output, msg, cancellable, error);
   if (!ret)
     goto out;
 
   input = g_io_stream_get_input_stream (G_IO_STREAM (conn));
-  reply = one_video_tcp_msg_read_from_stream (input, cancellable, error);
+  reply = ov_tcp_msg_read_from_stream (input, cancellable, error);
   if (!reply)
     goto out;
 
@@ -127,8 +127,8 @@ no_conn:
 }
 
 void
-one_video_remote_peer_send_tcp_msg_quick_noreply (OneVideoRemotePeer * remote,
-    OneVideoTcpMsg * msg)
+ov_remote_peer_send_tcp_msg_quick_noreply (OvRemotePeer * remote,
+    OvTcpMsg * msg)
 {
   gchar *tmp;
   GSocketClient *client;
@@ -150,14 +150,14 @@ one_video_remote_peer_send_tcp_msg_quick_noreply (OneVideoRemotePeer * remote,
   if (!conn)
     goto no_conn;
 
-  tmp = one_video_tcp_msg_print (msg);
+  tmp = ov_tcp_msg_print (msg);
   GST_TRACE ("Quick-sending to '%s' a '%s' msg of size %u: %s", remote->id,
-      one_video_tcp_msg_type_to_string (msg->type, msg->version),
+      ov_tcp_msg_type_to_string (msg->type, msg->version),
       msg->size, tmp);
   g_free (tmp);
 
   output = g_io_stream_get_output_stream (G_IO_STREAM (conn));
-  if (!one_video_tcp_msg_write_to_stream (output, msg, NULL, NULL))
+  if (!ov_tcp_msg_write_to_stream (output, msg, NULL, NULL))
     goto out;
 
 out:
@@ -169,27 +169,27 @@ no_conn:
 }
 
 static gboolean
-one_video_remote_peer_tcp_client_start_negotiate (OneVideoRemotePeer * remote,
+ov_remote_peer_tcp_client_start_negotiate (OvRemotePeer * remote,
     guint64 call_id, GCancellable * cancellable, GError ** error)
 {
   gchar *error_msg;
-  OneVideoTcpMsg *msg, *reply = NULL;
+  OvTcpMsg *msg, *reply = NULL;
   gboolean ret = FALSE;
 
-  msg = one_video_tcp_msg_new_start_negotiate (call_id, remote->local->id,
+  msg = ov_tcp_msg_new_start_negotiate (call_id, remote->local->id,
       g_inet_socket_address_get_port (remote->local->addr));
 
-  reply = one_video_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
+  reply = ov_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
   if (!reply)
     goto no_reply;
 
   switch (reply->type) {
-    case ONE_VIDEO_TCP_MSG_TYPE_OK_NEGOTIATE:
+    case OV_TCP_MSG_TYPE_OK_NEGOTIATE:
       g_assert (remote->id == NULL);
       remote->id = handle_tcp_msg_ok_negotiate (reply);
       GST_DEBUG ("Recvd OK from '%s'", remote->id);
       break;
-    case ONE_VIDEO_TCP_MSG_TYPE_ERROR:
+    case OV_TCP_MSG_TYPE_ERROR:
       /* Try again? */
       error_msg = handle_tcp_msg_error (reply);
       GST_ERROR ("Remote %s returned an error while starting negotiation: %s",
@@ -198,42 +198,42 @@ one_video_remote_peer_tcp_client_start_negotiate (OneVideoRemotePeer * remote,
       goto err;
     default:
       GST_ERROR ("Expected message type '%s' from %s, got '%s'",
-          one_video_tcp_msg_type_to_string (
-            ONE_VIDEO_TCP_MSG_TYPE_ACK, ONE_VIDEO_TCP_MAX_VERSION),
-          remote->id, one_video_tcp_msg_type_to_string (reply->type,
+          ov_tcp_msg_type_to_string (
+            OV_TCP_MSG_TYPE_ACK, OV_TCP_MAX_VERSION),
+          remote->id, ov_tcp_msg_type_to_string (reply->type,
             reply->version));
       goto err;
   }
 
   ret = TRUE;
 err:
-  one_video_tcp_msg_free (reply);
+  ov_tcp_msg_free (reply);
 no_reply:
-  one_video_tcp_msg_free (msg);
+  ov_tcp_msg_free (msg);
   return ret;
 }
 
 static void
-one_video_remote_peer_tcp_client_cancel_negotiate (OneVideoRemotePeer * remote,
+ov_remote_peer_tcp_client_cancel_negotiate (OvRemotePeer * remote,
     guint64 call_id)
 {
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
 
-  msg = one_video_tcp_msg_new_cancel_negotiate (call_id, remote->local->id);
+  msg = ov_tcp_msg_new_cancel_negotiate (call_id, remote->local->id);
 
-  one_video_remote_peer_send_tcp_msg_quick_noreply (remote, msg);
+  ov_remote_peer_send_tcp_msg_quick_noreply (remote, msg);
     
-  one_video_tcp_msg_free (msg);
+  ov_tcp_msg_free (msg);
 }
 
 static GVariant *
-get_all_peers_list_except_this (OneVideoRemotePeer * remote, guint64 call_id)
+get_all_peers_list_except_this (OvRemotePeer * remote, guint64 call_id)
 {
   int ii;
   gchar *tmp;
   GVariant *peers;
   GVariantBuilder *builder;
-  OneVideoLocalPeer *local = remote->local;
+  OvLocalPeer *local = remote->local;
 
   builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
   /* We add ourselves here because we might want to potentially have a call that
@@ -241,7 +241,7 @@ get_all_peers_list_except_this (OneVideoRemotePeer * remote, guint64 call_id)
   g_variant_builder_add (builder, "s", local->id);
 
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
-    OneVideoRemotePeer *peer = g_ptr_array_index (local->priv->remote_peers, ii);
+    OvRemotePeer *peer = g_ptr_array_index (local->priv->remote_peers, ii);
     if (peer != remote)
       g_variant_builder_add (builder, "s", peer->id);
   }
@@ -257,21 +257,21 @@ get_all_peers_list_except_this (OneVideoRemotePeer * remote, guint64 call_id)
 }
 
 static GVariant *
-get_all_remotes_addr_list_except_this (OneVideoRemotePeer * remote,
+get_all_remotes_addr_list_except_this (OvRemotePeer * remote,
     guint64 call_id)
 {
   int ii;
   gchar *tmp;
   GVariant *peers;
   GVariantBuilder *builder;
-  OneVideoLocalPeer *local = remote->local;
+  OvLocalPeer *local = remote->local;
 
   builder = g_variant_builder_new (G_VARIANT_TYPE ("a(ss)"));
 
   /* We don't add ourselves here because each peer already knows about us */
 
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
-    OneVideoRemotePeer *peer = g_ptr_array_index (local->priv->remote_peers, ii);
+    OvRemotePeer *peer = g_ptr_array_index (local->priv->remote_peers, ii);
     if (peer != remote)
       /* Here we inform this remote about the address to use to connect to all
        * the other remotes */
@@ -288,32 +288,32 @@ get_all_remotes_addr_list_except_this (OneVideoRemotePeer * remote,
   return peers;
 }
 
-static OneVideoTcpMsg *
-one_video_remote_peer_tcp_client_query_caps (OneVideoRemotePeer * remote,
+static OvTcpMsg *
+ov_remote_peer_tcp_client_query_caps (OvRemotePeer * remote,
     guint64 call_id, GCancellable * cancellable, GError ** error)
 {
   gchar *tmp;
-  OneVideoTcpMsg *msg, *reply = NULL;
+  OvTcpMsg *msg, *reply = NULL;
 
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_QUERY_CAPS,
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_QUERY_CAPS,
       get_all_remotes_addr_list_except_this (remote, call_id));
 
-  reply = one_video_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
+  reply = ov_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
   if (!reply)
     goto no_reply;
 
   switch (reply->type) {
-    case ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS:
+    case OV_TCP_MSG_TYPE_REPLY_CAPS:
       /* TODO: Check whether the call id matches */
-      tmp = one_video_tcp_msg_print (reply);
+      tmp = ov_tcp_msg_print (reply);
       GST_DEBUG ("Reply caps from %s: %s", remote->id, tmp);
       g_free (tmp);
       break;
-    case ONE_VIDEO_TCP_MSG_TYPE_ACK:
+    case OV_TCP_MSG_TYPE_ACK:
       handle_tcp_msg_ack (reply);
       GST_ERROR ("Expected a 'reply-caps' reply, but got ACK instead");
       goto clear_reply;
-    case ONE_VIDEO_TCP_MSG_TYPE_ERROR:
+    case OV_TCP_MSG_TYPE_ERROR:
       /* Try again? */
       tmp = handle_tcp_msg_error (reply);
       GST_ERROR ("Remote %s returned an error while receiving query caps: %s",
@@ -322,37 +322,36 @@ one_video_remote_peer_tcp_client_query_caps (OneVideoRemotePeer * remote,
       goto clear_reply;
     default:
       GST_ERROR ("Expected message type '%s' from %s, got '%s'",
-          one_video_tcp_msg_type_to_string (
-            ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS, ONE_VIDEO_TCP_MAX_VERSION),
-          remote->id, one_video_tcp_msg_type_to_string (reply->type,
+          ov_tcp_msg_type_to_string (
+            OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION),
+          remote->id, ov_tcp_msg_type_to_string (reply->type,
             reply->version));
       goto clear_reply;
   }
 
 no_reply:
-  one_video_tcp_msg_free (msg);
+  ov_tcp_msg_free (msg);
   return reply;
 
 clear_reply:
-  g_clear_pointer (&reply, (GDestroyNotify) one_video_tcp_msg_free);
+  g_clear_pointer (&reply, (GDestroyNotify) ov_tcp_msg_free);
   goto no_reply;
 }
 
 static void
-one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
-    GHashTable * in)
+ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
 {
   guint ii;
   const gchar *in_vtype;
 
-  in_vtype = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS, ONE_VIDEO_TCP_MAX_VERSION);
+  in_vtype = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION);
 
   /* For each remote peer, find the ports *we* need to send to */
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
     GVariant *value;
     GVariantIter *iter;
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
     /* The caps of the data that this remote will send to everyone */
     gchar *send_acaps, *send_vcaps, *peer_id;
     guint32 ports[6] = {};
@@ -389,11 +388,11 @@ one_video_local_peer_set_call_details (OneVideoLocalPeer * local,
   }
 }
 
-/* Format of GHashTable *in is: {OneVideoRemotePeer*: GVariant*}
- * GVariant is of type ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS */
+/* Format of GHashTable *in is: {OvRemotePeer*: GVariant*}
+ * GVariant is of type OV_TCP_MSG_TYPE_REPLY_CAPS */
 static GHashTable *
-one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
-    GHashTable * in, guint64 call_id)
+ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
+    guint64 call_id)
 {
   guint ii, jj;
   GHashTable *out;
@@ -402,13 +401,13 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
   const gchar *in_vtype, *out_vtype;
   GPtrArray *remotes = local->priv->remote_peers;
 
-  in_vtype = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS, ONE_VIDEO_TCP_MAX_VERSION);
-  out_vtype = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS, ONE_VIDEO_TCP_MAX_VERSION);
+  in_vtype = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION);
+  out_vtype = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_CALL_DETAILS, OV_TCP_MAX_VERSION);
 
-  /* Format: {OneVideoRemotePeer*: GVariant*}
-   * GVariant is of type ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS */
+  /* Format: {OvRemotePeer*: GVariant*}
+   * GVariant is of type OV_TCP_MSG_TYPE_CALL_DETAILS */
   out = g_hash_table_new_full (NULL, NULL, NULL,
       (GDestroyNotify) g_variant_unref);
 
@@ -432,7 +431,7 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
   for (ii = 0; ii < remotes->len; ii++) {
     GVariant *negotiated;
     GVariantBuilder *thisb;
-    OneVideoRemotePeer *this;
+    OvRemotePeer *this;
     
     this = g_ptr_array_index (remotes, ii);
     thisb = g_variant_builder_new (G_VARIANT_TYPE ("a(sssuuuuuu)"));
@@ -440,7 +439,7 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
     for (jj = 0; jj < remotes->len; jj++) {
       GVariant *otherv;
       GVariantIter *iter;
-      OneVideoRemotePeer *other;
+      OvRemotePeer *other;
       /* The caps of the data that the remote 'other'
        * will receive from the remote 'this'*/
       gchar *recv_acaps, *recv_vcaps, *peer_id;
@@ -497,25 +496,25 @@ one_video_aggregate_call_details_for_remotes (OneVideoLocalPeer * local,
 }
 
 static gboolean
-one_video_remote_peer_tcp_client_send_call_details (OneVideoRemotePeer * remote,
+ov_remote_peer_tcp_client_send_call_details (OvRemotePeer * remote,
     GVariant * details, GCancellable * cancellable, GError ** error)
 {
   gchar *error_msg;
-  OneVideoTcpMsg *msg, *reply = NULL;
+  OvTcpMsg *msg, *reply = NULL;
   gboolean ret = FALSE;
 
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_CALL_DETAILS, details);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_CALL_DETAILS, details);
 
-  reply = one_video_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
+  reply = ov_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
   if (!reply)
     goto no_reply;
 
   switch (reply->type) {
-    case ONE_VIDEO_TCP_MSG_TYPE_ACK:
+    case OV_TCP_MSG_TYPE_ACK:
       handle_tcp_msg_ack (reply);
       GST_DEBUG ("Recvd from '%s' ACK", remote->id);
       break;
-    case ONE_VIDEO_TCP_MSG_TYPE_ERROR:
+    case OV_TCP_MSG_TYPE_ERROR:
       /* Try again? */
       error_msg = handle_tcp_msg_error (reply);
       GST_ERROR ("Remote %s returned an error while receiving call details: %s",
@@ -524,41 +523,41 @@ one_video_remote_peer_tcp_client_send_call_details (OneVideoRemotePeer * remote,
       goto err;
     default:
       GST_ERROR ("Expected message type '%s' from %s, got '%s'",
-          one_video_tcp_msg_type_to_string (
-            ONE_VIDEO_TCP_MSG_TYPE_ACK, ONE_VIDEO_TCP_MAX_VERSION),
-          remote->id, one_video_tcp_msg_type_to_string (reply->type,
+          ov_tcp_msg_type_to_string (
+            OV_TCP_MSG_TYPE_ACK, OV_TCP_MAX_VERSION),
+          remote->id, ov_tcp_msg_type_to_string (reply->type,
             reply->version));
       goto err;
   }
 
   ret = TRUE;
 err:
-  one_video_tcp_msg_free (reply);
+  ov_tcp_msg_free (reply);
 no_reply:
-  one_video_tcp_msg_free (msg);
+  ov_tcp_msg_free (msg);
   return ret;
 }
 
 static gboolean
-one_video_remote_peer_tcp_client_start_call (OneVideoRemotePeer * remote,
-    GVariant * peers, GCancellable * cancellable, GError ** error)
+ov_remote_peer_tcp_client_start_call (OvRemotePeer * remote, GVariant * peers,
+    GCancellable * cancellable, GError ** error)
 {
   gchar *error_msg;
-  OneVideoTcpMsg *msg, *reply = NULL;
+  OvTcpMsg *msg, *reply = NULL;
   gboolean ret = FALSE;
 
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_START_CALL, peers);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_START_CALL, peers);
 
-  reply = one_video_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
+  reply = ov_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
   if (!reply)
     goto no_reply;
 
   switch (reply->type) {
-    case ONE_VIDEO_TCP_MSG_TYPE_ACK:
+    case OV_TCP_MSG_TYPE_ACK:
       handle_tcp_msg_ack (reply);
       GST_DEBUG ("Recvd from '%s' ACK", remote->id);
       break;
-    case ONE_VIDEO_TCP_MSG_TYPE_ERROR:
+    case OV_TCP_MSG_TYPE_ERROR:
       /* Try again? */
       error_msg = handle_tcp_msg_error (reply);
       GST_ERROR ("Remote %s returned an error while receiving call details: %s",
@@ -567,18 +566,18 @@ one_video_remote_peer_tcp_client_start_call (OneVideoRemotePeer * remote,
       goto err;
     default:
       GST_ERROR ("Expected message type '%s' from %s, got '%s'",
-          one_video_tcp_msg_type_to_string (
-            ONE_VIDEO_TCP_MSG_TYPE_ACK, ONE_VIDEO_TCP_MAX_VERSION),
-          remote->id, one_video_tcp_msg_type_to_string (reply->type,
+          ov_tcp_msg_type_to_string (
+            OV_TCP_MSG_TYPE_ACK, OV_TCP_MAX_VERSION),
+          remote->id, ov_tcp_msg_type_to_string (reply->type,
             reply->version));
       goto err;
   }
 
   ret = TRUE;
 err:
-  one_video_tcp_msg_free (reply);
+  ov_tcp_msg_free (reply);
 no_reply:
-  one_video_tcp_msg_free (msg);
+  ov_tcp_msg_free (msg);
   return ret;
 }
 
@@ -589,8 +588,8 @@ no_reply:
  * CALL_DETAILS → ACK
  * START_CALL → ACK */
 void
-one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
-    OneVideoLocalPeer * local, GCancellable * cancellable)
+ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
+    OvLocalPeer * local, GCancellable * cancellable)
 {
   gint ii;
   guint64 call_id;
@@ -603,8 +602,8 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     return;
   }
 
-  /* Format: {OneVideoRemotePeer*: GVariant*}
-   * GVariant is of type ONE_VIDEO_TCP_MSG_TYPE_REPLY_CAPS */
+  /* Format: {OvRemotePeer*: GVariant*}
+   * GVariant is of type OV_TCP_MSG_TYPE_REPLY_CAPS */
   in = g_hash_table_new_full (NULL, NULL, NULL,
       (GDestroyNotify) g_variant_unref);
 
@@ -615,18 +614,18 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   /* Every time we take the lock, check if our task has been cancelled */
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATING |
-    ONE_VIDEO_LOCAL_STATE_NEGOTIATOR;
+  local->state = OV_LOCAL_STATE_NEGOTIATING |
+    OV_LOCAL_STATE_NEGOTIATOR;
   /* Begin negotiation with all peers first (which returns a peer id) */
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
 
     remote = g_ptr_array_index (remotes, ii);
 
     /* START_NEGOTIATE → ACK */
-    ret = one_video_remote_peer_tcp_client_start_negotiate (remote, call_id,
+    ret = ov_remote_peer_tcp_client_start_negotiate (remote, call_id,
         cancellable, &error);
     if (!ret) {
       GST_WARNING ("Unable to start negotiation with remote %s: %s. Skipped.",
@@ -648,19 +647,19 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   /* Continue negotiation now that we have the peer id for all peers */
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
-    OneVideoTcpMsg *reply;
-    OneVideoRemotePeer *remote;
+    OvTcpMsg *reply;
+    OvRemotePeer *remote;
 
     remote = g_ptr_array_index (remotes, ii);
 
     /* QUERY_CAPS → REPLY_CAPS */
-    reply = one_video_remote_peer_tcp_client_query_caps (remote, call_id,
+    reply = ov_remote_peer_tcp_client_query_caps (remote, call_id,
         cancellable, &error);
     if (!reply)
       goto err;
 
     g_hash_table_insert (in, remote, g_variant_ref (reply->variant));
-    one_video_tcp_msg_free (reply);
+    ov_tcp_msg_free (reply);
   }
   g_rec_mutex_unlock (&local->priv->lock);
   
@@ -668,7 +667,7 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
   /* Transform REPLY_CAPS to CALL_DETAILS */
-  out = one_video_aggregate_call_details_for_remotes (local, in, call_id);
+  out = ov_aggregate_call_details_for_remotes (local, in, call_id);
   g_rec_mutex_unlock (&local->priv->lock);
 
   /* Distribute call details to all remotes */
@@ -680,12 +679,12 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
 
     remote = g_ptr_array_index (remotes, ii);
 
     /* CALL_DETAILS → ACK */
-    ret = one_video_remote_peer_tcp_client_send_call_details (remote,
+    ret = ov_remote_peer_tcp_client_send_call_details (remote,
         g_hash_table_lookup (out, remote), cancellable, &error);
 
     if (!ret) {
@@ -693,12 +692,12 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
       goto err;
     }
   }
-  local->state = ONE_VIDEO_LOCAL_STATE_NEGOTIATED |
-    ONE_VIDEO_LOCAL_STATE_NEGOTIATOR;
+  local->state = OV_LOCAL_STATE_NEGOTIATED |
+    OV_LOCAL_STATE_NEGOTIATOR;
   g_rec_mutex_unlock (&local->priv->lock);
 
   /* Start the call
-   * FIXME: Do this in one_video_local_start() ? */
+   * FIXME: Do this in ov_local_start() ? */
   g_rec_mutex_lock (&local->priv->lock);
   if (g_cancellable_is_cancelled (cancellable)) {
     g_hash_table_unref (out);
@@ -708,14 +707,14 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
     GVariant *peers;
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
 
     remote = g_ptr_array_index (remotes, ii);
 
     peers =
       g_variant_ref_sink (get_all_peers_list_except_this (remote, call_id));
     /* START_CALL → ACK */
-    ret = one_video_remote_peer_tcp_client_start_call (remote,
+    ret = ov_remote_peer_tcp_client_start_call (remote,
         peers, cancellable, &error);
     g_variant_unref (peers);
     if (!ret) {
@@ -724,9 +723,9 @@ one_video_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     }
   }
   /* Set our own call details */
-  one_video_local_peer_set_call_details (local, in);
-  local->state = ONE_VIDEO_LOCAL_STATE_READY |
-    ONE_VIDEO_LOCAL_STATE_NEGOTIATOR;
+  ov_local_peer_set_call_details (local, in);
+  local->state = OV_LOCAL_STATE_READY |
+    OV_LOCAL_STATE_NEGOTIATOR;
 
   g_hash_table_unref (out);
 
@@ -749,34 +748,34 @@ err:
 cancelled:
   GST_DEBUG ("Negotiation cancelled, sending CANCEL_NEGOTIATE");
   for (ii = 0; ii < remotes->len; ii++) {
-    OneVideoRemotePeer *remote = g_ptr_array_index (remotes, ii);
-    one_video_remote_peer_tcp_client_cancel_negotiate (remote, call_id);
+    OvRemotePeer *remote = g_ptr_array_index (remotes, ii);
+    ov_remote_peer_tcp_client_cancel_negotiate (remote, call_id);
   }
-  local->state |= ONE_VIDEO_LOCAL_STATE_FAILED;
+  local->state |= OV_LOCAL_STATE_FAILED;
   g_rec_mutex_unlock (&local->priv->lock);
   goto out;
 }
 
 static gboolean
-one_video_remote_peer_tcp_client_end_call (OneVideoRemotePeer * remote,
-    OneVideoTcpMsg * msg, GCancellable * cancellable, GError ** error)
+ov_remote_peer_tcp_client_end_call (OvRemotePeer * remote, OvTcpMsg * msg,
+    GCancellable * cancellable, GError ** error)
 {
   gchar *error_msg;
-  OneVideoTcpMsg *reply = NULL;
+  OvTcpMsg *reply = NULL;
   gboolean ret = FALSE;
 
   /* FIXME: This does a blocking write which is really bad especially if we're
    * ending the call because we're exiting */
-  reply = one_video_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
+  reply = ov_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
   if (!reply)
     goto no_reply;
 
   switch (reply->type) {
-    case ONE_VIDEO_TCP_MSG_TYPE_ACK:
+    case OV_TCP_MSG_TYPE_ACK:
       handle_tcp_msg_ack (reply);
       GST_DEBUG ("Recvd from '%s' ACK", remote->id);
       break;
-    case ONE_VIDEO_TCP_MSG_TYPE_ERROR:
+    case OV_TCP_MSG_TYPE_ERROR:
       /* Try again? */
       error_msg = handle_tcp_msg_error (reply);
       GST_ERROR ("Remote %s returned an error in reply to end call: %s",
@@ -785,44 +784,44 @@ one_video_remote_peer_tcp_client_end_call (OneVideoRemotePeer * remote,
       goto err;
     default:
       GST_ERROR ("Expected message type '%s' from %s, got '%s'",
-          one_video_tcp_msg_type_to_string (
-            ONE_VIDEO_TCP_MSG_TYPE_ACK, ONE_VIDEO_TCP_MAX_VERSION),
-          remote->id, one_video_tcp_msg_type_to_string (reply->type,
+          ov_tcp_msg_type_to_string (
+            OV_TCP_MSG_TYPE_ACK, OV_TCP_MAX_VERSION),
+          remote->id, ov_tcp_msg_type_to_string (reply->type,
             reply->version));
       goto err;
   }
 
   ret = TRUE;
 err:
-  one_video_tcp_msg_free (reply);
+  ov_tcp_msg_free (reply);
 no_reply:
   return ret;
 }
 
 void
-one_video_local_peer_end_call (OneVideoLocalPeer * local)
+ov_local_peer_end_call (OvLocalPeer * local)
 {
   guint ii;
-  OneVideoTcpMsg *msg;
+  OvTcpMsg *msg;
   const gchar *variant_type;
 
   if (!local->priv->active_call_id)
     /* No active call */
     return;
 
-  variant_type = one_video_tcp_msg_type_to_variant_type (
-      ONE_VIDEO_TCP_MSG_TYPE_END_CALL, ONE_VIDEO_TCP_MAX_VERSION);
-  msg = one_video_tcp_msg_new (ONE_VIDEO_TCP_MSG_TYPE_END_CALL,
+  variant_type = ov_tcp_msg_type_to_variant_type (
+      OV_TCP_MSG_TYPE_END_CALL, OV_TCP_MAX_VERSION);
+  msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_END_CALL,
       g_variant_new (variant_type, local->priv->active_call_id, local->id));
 
   for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
 
     remote = g_ptr_array_index (local->priv->remote_peers, ii);
-    one_video_remote_peer_tcp_client_end_call (remote, msg, NULL, NULL);
+    ov_remote_peer_tcp_client_end_call (remote, msg, NULL, NULL);
   }
 
   local->priv->active_call_id = 0;
 
-  one_video_tcp_msg_free (msg);
+  ov_tcp_msg_free (msg);
 }

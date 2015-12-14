@@ -25,8 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_DISCOVERY_H__
-#define __ONE_VIDEO_DISCOVERY_H__
+#ifndef __OV_DISCOVERY_H__
+#define __OV_DISCOVERY_H__
 
 #include "comms.h"
 
@@ -35,62 +35,62 @@
 
 G_BEGIN_DECLS
 
-typedef enum _OneVideoUdpMsgType OneVideoUdpMsgType;
+typedef enum _OvUdpMsgType OvUdpMsgType;
 
-enum _OneVideoUdpMsgType {
-  ONE_VIDEO_UDP_MSG_TYPE_UNKNOWN,
+enum _OvUdpMsgType {
+  OV_UDP_MSG_TYPE_UNKNOWN,
 
   /* Queries */
-  ONE_VIDEO_UDP_MSG_TYPE_MULTICAST_DISCOVER   = 100,
+  OV_UDP_MSG_TYPE_MULTICAST_DISCOVER   = 100,
 
   /* Replies */
-  ONE_VIDEO_UDP_MSG_TYPE_UNICAST_HI_THERE     = 200,
+  OV_UDP_MSG_TYPE_UNICAST_HI_THERE     = 200,
 };
 
-typedef struct _OneVideoUdpMsg OneVideoUdpMsg;
+typedef struct _OvUdpMsg OvUdpMsg;
 
-struct _OneVideoUdpMsg {
+struct _OvUdpMsg {
   guint32 version;
   guint64 id;
-  guint32 type; /* OneVideoUdpMsgType */
+  guint32 type; /* OvUdpMsgType */
   guint32 size; /* size of *data */
   gchar *data;
 };
 
 /* Max size of our outgoing UDP messages */
-#define ONE_VIDEO_UDP_MAX_SIZE 4096
+#define OV_UDP_MAX_SIZE 4096
 
-/* Size of the metadata sent with a OneVideoUdpMsg */
-#define ONE_VIDEO_UDP_MSG_HEADER_SIZE 20
+/* Size of the metadata sent with a OvUdpMsg */
+#define OV_UDP_MSG_HEADER_SIZE 20
 
 /* Ordered from oldest to newest */
-#define ONE_VIDEO_UDP_MIN_VERSION one_video_versions[0]
-#define ONE_VIDEO_UDP_MAX_VERSION one_video_versions[0]
+#define OV_UDP_MIN_VERSION ov_versions[0]
+#define OV_UDP_MAX_VERSION ov_versions[0]
 
 gboolean        on_incoming_udp_message         (GSocket *socket,
                                                  GIOCondition condition,
-                                                 OneVideoLocalPeer *local);
+                                                 OvLocalPeer *local);
 
-void            one_video_udp_msg_free          (OneVideoUdpMsg *msg);
-OneVideoUdpMsg* one_video_udp_msg_new           (OneVideoUdpMsgType type,
+void            ov_udp_msg_free                 (OvUdpMsg *msg);
+OvUdpMsg*       ov_udp_msg_new                  (OvUdpMsgType type,
                                                  gchar *data,
                                                  gsize size);
 
-gboolean        one_video_udp_msg_read_message_from   (OneVideoUdpMsg *msg,
-                                                       GSocketAddress **addr,
-                                                       GSocket *socket,
-                                                       GCancellable *cancellable,
-                                                       GError **error);
-gboolean        one_video_udp_msg_send_to_from        (OneVideoUdpMsg *msg,
-                                                       GSocketAddress *to,
-                                                       GSocketAddress *from,
-                                                       GCancellable *cancellable,
-                                                       GError **error);
+gboolean        ov_udp_msg_read_message_from   (OvUdpMsg *msg,
+                                                GSocketAddress **addr,
+                                                GSocket *socket,
+                                                GCancellable *cancellable,
+                                                GError **error);
+gboolean        ov_udp_msg_send_to_from        (OvUdpMsg *msg,
+                                                GSocketAddress *to,
+                                                GSocketAddress *from,
+                                                GCancellable *cancellable,
+                                                GError **error);
 
-gboolean        one_video_discovery_send_multicast_discover (OneVideoLocalPeer *local,
-                                                             GCancellable *cancellable,
-                                                             GError **error);
+gboolean        ov_discovery_send_multicast_discover  (OvLocalPeer *local,
+                                                       GCancellable *cancellable,
+                                                       GError **error);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_DISCOVERY_H__ */
+#endif /* __OV_DISCOVERY_H__ */

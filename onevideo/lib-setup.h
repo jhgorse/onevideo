@@ -25,29 +25,29 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_LIB_SETUP_H__
-#define __ONE_VIDEO_LIB_SETUP_H__
+#ifndef __OV_LIB_SETUP_H__
+#define __OV_LIB_SETUP_H__
 
 #include "lib-priv.h"
 
 G_BEGIN_DECLS
 
-void      one_video_on_gst_bus_error                     (GstBus *bus,
+void      ov_on_gst_bus_error                     (GstBus *bus,
                                                           GstMessage *msg,
                                                           gpointer user_data);
 
-GSocket*  one_video_get_socket_for_addr                  (const gchar *addr_s,
+GSocket*  ov_get_socket_for_addr                  (const gchar *addr_s,
                                                           guint port);
 
-gboolean  one_video_local_peer_setup_transmit_pipeline   (OneVideoLocalPeer *local);
-gboolean  one_video_local_peer_setup_playback_pipeline   (OneVideoLocalPeer *local);
-gboolean  one_video_local_peer_setup_comms               (OneVideoLocalPeer *local);
+gboolean  ov_local_peer_setup_transmit_pipeline   (OvLocalPeer *local);
+gboolean  ov_local_peer_setup_playback_pipeline   (OvLocalPeer *local);
+gboolean  ov_local_peer_setup_comms               (OvLocalPeer *local);
 
-void      one_video_local_peer_setup_remote_receive      (OneVideoLocalPeer *local,
-                                                          OneVideoRemotePeer *remote);
-void      one_video_local_peer_setup_remote_playback     (OneVideoLocalPeer *local,
-                                                          OneVideoRemotePeer *remote);
+void      ov_local_peer_setup_remote_receive      (OvLocalPeer *local,
+                                                          OvRemotePeer *remote);
+void      ov_local_peer_setup_remote_playback     (OvLocalPeer *local,
+                                                          OvRemotePeer *remote);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_LIB_SETUP_H__ */
+#endif /* __OV_LIB_SETUP_H__ */

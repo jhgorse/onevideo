@@ -37,11 +37,11 @@ static GMainLoop *loop = NULL;
 
 typedef struct {
   gchar **remotes;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
 } FindRemotesData;
 
 static gboolean
-found_remote_cb (OneVideoDiscoveredPeer * d, gpointer user_data)
+found_remote_cb (OvDiscoveredPeer * d, gpointer user_data)
 {
   guint len;
   FindRemotesData *data = user_data;
@@ -54,34 +54,34 @@ found_remote_cb (OneVideoDiscoveredPeer * d, gpointer user_data)
   /* Expand to include another gchar* pointer */
   data->remotes = g_realloc_n (data->remotes, sizeof (gchar*), len + 1);
 
-  data->remotes[len - 1] = one_video_inet_socket_address_to_string (d->addr);
+  data->remotes[len - 1] = ov_inet_socket_address_to_string (d->addr);
   data->remotes[len] = NULL;
 
-  one_video_discovered_peer_free (d);
+  ov_discovered_peer_free (d);
   return TRUE;
 }
 
 static gboolean
-kill_remote_peer (OneVideoRemotePeer * remote)
+kill_remote_peer (OvRemotePeer * remote)
 {
-  one_video_remote_peer_remove (remote);
+  ov_remote_peer_remove (remote);
   g_main_loop_quit (loop);
 
   return G_SOURCE_REMOVE;
 }
 
 static gboolean
-on_local_peer_stop (OneVideoLocalPeer * local)
+on_local_peer_stop (OvLocalPeer * local)
 {
-  if (local->state & ONE_VIDEO_LOCAL_STATE_STOPPED) {
+  if (local->state & OV_LOCAL_STATE_STOPPED) {
       g_print ("Local peer stopped, exiting...\n");
       goto quit;
   }
 
-  if (local->state & ONE_VIDEO_LOCAL_STATE_FAILED &&
-      local->state & ONE_VIDEO_LOCAL_STATE_NEGOTIATOR) {
+  if (local->state & OV_LOCAL_STATE_FAILED &&
+      local->state & OV_LOCAL_STATE_NEGOTIATOR) {
       g_print ("Local negotiator peer failed, exiting...\n");
-      one_video_local_peer_stop (local);
+      ov_local_peer_stop (local);
       goto quit;
   }
 
@@ -93,9 +93,9 @@ quit:
 }
 
 static gboolean
-on_app_exit (OneVideoLocalPeer * local)
+on_app_exit (OvLocalPeer * local)
 {
-  one_video_local_peer_stop (local);
+  ov_local_peer_stop (local);
   g_main_loop_quit (loop);
 
   return G_SOURCE_REMOVE;
@@ -106,14 +106,14 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
     gpointer user_data)
 {
   gboolean ret;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
   GError *error = NULL;
 
   local = g_task_get_task_data (G_TASK (res));
-  ret = one_video_local_peer_negotiate_finish (local, res, &error);
+  ret = ov_local_peer_negotiate_finish (local, res, &error);
   if (ret) {
     g_print ("All remotes have replied.\n");
-    one_video_local_peer_start (local);
+    ov_local_peer_start (local);
     return;
   } else {
     if (error != NULL)
@@ -122,21 +122,21 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
 }
 
 static void
-dial_remotes (OneVideoLocalPeer * local, gchar ** remotes)
+dial_remotes (OvLocalPeer * local, gchar ** remotes)
 {
   guint index;
 
   g_print ("Dialling remotes...\n");
   for (index = 0; index < g_strv_length (remotes); index++) {
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
 
-    remote = one_video_remote_peer_new_from_string (local, remotes[index]);
-    one_video_local_peer_add_remote (local, remote);
+    remote = ov_remote_peer_new_from_string (local, remotes[index]);
+    ov_local_peer_add_remote (local, remote);
 
     g_print ("Created and added remote peer %s\n", remote->addr_s);
   }
 
-  one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
+  ov_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
   g_print ("Waiting for remotes to reply...\n");
 }
 
@@ -278,7 +278,7 @@ get_device (GList * devices, const gchar * device_path)
   GstDevice *device;
 
 #ifdef __linux__
-  device = one_video_get_device_from_device_path (devices, device_path);
+  device = ov_get_device_from_device_path (devices, device_path);
 #else
   /* Just pick the first one */
   device = devices ? GST_DEVICE (devices->data) : NULL;
@@ -294,7 +294,7 @@ int
 main (int   argc,
       char *argv[])
 {
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
   GOptionContext *optctx;
   GError *error = NULL;
   GList *devices;
@@ -316,7 +316,7 @@ main (int   argc,
     {"device", 'd', 0, G_OPTION_ARG_STRING, &device_path, "Path to the V4L2"
           " (camera) device; example: /dev/video0 (default: ask)", "PATH"},
     {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "TCP port to listen on"
-          " for incoming connections (default: " STR(ONE_VIDEO_DEFAULT_COMM_PORT)
+          " for incoming connections (default: " STR(OV_DEFAULT_COMM_PORT)
           ")", "PORT"},
     {"peer", 'c', 0, G_OPTION_ARG_STRING_ARRAY, &remotes, "Peers with an"
           " optional port to connect to. Specify multiple times to connect to"
@@ -346,14 +346,14 @@ main (int   argc,
     g_printerr ("Listening on all interface %s\n", iface_name);
 
   g_print ("Probing devices...\n");
-  local = one_video_local_peer_new (iface_name, iface_port);
+  local = ov_local_peer_new (iface_name, iface_port);
 
   if (local == NULL)
     goto out;
 
-  devices = one_video_local_peer_get_video_devices (local);
+  devices = ov_local_peer_get_video_devices (local);
   g_print ("Probing finished\n");
-  one_video_local_peer_set_video_device (local, device_path ?
+  ov_local_peer_set_video_device (local, device_path ?
         get_device (devices, device_path) : get_device_choice (devices));
   g_list_free_full (devices, g_object_unref);
 
@@ -372,7 +372,7 @@ main (int   argc,
     data = g_new0 (FindRemotesData, 1);
     data->local = local;
 
-    source = one_video_local_peer_find_remotes_create_source (local, NULL,
+    source = ov_local_peer_find_remotes_create_source (local, NULL,
         found_remote_cb, data, &error);
     if (source == NULL) {
       g_print (" unable to search: %s. Exiting.", error->message);
@@ -401,7 +401,7 @@ remotes_done:
   g_main_loop_run (loop);
 
 out:
-  g_clear_pointer (&local, one_video_local_peer_free);
+  g_clear_pointer (&local, ov_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
   g_strfreev (remotes);
   g_free (device_path);

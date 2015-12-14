@@ -46,7 +46,7 @@ struct _OvgAppClass
 
 struct _OvgAppPrivate
 {
-  OneVideoLocalPeer *ov_local;
+  OvLocalPeer *ov_local;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (OvgApp, ovg_app, GTK_TYPE_APPLICATION);
@@ -155,7 +155,7 @@ ovg_app_startup (GApplication * app)
   gst_init (NULL, NULL);
 
   /* This probes available devices at start, so start-up can be slow */
-  priv->ov_local = one_video_local_peer_new (iface_name, iface_port);
+  priv->ov_local = ov_local_peer_new (iface_name, iface_port);
   if (priv->ov_local == NULL) {
     /* FIXME: Print some GUI message */
     g_application_quit (app);
@@ -163,16 +163,16 @@ ovg_app_startup (GApplication * app)
   }
 
   /* Just use the first device for now. Need to create GSettings for this. */
-  devices = one_video_local_peer_get_video_devices (priv->ov_local);
+  devices = ov_local_peer_get_video_devices (priv->ov_local);
 #ifdef __linux__
-  device = one_video_get_device_from_device_path (devices, device_path);
+  device = ov_get_device_from_device_path (devices, device_path);
 #else
   /* TODO: Add a gsettings + a preferences UI for selecting this */
   device = GST_DEVICE (devices->data);
 #endif
 
   /* This currently always returns TRUE (aborts on error) */
-  one_video_local_peer_set_video_device (priv->ov_local, device);
+  ov_local_peer_set_video_device (priv->ov_local, device);
   g_list_free_full (devices, g_object_unref);
 
 #ifdef G_OS_UNIX
@@ -194,7 +194,7 @@ ovg_app_shutdown (GApplication * app)
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (app));
 
   if (priv->ov_local)
-    one_video_local_peer_stop (priv->ov_local);
+    ov_local_peer_stop (priv->ov_local);
 
   G_APPLICATION_CLASS (ovg_app_parent_class)->shutdown (app);
 }
@@ -204,7 +204,7 @@ ovg_app_dispose (GObject * object)
 {
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (object));
 
-  g_clear_pointer (&priv->ov_local, one_video_local_peer_free);
+  g_clear_pointer (&priv->ov_local, ov_local_peer_free);
 
   G_OBJECT_CLASS (ovg_app_parent_class)->dispose (object);
 }
@@ -231,7 +231,7 @@ ovg_app_new (void)
 }
 
 
-OneVideoLocalPeer *
+OvLocalPeer *
 ovg_app_get_ov_local_peer (OvgApp * app)
 {
   OvgAppPrivate *priv;

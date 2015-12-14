@@ -35,7 +35,7 @@
 #include <string.h>
 
 void
-one_video_on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer user_data)
+ov_on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer user_data)
 {
   char *tmp = NULL;
   GError *error = NULL;
@@ -49,11 +49,11 @@ one_video_on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer user_data)
   g_free (tmp);
 }
 
-#define on_local_transmit_error one_video_on_gst_bus_error
-#define on_local_playback_error one_video_on_gst_bus_error
+#define on_local_transmit_error ov_on_gst_bus_error
+#define on_local_playback_error ov_on_gst_bus_error
 
 GSocket *
-one_video_get_socket_for_addr (const gchar * addr_s, guint port)
+ov_get_socket_for_addr (const gchar * addr_s, guint port)
 {
   GSocketAddress *sock_addr;
   GSocket *socket = NULL;
@@ -84,7 +84,7 @@ err:
 
 /*-- LOCAL PEER SETUP --*/
 gboolean
-one_video_local_peer_setup_playback_pipeline (OneVideoLocalPeer * local)
+ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
   gboolean ret;
@@ -131,7 +131,7 @@ one_video_local_peer_setup_playback_pipeline (OneVideoLocalPeer * local)
 }
 
 gboolean
-one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
+ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
   GstCaps *video_caps, *raw_audio_caps;
@@ -141,9 +141,9 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
   gboolean ret;
 
-  if (!(local->state & ONE_VIDEO_LOCAL_STATE_INITIALISED) &&
+  if (!(local->state & OV_LOCAL_STATE_INITIALISED) &&
       /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
-      !(local->state & ONE_VIDEO_LOCAL_STATE_READY))
+      !(local->state & OV_LOCAL_STATE_READY))
     return FALSE;
 
   if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit)) {
@@ -288,7 +288,7 @@ one_video_local_peer_setup_transmit_pipeline (OneVideoLocalPeer * local)
 }
 
 gboolean
-one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
+ov_local_peer_setup_comms (OvLocalPeer * local)
 {
   GList *l;
   gboolean ret;
@@ -323,9 +323,9 @@ one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
   GST_DEBUG ("Listening for incoming TCP connections on %s", local->addr_s);
 
   /*-- Listen for incoming UDP messages (multicast and unicast) --*/
-  mc_group = g_inet_address_new_from_string (ONE_VIDEO_MULTICAST_GROUP);
+  mc_group = g_inet_address_new_from_string (OV_MULTICAST_GROUP);
   /* Use this hard-coded port for UDP messages; it's our canonical port */
-  mc_addr = g_inet_socket_address_new (mc_group, ONE_VIDEO_DEFAULT_COMM_PORT);
+  mc_addr = g_inet_socket_address_new (mc_group, OV_DEFAULT_COMM_PORT);
   g_object_unref (mc_group);
 
   /* Create and bind multicast socket */
@@ -335,7 +335,7 @@ one_video_local_peer_setup_comms (OneVideoLocalPeer * local)
     gchar *name =
       g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
     GST_ERROR ("Unable to bind to multicast addr/port (%s:%u): %s", name,
-        ONE_VIDEO_DEFAULT_COMM_PORT, error->message);
+        OV_DEFAULT_COMM_PORT, error->message);
     g_error_free (error);
     g_free (name);
     goto out;
@@ -383,7 +383,7 @@ out_nofree:
 /*-- REMOTE PEER SETUP --*/
 static void
 rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
-    OneVideoRemotePeer * remote)
+    OvRemotePeer * remote)
 {
   GstPad *sinkpad;
   GstElement *depay;
@@ -410,8 +410,7 @@ rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
 }
 
 void
-one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
-    OneVideoRemotePeer * remote)
+ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
 {
   gboolean ret;
   GSocket *socket;
@@ -440,7 +439,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   /* TODO: Both audio and video should be optional */
 
   /* Recv RTP audio data */
-  socket = one_video_get_socket_for_addr (local_addr_s,
+  socket = ov_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[0]);
   asrc = gst_element_factory_make ("udpsrc", "arecv_rtp_src-%u");
   /* We always use the same caps for sending audio */
@@ -453,7 +452,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   asink = gst_element_factory_make ("proxysink", "audio-proxysink-%u");
   g_assert (asink != NULL);
   /* Recv RTCP SR for audio */
-  socket = one_video_get_socket_for_addr (local_addr_s,
+  socket = ov_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[1]);
   artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src-%u");
   g_object_set (artcpsrc, "socket", socket, NULL);
@@ -468,7 +467,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   g_object_unref (socket);
 
   /* Recv RTP video data */
-  socket = one_video_get_socket_for_addr (local_addr_s,
+  socket = ov_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[2]);
   vsrc = gst_element_factory_make ("udpsrc", "vrecv_rtp_src-%u");
   /* The depayloader will detect the height/width/framerate on the fly
@@ -486,7 +485,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
   vsink = gst_element_factory_make ("proxysink", "video-proxysink-%u");
   g_assert (vsink != NULL);
   /* Recv RTCP SR for video */
-  socket = one_video_get_socket_for_addr (local_addr_s,
+  socket = ov_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[3]);
   vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src-%u");
   g_object_set (vrtcpsrc, "socket", socket, NULL);
@@ -553,8 +552,7 @@ one_video_local_peer_setup_remote_receive (OneVideoLocalPeer * local,
 }
 
 void
-one_video_local_peer_setup_remote_playback (OneVideoLocalPeer * local,
-    OneVideoRemotePeer * remote)
+ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
 {
   GstPad *ghostpad, *srcpad, *sinkpad;
   GstPadLinkReturn ret;

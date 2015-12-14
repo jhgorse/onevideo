@@ -25,8 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_LIB_PRIV_H__
-#define __ONE_VIDEO_LIB_PRIV_H__
+#ifndef __OV_LIB_PRIV_H__
+#define __OV_LIB_PRIV_H__
 
 #include "lib.h"
 
@@ -53,28 +53,28 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define RTP_JPEG_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG"
 #define RTP_H264_VIDEO_CAPS_STR "application/x-rtp, payload=96, media=video, clock-rate=90000, encoding-name=H264"
 
-typedef enum _OneVideoMediaType OneVideoMediaType;
-typedef struct _OneVideoNegotiate OneVideoNegotiate;
+typedef enum _OvMediaType OvMediaType;
+typedef struct _OvNegotiate OvNegotiate;
 
-enum _OneVideoMediaType {
-  ONE_VIDEO_MEDIA_TYPE_UNKNOWN    = 0,
-  ONE_VIDEO_MEDIA_TYPE_JPEG,
-  ONE_VIDEO_MEDIA_TYPE_H264, /* Not supported yet */
-  ONE_VIDEO_MEDIA_TYPE_YUY2, /* Fallback if JPEG/H264 are not supported */
+enum _OvMediaType {
+  OV_MEDIA_TYPE_UNKNOWN    = 0,
+  OV_MEDIA_TYPE_JPEG,
+  OV_MEDIA_TYPE_H264, /* Not supported yet */
+  OV_MEDIA_TYPE_YUY2, /* Fallback if JPEG/H264 are not supported */
 };
 
-struct _OneVideoNegotiate {
+struct _OvNegotiate {
   /* Call id while negotiating */
   guint64 call_id;
   /* The remote that we're talking to */
-  OneVideoRemotePeer *negotiator;
+  OvRemotePeer *negotiator;
   /* Potential remotes while negotiating */
   GHashTable *remotes;
   /* A GSourceFunc id that checks for timeouts */
   guint check_timeout_id;
 };
 
-struct _OneVideoLocalPeerPriv {
+struct _OvLocalPeerPriv {
   /* Transmit A/V data, rtcp send/recv RTP bin */
   GstElement *rtpbin;
   /* The local ports we receive rtcp data on using udpsrc, in order:
@@ -98,7 +98,7 @@ struct _OneVideoLocalPeerPriv {
   /* A unique id representing an active call (0 if no active call) */
   guint64 active_call_id;
   /* Struct used for holding info while negotiating */
-  OneVideoNegotiate *negotiate;
+  OvNegotiate *negotiate;
   /* The task used for doing negotiation when we're the negotiator */
   GTask *negotiator_task;
 
@@ -126,14 +126,14 @@ struct _OneVideoLocalPeerPriv {
 
   /* Array of UDP ports that are either reserved or in use for receiving */
   GArray *used_ports;
-  /* Array of OneVideoRemotePeers: peers we want to connect to */
+  /* Array of OvRemotePeers: peers we want to connect to */
   GPtrArray *remote_peers;
 
   /* Lock to access non-thread-safe structures like GPtrArray */
   GRecMutex lock;
 };
 
-struct _OneVideoRemotePeerPriv {
+struct _OvRemotePeerPriv {
   /* The remote ports we transmit data to using udpsink, in order:
    * {audio_rtp, audio_send_rtcp SRs, audio_send_rtcp RRs,
    *  video_rtp, video_send_rtcp SRs, video_send_rtcp RRs} */
@@ -165,9 +165,9 @@ struct _OneVideoRemotePeerPriv {
   GstElement *video_sink;
 };
 
-gboolean            one_video_local_peer_setup               (OneVideoLocalPeer *local);
-void                one_video_remote_peer_remove_not_array   (OneVideoRemotePeer *remote);
+gboolean            ov_local_peer_setup               (OvLocalPeer *local);
+void                ov_remote_peer_remove_not_array   (OvRemotePeer *remote);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_LIB_PRIV_H__ */
+#endif /* __OV_LIB_PRIV_H__ */

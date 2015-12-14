@@ -34,7 +34,7 @@
 #include <glib/gstdio.h>
 
 GInetSocketAddress *
-one_video_inet_socket_address_from_string (const gchar * addr_s)
+ov_inet_socket_address_from_string (const gchar * addr_s)
 {
   guint port;
   gchar **split;
@@ -50,7 +50,7 @@ one_video_inet_socket_address_from_string (const gchar * addr_s)
   split = g_strsplit (addr_s, ":", 2);
 
   if (g_strv_length (split) == 1) {
-    port = ONE_VIDEO_DEFAULT_COMM_PORT;
+    port = OV_DEFAULT_COMM_PORT;
   } else {
     port = g_ascii_strtoull (split[1], NULL, 10);
     if (!port) {
@@ -71,7 +71,7 @@ out:
 }
 
 gchar *
-one_video_inet_socket_address_to_string (const GInetSocketAddress * addr)
+ov_inet_socket_address_to_string (const GInetSocketAddress * addr)
 {
   gchar *addr_s, *inet_addr_s;
 
@@ -85,7 +85,7 @@ one_video_inet_socket_address_to_string (const GInetSocketAddress * addr)
 }
 
 gboolean
-one_video_inet_socket_address_equal (GInetSocketAddress * addr1,
+ov_inet_socket_address_equal (GInetSocketAddress * addr1,
     GInetSocketAddress * addr2)
 {
   if (g_inet_socket_address_get_port (addr1) ==
@@ -97,8 +97,8 @@ one_video_inet_socket_address_equal (GInetSocketAddress * addr1,
 }
 
 gboolean
-one_video_inet_socket_address_is_iface (GInetSocketAddress * saddr,
-    GList * ifaces, guint16 port)
+ov_inet_socket_address_is_iface (GInetSocketAddress * saddr, GList * ifaces,
+    guint16 port)
 {
   GList *l;
   GInetAddress *addr;
@@ -106,11 +106,11 @@ one_video_inet_socket_address_is_iface (GInetSocketAddress * saddr,
 
   for (l = ifaces; l != NULL; l = l->next) {
     GInetSocketAddress *iface_saddr;
-    addr = one_video_get_inet_addr_for_iface (l->data);
+    addr = ov_get_inet_addr_for_iface (l->data);
     iface_saddr =
       G_INET_SOCKET_ADDRESS (g_inet_socket_address_new (addr, port));
     g_object_unref (addr);
-    if (one_video_inet_socket_address_equal (saddr, iface_saddr)) {
+    if (ov_inet_socket_address_equal (saddr, iface_saddr)) {
       g_object_unref (iface_saddr);
       goto out;
     }
@@ -124,8 +124,7 @@ out:
 
 #ifdef __linux
 GstDevice *
-one_video_get_device_from_device_path (GList * devices,
-    const gchar * device_path)
+ov_get_device_from_device_path (GList * devices, const gchar * device_path)
 {
   GList *device;
   gboolean some_device_had_props = FALSE;
@@ -177,7 +176,7 @@ one_video_get_device_from_device_path (GList * devices,
 /* Copy of nice_interfaces_get_local_interfaces() from libnice.
  * Same for win32 version below. */
 GList *
-one_video_get_network_interfaces (void)
+ov_get_network_interfaces (void)
 {
   GList *interfaces = NULL;
   struct ifaddrs *ifa, *results;
@@ -211,7 +210,7 @@ one_video_get_network_interfaces (void)
 /* Copy of nice_interfaces_get_ip_for_interface() from libnice.
  * Replace with that if/when we use libnice. Same for win32 version below. */
 GInetAddress *
-one_video_get_inet_addr_for_iface (const gchar * iface_name)
+ov_get_inet_addr_for_iface (const gchar * iface_name)
 {
   struct ifreq ifr = {0};
   union {
@@ -262,7 +261,7 @@ one_video_get_inet_addr_for_iface (const gchar * iface_name)
 #endif
 
 GList *
-one_video_get_network_interfaces (void)
+ov_get_network_interfaces (void)
 {
   ULONG size = 0;
   PMIB_IFTABLE if_table;
@@ -290,7 +289,7 @@ one_video_get_network_interfaces (void)
 }
 
 GInetAddress *
-one_video_get_inet_addr_for_iface (const gchar * iface_name)
+ov_get_inet_addr_for_iface (const gchar * iface_name)
 {
   DWORD i;
   ULONG size = 0;

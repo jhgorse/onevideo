@@ -108,7 +108,7 @@ ovg_list_box_update_header_func (GtkListBoxRow * row, GtkListBoxRow * before,
 }
 
 static gboolean
-add_peer_to_discovered (OneVideoDiscoveredPeer * d, gpointer user_data)
+add_peer_to_discovered (OvDiscoveredPeer * d, gpointer user_data)
 {
   GtkWidget *row;
   OvgAppWindowPrivate *priv;
@@ -129,7 +129,7 @@ add_peer_to_discovered (OneVideoDiscoveredPeer * d, gpointer user_data)
 out:
   /* Attach the latest DiscoveredPeer data to the row */
   g_object_set_data_full (G_OBJECT (row), "peer-data", d,
-      (GDestroyNotify) one_video_discovered_peer_free);
+      (GDestroyNotify) ov_discovered_peer_free);
   return G_SOURCE_CONTINUE;
 }
 
@@ -309,7 +309,7 @@ ovg_app_window_peers_c_get_addrs (OvgAppWindow * win)
   remotes = g_ptr_array_new_full (5, (GDestroyNotify) g_object_unref);
 
   for (l = children; l != NULL; l = l->next) {
-    OneVideoDiscoveredPeer *peer;
+    OvDiscoveredPeer *peer;
     g_assert (GTK_IS_LIST_BOX_ROW (l->data));
     peer = g_object_get_data (G_OBJECT (l->data), "peer-data");
     if (peer != NULL) {
@@ -320,7 +320,7 @@ ovg_app_window_peers_c_get_addrs (OvgAppWindow * win)
       const gchar *name;
       GInetSocketAddress *addr;
       name = g_object_get_data (G_OBJECT (l->data), "peer-name");
-      addr = one_video_inet_socket_address_from_string (name); 
+      addr = ov_inet_socket_address_from_string (name); 
       g_ptr_array_add (remotes, addr);
     }
   }
@@ -406,7 +406,7 @@ ovg_app_window_peers_d_rows_clean_timed_out (OvgAppWindow * win)
   children = gtk_container_get_children (GTK_CONTAINER (priv->peers_d));
 
   for (l = children; l != NULL; l = l->next) {
-    OneVideoDiscoveredPeer *d;
+    OvDiscoveredPeer *d;
 
     d = g_object_get_data (G_OBJECT (l->data), "peer-data");
     /* If this peer was discovered more than 2 discovery-intervals ago, it has
@@ -424,7 +424,7 @@ static gboolean
 do_peer_discovery (gpointer user_data)
 {
   GtkApplication *app;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
   OvgAppWindowPrivate *priv;
   OvgAppWindow *win = user_data;
   GError *error = NULL;
@@ -450,7 +450,7 @@ do_peer_discovery (gpointer user_data)
   }
 
   priv->peers_source =
-    one_video_local_peer_find_remotes_create_source (local, NULL,
+    ov_local_peer_find_remotes_create_source (local, NULL,
       add_peer_to_discovered, win, &error);
 
   ovg_app_window_peers_d_rows_clean_timed_out (win);
@@ -524,14 +524,14 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
     gpointer user_data)
 {
   gboolean ret;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
   GError *error = NULL;
 
   local = g_task_get_task_data (G_TASK (res));
-  ret = one_video_local_peer_negotiate_finish (local, res, &error);
+  ret = ov_local_peer_negotiate_finish (local, res, &error);
   if (ret) {
     g_print ("All remotes have replied.\n");
-    one_video_local_peer_start (local);
+    ov_local_peer_start (local);
     return ovg_app_window_show_peers_video (user_data);
   } else {
     if (error != NULL)
@@ -546,7 +546,7 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   GPtrArray *remotes;
   GtkApplication *app;
   GtkSettings *settings;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
   OvgAppWindowPrivate *priv;
   gint sidebar_height, child_width;
   guint ii, n_cols;
@@ -579,22 +579,22 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
   for (ii = 0; ii < remotes->len; ii++) {
     GtkWidget *child, *area;
     GInetSocketAddress *addr;
-    OneVideoRemotePeer *remote;
+    OvRemotePeer *remote;
 
     addr = g_ptr_array_index (remotes, ii);
-    remote = one_video_remote_peer_new (local, addr);
+    remote = ov_remote_peer_new (local, addr);
 
     child = gtk_flow_box_child_new ();
     gtk_widget_set_size_request (child, child_width, -1);
-    area = one_video_remote_peer_add_gtkglsink (remote);
+    area = ov_remote_peer_add_gtkglsink (remote);
     gtk_container_add (GTK_CONTAINER (child), area);
     gtk_container_add (GTK_CONTAINER (priv->peers_video), child);
 
-    one_video_local_peer_add_remote (local, remote);
+    ov_local_peer_add_remote (local, remote);
   }
   g_ptr_array_free (remotes, TRUE);
 
-  one_video_local_peer_negotiate_async (local, NULL, on_negotiate_done, win);
+  ov_local_peer_negotiate_async (local, NULL, on_negotiate_done, win);
   g_print ("Started async negotiation with peers...");
 }
 
@@ -602,12 +602,12 @@ static void
 on_end_call_button_clicked (OvgAppWindow * win, GtkButton * b)
 {
   GtkApplication *app;
-  OneVideoLocalPeer *local;
+  OvLocalPeer *local;
 
   app = gtk_window_get_application (GTK_WINDOW (win));
   local = ovg_app_get_ov_local_peer (OVG_APP (app));
 
-  one_video_local_peer_stop (local);
+  ov_local_peer_stop (local);
   ovg_app_window_reset_state (win);
 }
 

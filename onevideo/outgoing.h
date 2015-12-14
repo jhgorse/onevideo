@@ -25,8 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ONE_VIDEO_NEGOTIATE_H__
-#define __ONE_VIDEO_NEGOTIATE_H__
+#ifndef __OV_NEGOTIATE_H__
+#define __OV_NEGOTIATE_H__
 
 #include <gio/gio.h>
 
@@ -34,13 +34,13 @@
 
 G_BEGIN_DECLS
 
-void	one_video_local_peer_negotiate_thread   (GTask *task,
-                                                 gpointer source_object,
-                                                 OneVideoLocalPeer *local,
-                                                 GCancellable *cancellable);
+void	ov_local_peer_negotiate_thread    (GTask *task,
+                                           gpointer source_object,
+                                           OvLocalPeer *local,
+                                           GCancellable *cancellable);
 
-void    one_video_local_peer_end_call           (OneVideoLocalPeer *local);
+void    ov_local_peer_end_call            (OvLocalPeer *local);
 
 G_END_DECLS
 
-#endif /* __ONE_VIDEO_NEGOTIATE_H__ */
+#endif /* __OV_NEGOTIATE_H__ */
