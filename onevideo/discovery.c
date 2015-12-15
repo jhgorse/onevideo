@@ -30,6 +30,7 @@
 #include "utils.h"
 #include "comms.h"
 #include "discovery.h"
+#include "ov-local-peer-priv.h"
 
 #include <string.h>
 
@@ -181,6 +182,7 @@ ov_local_peer_send_info (OvLocalPeer * local, GSocketAddress * addr,
 {
   gchar *tmp;
   OvUdpMsg *send;
+  GSocketAddress *local_addr;
 
   send = ov_udp_msg_new (OV_UDP_MSG_TYPE_UNICAST_HI_THERE,
       NULL, 0);
@@ -189,8 +191,9 @@ ov_local_peer_send_info (OvLocalPeer * local, GSocketAddress * addr,
   GST_DEBUG ("Sending HI_THERE to %s, id: %lu", tmp, send->id);
   g_free (tmp);
 
-  ov_udp_msg_send_to_from (send, addr, G_SOCKET_ADDRESS (local->addr),
-      NULL, NULL);
+  g_object_get (OV_PEER (local), "address", &local_addr, NULL);
+  ov_udp_msg_send_to_from (send, addr, local_addr, NULL, NULL);
+  g_object_unref (addr);
 
   ov_udp_msg_free (send);
 }
@@ -202,8 +205,12 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   gchar *tmp;
   gboolean ret;
   OvUdpMsg *msg;
-  GInetSocketAddress *saddr;
+  GInetSocketAddress *sfrom, *local_addr;
+  OvLocalPeerPrivate *priv;
   GSocketAddress *from = NULL;
+
+  priv = ov_local_peer_get_private (local);
+  g_object_get (OV_PEER (local), "address", &local_addr, NULL);
 
   msg = g_new0 (OvUdpMsg, 1);
 
@@ -215,18 +222,19 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   if (!ret)
     goto out;
 
-  saddr = G_INET_SOCKET_ADDRESS (from);
-  tmp = ov_inet_socket_address_to_string (saddr);
-  g_free (tmp);
+  sfrom = G_INET_SOCKET_ADDRESS (from);
+  tmp = ov_inet_socket_address_to_string (sfrom);
   
-  if (ov_inet_socket_address_is_iface (saddr, local->priv->mc_ifaces,
-        g_inet_socket_address_get_port (local->addr))) {
+  if (ov_inet_socket_address_is_iface (sfrom, priv->mc_ifaces,
+        g_inet_socket_address_get_port (local_addr))) {
     GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
         msg->type, msg->id);
+    g_free (tmp);
     goto out;
   }
 
   GST_DEBUG ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
+  g_free (tmp);
 
   switch (msg->type) {
     case OV_UDP_MSG_TYPE_MULTICAST_DISCOVER:
@@ -238,7 +246,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 
 out:
   ov_udp_msg_free (msg);
-  g_object_unref (from);
+  g_object_unref (local_addr);
   return G_SOURCE_CONTINUE;
 }
 
@@ -248,8 +256,12 @@ ov_discovery_send_multicast_discover (OvLocalPeer * local,
 {
   OvUdpMsg *msg;
   GInetAddress *group, *addr;
+  GInetSocketAddress *local_addr;
+  OvLocalPeerPrivate *priv;
   gboolean ret = FALSE;
   GSocketAddress *mc_addr = NULL;
+
+  priv = ov_local_peer_get_private (local);
 
   group = g_inet_address_new_from_string (OV_MULTICAST_GROUP);
   /* The multicast port is always the default comms port since
@@ -263,18 +275,19 @@ ov_discovery_send_multicast_discover (OvLocalPeer * local,
   GST_DEBUG ("Sending multicast discover (id %lu) to %s:%u",
       msg->id, OV_MULTICAST_GROUP, OV_DEFAULT_COMM_PORT);
 
-  addr = g_inet_socket_address_get_address (local->addr);
+  g_object_get (OV_PEER (local), "address", &local_addr, NULL);
+  addr = g_inet_socket_address_get_address (local_addr);
   if (!g_inet_address_get_is_any (addr)) {
     ret = ov_udp_msg_send_to_from (msg, mc_addr,
-        G_SOCKET_ADDRESS (local->addr), cancellable, error);
+        G_SOCKET_ADDRESS (local_addr), cancellable, error);
   } else {
     GList *l;
     gboolean res;
-    for (l = local->priv->mc_ifaces; l != NULL; l = l->next) {
+    for (l = priv->mc_ifaces; l != NULL; l = l->next) {
       GSocketAddress *saddr;
       addr = ov_get_inet_addr_for_iface (l->data);
       saddr = g_inet_socket_address_new (addr,
-          g_inet_socket_address_get_port (local->addr));
+          g_inet_socket_address_get_port (local_addr));
       g_object_unref (addr);
       res = ov_udp_msg_send_to_from (msg, mc_addr, saddr, cancellable,
           error);
@@ -284,6 +297,7 @@ ov_discovery_send_multicast_discover (OvLocalPeer * local,
         ret = TRUE;
     }
   }
+  g_object_unref (local_addr);
   ov_udp_msg_free (msg);
   if (!ret)
     goto out;

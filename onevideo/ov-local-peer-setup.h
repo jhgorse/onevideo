@@ -25,36 +25,30 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __OV_UTILS_H__
-#define __OV_UTILS_H__
+#ifndef __OV_LOCAL_PEER_SETUP_H__
+#define __OV_LOCAL_PEER_SETUP_H__
 
-#include <glib.h>
-#include <gio/gio.h>
-
-#ifdef __linux__
-#include <gst/gst.h>
-#endif
+#include "lib.h"
+#include "ov-local-peer.h"
 
 G_BEGIN_DECLS
 
-GInetSocketAddress* ov_inet_socket_address_from_string  (const gchar *addr_s);
-gchar*              ov_inet_socket_address_to_string    (const GInetSocketAddress *addr);
-gboolean            ov_inet_socket_address_equal        (GInetSocketAddress *addr1,
-                                                         GInetSocketAddress *addr2);
-gboolean            ov_inet_socket_address_is_iface     (GInetSocketAddress *addr,
-                                                         GList *ifaces,
-                                                         guint16 port);
+void      ov_on_gst_bus_error                     (GstBus *bus,
+                                                   GstMessage *msg,
+                                                   gpointer user_data);
 
-#if defined(G_OS_UNIX) || defined (G_OS_WIN32)
-GInetAddress*       ov_get_inet_addr_for_iface          (const gchar *iface_name);
-GList*              ov_get_network_interfaces           (void);
-#endif
+GSocket*  ov_get_socket_for_addr                  (const gchar *addr_s,
+                                                   guint port);
 
-#ifdef __linux__
-GstDevice*          ov_get_device_from_device_path      (GList *devices,
-                                                         const gchar *path);
-#endif
+gboolean  ov_local_peer_setup_transmit_pipeline   (OvLocalPeer *local);
+gboolean  ov_local_peer_setup_playback_pipeline   (OvLocalPeer *local);
+gboolean  ov_local_peer_setup_comms               (OvLocalPeer *local);
+
+void      ov_local_peer_setup_remote_receive      (OvLocalPeer *local,
+                                                   OvRemotePeer *remote);
+void      ov_local_peer_setup_remote_playback     (OvLocalPeer *local,
+                                                   OvRemotePeer *remote);
 
 G_END_DECLS
 
-#endif /* __OV_UTILS_H__ */
+#endif /* __OV_LOCAL_PEER_SETUP_H__ */

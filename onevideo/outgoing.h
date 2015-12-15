@@ -39,7 +39,7 @@ void	ov_local_peer_negotiate_thread    (GTask *task,
                                            OvLocalPeer *local,
                                            GCancellable *cancellable);
 
-void    ov_local_peer_end_call            (OvLocalPeer *local);
+void    ov_local_peer_send_end_call       (OvLocalPeer *local);
 
 G_END_DECLS
 

@@ -28,7 +28,8 @@
 #ifndef __OV_LIB_PRIV_H__
 #define __OV_LIB_PRIV_H__
 
-#include "lib.h"
+#include <glib.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
@@ -54,7 +55,6 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define RTP_H264_VIDEO_CAPS_STR "application/x-rtp, payload=96, media=video, clock-rate=90000, encoding-name=H264"
 
 typedef enum _OvMediaType OvMediaType;
-typedef struct _OvNegotiate OvNegotiate;
 
 enum _OvMediaType {
   OV_MEDIA_TYPE_UNKNOWN    = 0,
@@ -63,77 +63,7 @@ enum _OvMediaType {
   OV_MEDIA_TYPE_YUY2, /* Fallback if JPEG/H264 are not supported */
 };
 
-struct _OvNegotiate {
-  /* Call id while negotiating */
-  guint64 call_id;
-  /* The remote that we're talking to */
-  OvRemotePeer *negotiator;
-  /* Potential remotes while negotiating */
-  GHashTable *remotes;
-  /* A GSourceFunc id that checks for timeouts */
-  guint check_timeout_id;
-};
-
-struct _OvLocalPeerPriv {
-  /* Transmit A/V data, rtcp send/recv RTP bin */
-  GstElement *rtpbin;
-  /* The local ports we receive rtcp data on using udpsrc, in order:
-   * {audio_recv_rtcp RRs, video_recv_rtcp RRs}
-   * We recv RTCP RRs from all remotes on the same port for each media type
-   * since we send them all to the same rtpbin */
-  guint recv_rtcp_ports[2];
-
-  /* udpsinks transmitting RTP and RTCP and udpsrcs receiving rtcp */
-  GstElement *asend_rtp_sink;
-  GstElement *asend_rtcp_sink;
-  GstElement *arecv_rtcp_src;
-  GstElement *vsend_rtp_sink;
-  GstElement *vsend_rtcp_sink;
-  GstElement *vrecv_rtcp_src;
-
-  /* primary audio playback elements */
-  GstElement *audiomixer;
-  GstElement *audiosink;
-
-  /* A unique id representing an active call (0 if no active call) */
-  guint64 active_call_id;
-  /* Struct used for holding info while negotiating */
-  OvNegotiate *negotiate;
-  /* The task used for doing negotiation when we're the negotiator */
-  GTask *negotiator_task;
-
-  /* The video device monitor being used */
-  GstDeviceMonitor *dm;
-  /* Video device being used */
-  GstDevice *video_device;
-
-  /* The caps that we support sending */
-  GstCaps *supported_send_acaps;
-  GstCaps *supported_send_vcaps;
-  /* The caps that we support receiving */
-  GstCaps *supported_recv_acaps;
-  GstCaps *supported_recv_vcaps;
-  /* The caps that we *will* send */
-  GstCaps *send_acaps;
-  GstCaps *send_vcaps;
-  
-  /* List of network interfaces we're listening for multicast on */
-  GList *mc_ifaces;
-  /* TCP Server for comms (listens on all interfaces if none are specified) */
-  GSocketService *tcp_server;
-  /* The UDP message listener for all interfaces */
-  GSource *mc_socket_source;
-
-  /* Array of UDP ports that are either reserved or in use for receiving */
-  GArray *used_ports;
-  /* Array of OvRemotePeers: peers we want to connect to */
-  GPtrArray *remote_peers;
-
-  /* Lock to access non-thread-safe structures like GPtrArray */
-  GRecMutex lock;
-};
-
-struct _OvRemotePeerPriv {
+struct _OvRemotePeerPrivate {
   /* The remote ports we transmit data to using udpsink, in order:
    * {audio_rtp, audio_send_rtcp SRs, audio_send_rtcp RRs,
    *  video_rtp, video_send_rtcp SRs, video_send_rtcp RRs} */
@@ -164,9 +94,6 @@ struct _OvRemotePeerPriv {
   /* Video sink */
   GstElement *video_sink;
 };
-
-gboolean            ov_local_peer_setup               (OvLocalPeer *local);
-void                ov_remote_peer_remove_not_array   (OvRemotePeer *remote);
 
 G_END_DECLS
 

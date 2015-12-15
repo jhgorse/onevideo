@@ -48,7 +48,7 @@ typedef struct _OvgAppPrivate OvgAppPrivate;
 
 GType               ovg_app_get_type          (void) G_GNUC_CONST;
 OvgApp*             ovg_app_new               (void);
-OvLocalPeer*  ovg_app_get_ov_local_peer (OvgApp *app);
+OvLocalPeer*        ovg_app_get_ov_local_peer (OvgApp *app);
 
 G_END_DECLS
 

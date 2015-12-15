@@ -26,11 +26,12 @@
  */
 
 #include "lib-priv.h"
-#include "lib-setup.h"
-#include "incoming.h"
 #include "comms.h"
 #include "utils.h"
+#include "incoming.h"
 #include "discovery.h"
+#include "ov-local-peer-priv.h"
+#include "ov-local-peer-setup.h"
 
 #include <string.h>
 
@@ -88,38 +89,40 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
   gboolean ret;
+  OvLocalPeerPrivate *priv;
 
-  if (local->playback != NULL && GST_IS_PIPELINE (local->playback))
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->playback != NULL && GST_IS_PIPELINE (priv->playback))
     /* Already setup */
     return TRUE;
 
   /* Setup audio bits */
-  local->playback = gst_pipeline_new ("playback-%u");
-  gst_pipeline_set_auto_flush_bus (GST_PIPELINE (local->playback), FALSE);
-  local->priv->audiomixer = gst_element_factory_make ("audiomixer", NULL);
-  local->priv->audiosink = gst_element_factory_make ("pulsesink", NULL);
+  priv->playback = gst_pipeline_new ("playback-%u");
+  gst_pipeline_set_auto_flush_bus (GST_PIPELINE (priv->playback), FALSE);
+  priv->audiomixer = gst_element_factory_make ("audiomixer", NULL);
+  priv->audiosink = gst_element_factory_make ("pulsesink", NULL);
   /* These values give the lowest audio latency with the least chance of audio
    * artefacting. Setting buffer-time less than 50ms gives audio artefacts. */
-  g_object_set (local->priv->audiosink, "buffer-time", 50000, NULL);
+  g_object_set (priv->audiosink, "buffer-time", 50000, NULL);
     
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
    * basesink. Fix this by only plugging a sink if audio is present. */
-  gst_bin_add_many (GST_BIN (local->playback), local->priv->audiomixer,
-      local->priv->audiosink, NULL);
-  ret = gst_element_link_many (local->priv->audiomixer, local->priv->audiosink,
-      NULL);
+  gst_bin_add_many (GST_BIN (priv->playback), priv->audiomixer,
+      priv->audiosink, NULL);
+  ret = gst_element_link_many (priv->audiomixer, priv->audiosink, NULL);
   g_assert (ret);
 
   /* Video bits are setup by each local */
 
   /* Use the system clock and explicitly reset the base/start times to ensure
    * that all the pipelines started by us have the same base/start times */
-  gst_pipeline_use_clock (GST_PIPELINE (local->playback),
+  gst_pipeline_use_clock (GST_PIPELINE (priv->playback),
       gst_system_clock_obtain());
-  gst_element_set_base_time (local->playback, 0);
+  gst_element_set_base_time (priv->playback, 0);
 
-  bus = gst_pipeline_get_bus (GST_PIPELINE (local->playback));
+  bus = gst_pipeline_get_bus (GST_PIPELINE (priv->playback));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::error",
       G_CALLBACK (on_local_playback_error), local);
@@ -139,21 +142,26 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
+  OvLocalPeerPrivate *priv;
+  OvLocalPeerState state;
   gboolean ret;
 
-  if (!(local->state & OV_LOCAL_STATE_INITIALISED) &&
+  priv = ov_local_peer_get_private (local);
+
+  state = ov_local_peer_get_state (local);
+  if (!(state & OV_LOCAL_STATE_STARTED) &&
       /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
-      !(local->state & OV_LOCAL_STATE_READY))
+      !(state & OV_LOCAL_STATE_READY))
     return FALSE;
 
-  if (local->transmit != NULL && GST_IS_PIPELINE (local->transmit)) {
+  if (priv->transmit != NULL && GST_IS_PIPELINE (priv->transmit)) {
     /* Wipe pre-existing transmit pipeline and recreate anew */
-    gst_object_unref (local->transmit);
+    gst_object_unref (priv->transmit);
   }
 
-  local->transmit = gst_pipeline_new ("transmit-pipeline");
-  local->priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
-  g_object_set (local->priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
+  priv->transmit = gst_pipeline_new ("transmit-pipeline");
+  priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
+  g_object_set (priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
 
   asrc = gst_element_factory_make ("pulsesrc", NULL);
   /* latency-time to 5 ms, we use the system clock */
@@ -177,7 +185,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 
   /* FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
    * FIXME: Select the best format based on formats available on the camera */
-  if (local->priv->video_device == NULL) {
+  if (priv->video_device == NULL) {
     vsrc = gst_element_factory_make ("videotestsrc", NULL);
     g_object_set (vsrc, "is-live", TRUE, NULL);
     vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
@@ -186,10 +194,10 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     gst_caps_unref (video_caps);
     vqueue = gst_element_factory_make ("queue", "v4l2-queue");
   } else {
-    vsrc = gst_device_create_element (local->priv->video_device, NULL);
+    vsrc = gst_device_create_element (priv->video_device, NULL);
     vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
     /* These have already been fixated */
-    g_object_set (vfilter, "caps", local->priv->send_vcaps, NULL);
+    g_object_set (vfilter, "caps", priv->send_vcaps, NULL);
     vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
   }
   vqueue2 = gst_element_factory_make ("jpegenc", NULL);
@@ -205,7 +213,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   /* Recv RTCP RR for video (same port for all peers) */
   vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src");
 
-  gst_bin_add_many (GST_BIN (local->transmit), local->priv->rtpbin, asrc,
+  gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc,
       afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
       vsrc, vfilter, vqueue, vqueue2, vpay, vrtpqueue, vsink, vrtcpqueue,
       vrtcpsink, vrtcpsrc, NULL);
@@ -215,27 +223,27 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   g_assert (ret);
   ret = gst_element_link (artcpqueue, artcpsink);
   g_assert (ret);
-  local->priv->asend_rtcp_sink = artcpsink;
+  priv->asend_rtcp_sink = artcpsink;
   ret = gst_element_link (artpqueue, asink);
   g_assert (ret);
-  local->priv->asend_rtp_sink = asink;
-  local->priv->arecv_rtcp_src = artcpsrc;
+  priv->asend_rtp_sink = asink;
+  priv->arecv_rtcp_src = artcpsrc;
 
   /* Send RTP data */
-  ret = gst_element_link_pads (apay, "src", local->priv->rtpbin,
+  ret = gst_element_link_pads (apay, "src", priv->rtpbin,
       "send_rtp_sink_0");
   g_assert (ret);
-  ret = gst_element_link_pads (local->priv->rtpbin, "send_rtp_src_0", artpqueue,
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtp_src_0", artpqueue,
       "sink");
   g_assert (ret);
 
   /* Send RTCP SR */
-  ret = gst_element_link_pads (local->priv->rtpbin, "send_rtcp_src_0",
-      artcpqueue, "sink");
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtcp_src_0", artcpqueue,
+      "sink");
   g_assert (ret);
 
   /* Recv RTCP RR */
-  ret = gst_element_link_pads (artcpsrc, "src", local->priv->rtpbin,
+  ret = gst_element_link_pads (artcpsrc, "src", priv->rtpbin,
         "recv_rtcp_sink_0");
   g_assert (ret);
 
@@ -244,39 +252,38 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   g_assert (ret);
   ret = gst_element_link (vrtcpqueue, vrtcpsink);
   g_assert (ret);
-  local->priv->vsend_rtcp_sink = vrtcpsink;
+  priv->vsend_rtcp_sink = vrtcpsink;
   ret = gst_element_link (vrtpqueue, vsink);
   g_assert (ret);
-  local->priv->vsend_rtp_sink = vsink;
-  local->priv->vrecv_rtcp_src = vrtcpsrc;
+  priv->vsend_rtp_sink = vsink;
+  priv->vrecv_rtcp_src = vrtcpsrc;
 
   /* Send RTP data */
-  ret = gst_element_link_pads (vpay, "src", local->priv->rtpbin,
-      "send_rtp_sink_1");
+  ret = gst_element_link_pads (vpay, "src", priv->rtpbin, "send_rtp_sink_1");
   g_assert (ret);
-  ret = gst_element_link_pads (local->priv->rtpbin, "send_rtp_src_1", vrtpqueue,
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtp_src_1", vrtpqueue,
       "sink");
   g_assert (ret);
 
   /* Send RTCP SR */
-  ret = gst_element_link_pads (local->priv->rtpbin, "send_rtcp_src_1",
-      vrtcpqueue, "sink");
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtcp_src_1", vrtcpqueue,
+      "sink");
   g_assert (ret);
 
   /* Recv RTCP RR */
-  ret = gst_element_link_pads (vrtcpsrc, "src", local->priv->rtpbin,
-        "recv_rtcp_sink_1");
+  ret = gst_element_link_pads (vrtcpsrc, "src", priv->rtpbin,
+      "recv_rtcp_sink_1");
   g_assert (ret);
 
   /* All done */
 
   /* Use the system clock and explicitly reset the base/start times to ensure
    * that all the pipelines started by us have the same base/start times */
-  gst_pipeline_use_clock (GST_PIPELINE (local->transmit),
+  gst_pipeline_use_clock (GST_PIPELINE (priv->transmit),
       gst_system_clock_obtain ());
-  gst_element_set_base_time (local->transmit, 0);
+  gst_element_set_base_time (priv->transmit, 0);
 
-  bus = gst_pipeline_get_bus (GST_PIPELINE (local->transmit));
+  bus = gst_pipeline_get_bus (GST_PIPELINE (priv->transmit));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::error",
       G_CALLBACK (on_local_transmit_error), local);
@@ -292,35 +299,41 @@ ov_local_peer_setup_comms (OvLocalPeer * local)
 {
   GList *l;
   gboolean ret;
+  gchar *addr_s;
   GSocket *mc_socket;
   GSource *mc_source;
   GInetAddress *mc_group;
   GSocketAddress *mc_addr;
+  GInetSocketAddress *addr;
+  OvLocalPeerPrivate *priv;
   GError *error = NULL;
+
+  priv = ov_local_peer_get_private (local);
 
   /*-- Listen for incoming TCP connections --*/
 
   /* Threaded socket service since we use blocking TCP network reads
    * TODO: Use threads equal to number of remote peers? To ensure that peers
    * never wait while communicating. */
-  local->priv->tcp_server = g_threaded_socket_service_new (10);
+  priv->tcp_server = g_threaded_socket_service_new (10);
 
-  ret = g_socket_listener_add_address (
-      G_SOCKET_LISTENER (local->priv->tcp_server),
-      G_SOCKET_ADDRESS (local->addr), G_SOCKET_TYPE_STREAM,
-      G_SOCKET_PROTOCOL_TCP, NULL, NULL, &error);
+  g_object_get (OV_PEER (local), "address", &addr, "address-string", &addr_s,
+      NULL);
+
+  ret = g_socket_listener_add_address (G_SOCKET_LISTENER (priv->tcp_server),
+      G_SOCKET_ADDRESS (addr), G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP,
+      NULL, NULL, &error);
   if (!ret) {
-    GST_ERROR ("Unable to setup TCP server (%s): %s", local->addr_s,
-        error->message);
+    GST_ERROR ("Unable to setup TCP server (%s): %s", addr_s, error->message);
     g_error_free (error);
-    goto out_nofree;
+    goto out_early;
   }
 
-  g_signal_connect (local->priv->tcp_server, "run",
+  g_signal_connect (priv->tcp_server, "run",
       G_CALLBACK (on_incoming_peer_tcp_connection), local);
 
-  g_socket_service_start (local->priv->tcp_server);
-  GST_DEBUG ("Listening for incoming TCP connections on %s", local->addr_s);
+  g_socket_service_start (priv->tcp_server);
+  GST_DEBUG ("Listening for incoming TCP connections on %s", addr_s);
 
   /*-- Listen for incoming UDP messages (multicast and unicast) --*/
   mc_group = g_inet_address_new_from_string (OV_MULTICAST_GROUP);
@@ -333,7 +346,7 @@ ov_local_peer_setup_comms (OvLocalPeer * local)
       G_SOCKET_PROTOCOL_UDP, NULL);
   if (!g_socket_bind (mc_socket, mc_addr, TRUE, &error)) {
     gchar *name =
-      g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
+      g_inet_address_to_string (g_inet_socket_address_get_address (addr));
     GST_ERROR ("Unable to bind to multicast addr/port (%s:%u): %s", name,
         OV_DEFAULT_COMM_PORT, error->message);
     g_error_free (error);
@@ -346,18 +359,18 @@ ov_local_peer_setup_comms (OvLocalPeer * local)
   g_source_set_callback (mc_source, (GSourceFunc) on_incoming_udp_message,
       local, NULL);
   g_source_attach (mc_source, NULL);
-  local->priv->mc_socket_source = mc_source;
+  priv->mc_socket_source = mc_source;
 
   /* Join multicast groups on all interfaces */
   ret = FALSE;
-  l = local->priv->mc_ifaces;
+  l = priv->mc_ifaces;
   while (l != NULL) {
     ret = g_socket_join_multicast_group (mc_socket, mc_group, FALSE, l->data,
         &error);
     if (!ret) {
       GList *next = l->next;
       /* Not listening on this interface; remove it from the list */
-      local->priv->mc_ifaces = g_list_delete_link (local->priv->mc_ifaces, l);
+      priv->mc_ifaces = g_list_delete_link (priv->mc_ifaces, l);
       GST_WARNING ("Unable to setup a multicast listener on %s: %s",
           (gchar*) l->data, error->message);
       g_clear_error (&error);
@@ -376,7 +389,9 @@ out:
   g_object_unref (mc_socket);
   if (!ret)
     g_object_unref (mc_source);
-out_nofree:
+out_early:
+  g_object_unref (addr);
+  g_free (addr_s);
   return ret;
 }
 
@@ -417,6 +432,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   GstElement *rtpbin;
   GstElement *asrc, *artcpsrc, *adecode, *asink, *artcpsink;
   GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink, *vrtcpsink;
+  GInetSocketAddress *local_addr;
   gchar *local_addr_s, *remote_addr_s;
   GstCaps *rtpcaps;
 
@@ -425,10 +441,12 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
       remote->priv->recv_ports[1] > 0 && remote->priv->recv_ports[2] > 0 &&
       remote->priv->recv_ports[3] > 0);
 
+  g_object_get (OV_PEER (local), "address", &local_addr, NULL);
   local_addr_s =
-    g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
+    g_inet_address_to_string (g_inet_socket_address_get_address (local_addr));
   remote_addr_s =
     g_inet_address_to_string (g_inet_socket_address_get_address (remote->addr));
+  g_object_unref (local_addr);
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote peer */
 
@@ -557,8 +575,11 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
   GstPad *ghostpad, *srcpad, *sinkpad;
   GstPadLinkReturn ret;
   gboolean res;
+  OvLocalPeerPrivate *priv;
 
-  /* Setup pipeline (local->playback) to aggregate audio from all remote peers
+  priv = ov_local_peer_get_private (local);
+
+  /* Setup pipeline (priv->playback) to aggregate audio from all remote peers
    * to audiomixer and then render using the provided audio sink
    *  [ proxysrc ! audiomixer ] */
   if (remote->priv->audio_proxysink) {
@@ -570,11 +591,11 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
     g_object_set (remote->priv->audio_proxysrc, "proxysink",
         remote->priv->audio_proxysink, NULL);
 
-    sinkpad = gst_element_get_request_pad (local->priv->audiomixer, "sink_%u");
+    sinkpad = gst_element_get_request_pad (priv->audiomixer, "sink_%u");
 
     gst_bin_add_many (GST_BIN (remote->priv->aplayback),
         remote->priv->audio_proxysrc, NULL);
-    res = gst_bin_add (GST_BIN (local->playback), remote->priv->aplayback);
+    res = gst_bin_add (GST_BIN (priv->playback), remote->priv->aplayback);
     g_assert (res);
 
     srcpad = gst_element_get_static_pad (remote->priv->audio_proxysrc, "src");
@@ -590,7 +611,7 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
     gst_object_unref (sinkpad);
   }
 
-  /* Setup pipeline (local->playback) to render video from each local to the
+  /* Setup pipeline (priv->playback) to render video from each local to the
    * provided video sink */
   if (remote->priv->video_proxysink) {
     remote->priv->video_proxysrc = 
@@ -607,12 +628,12 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
 
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
         remote->priv->video_proxysrc, remote->priv->video_sink, NULL);
-    res = gst_bin_add (GST_BIN (local->playback), remote->priv->vplayback);
+    res = gst_bin_add (GST_BIN (priv->playback), remote->priv->vplayback);
     g_assert (res);
     res = gst_element_link_many (remote->priv->video_proxysrc,
         remote->priv->video_sink, NULL);
     g_assert (res);
   }
 
-  GST_DEBUG ("Setup pipeline to playback remote local");
+  GST_DEBUG ("Setup local pipeline to playback remote");
 }

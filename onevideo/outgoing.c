@@ -28,6 +28,7 @@
 #include "comms.h"
 #include "lib-priv.h"
 #include "outgoing.h"
+#include "ov-local-peer-priv.h"
 
 static void
 handle_tcp_msg_ack (OvTcpMsg * msg)
@@ -80,20 +81,26 @@ ov_remote_peer_send_tcp_msg (OvRemotePeer * remote, OvTcpMsg * msg,
   gboolean ret;
   GSocketClient *client;
   GSocketConnection *conn;
-  GSocketAddress *addr;
   GInputStream *input;
   GOutputStream *output;
+  GSocketAddress *addr;
+  GInetSocketAddress *local_addr;
   OvTcpMsg *reply = NULL;
 
   client = g_socket_client_new ();
+  
   /* Set local address with random port to ensure that we connect from the same
    * interface that we're listening on */
+  g_object_get (OV_PEER (remote->local), "address", &local_addr, NULL);
   addr = g_inet_socket_address_new (
-      g_inet_socket_address_get_address (remote->local->addr), 0);
+      g_inet_socket_address_get_address (local_addr), 0);
   g_socket_client_set_local_address (client, addr);
+  g_object_unref (local_addr);
   g_object_unref (addr);
+  
   /* Set timeout */
   g_socket_client_set_timeout (client, OV_TCP_TIMEOUT);
+
   conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
       cancellable, error);
   if (!conn) {
@@ -135,16 +142,22 @@ ov_remote_peer_send_tcp_msg_quick_noreply (OvRemotePeer * remote,
   GSocketConnection *conn;
   GSocketAddress *addr;
   GOutputStream *output;
+  GInetSocketAddress *local_addr;
 
   client = g_socket_client_new ();
+  
   /* Set local address with random port to ensure that we connect from the same
    * interface that we're listening on */
+  g_object_get (OV_PEER (remote->local), "address", &local_addr, NULL);
   addr = g_inet_socket_address_new (
-      g_inet_socket_address_get_address (remote->local->addr), 0);
+      g_inet_socket_address_get_address (local_addr), 0);
   g_socket_client_set_local_address (client, addr);
+  g_object_unref (local_addr);
   g_object_unref (addr);
+  
   /* Wait at most 1 second per client */
   g_socket_client_set_timeout (client, 1);
+
   conn = g_socket_client_connect (client, G_SOCKET_CONNECTABLE (remote->addr),
       NULL, NULL);
   if (!conn)
@@ -172,12 +185,17 @@ static gboolean
 ov_remote_peer_tcp_client_start_negotiate (OvRemotePeer * remote,
     guint64 call_id, GCancellable * cancellable, GError ** error)
 {
-  gchar *error_msg;
+  gchar *error_msg, *local_id;
+  GInetSocketAddress *local_addr;
   OvTcpMsg *msg, *reply = NULL;
   gboolean ret = FALSE;
 
-  msg = ov_tcp_msg_new_start_negotiate (call_id, remote->local->id,
-      g_inet_socket_address_get_port (remote->local->addr));
+  g_object_get (OV_PEER (remote->local), "address", &local_addr, "id",
+      &local_id, NULL);
+  msg = ov_tcp_msg_new_start_negotiate (call_id, local_id,
+      g_inet_socket_address_get_port (local_addr));
+  g_object_unref (local_addr);
+  g_free (local_id);
 
   reply = ov_remote_peer_send_tcp_msg (remote, msg, cancellable, error);
   if (!reply)
@@ -218,8 +236,11 @@ ov_remote_peer_tcp_client_cancel_negotiate (OvRemotePeer * remote,
     guint64 call_id)
 {
   OvTcpMsg *msg;
+  gchar *local_id;
 
-  msg = ov_tcp_msg_new_cancel_negotiate (call_id, remote->local->id);
+  g_object_get (OV_PEER (remote->local), "id", &local_id, NULL);
+  msg = ov_tcp_msg_new_cancel_negotiate (call_id, local_id);
+  g_free (local_id);
 
   ov_remote_peer_send_tcp_msg_quick_noreply (remote, msg);
     
@@ -230,18 +251,22 @@ static GVariant *
 get_all_peers_list_except_this (OvRemotePeer * remote, guint64 call_id)
 {
   int ii;
-  gchar *tmp;
+  gchar *tmp, *local_id;
   GVariant *peers;
   GVariantBuilder *builder;
-  OvLocalPeer *local = remote->local;
+  OvLocalPeerPrivate *local_priv;
+
+  local_priv = ov_local_peer_get_private (remote->local);
+  g_object_get (OV_PEER (remote->local), "id", &local_id, NULL);
 
   builder = g_variant_builder_new (G_VARIANT_TYPE ("as"));
   /* We add ourselves here because we might want to potentially have a call that
    * does not include ourselves */
-  g_variant_builder_add (builder, "s", local->id);
+  g_variant_builder_add (builder, "s", local_id);
+  g_free (local_id);
 
-  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
-    OvRemotePeer *peer = g_ptr_array_index (local->priv->remote_peers, ii);
+  for (ii = 0; ii < local_priv->remote_peers->len; ii++) {
+    OvRemotePeer *peer = g_ptr_array_index (local_priv->remote_peers, ii);
     if (peer != remote)
       g_variant_builder_add (builder, "s", peer->id);
   }
@@ -264,14 +289,16 @@ get_all_remotes_addr_list_except_this (OvRemotePeer * remote,
   gchar *tmp;
   GVariant *peers;
   GVariantBuilder *builder;
-  OvLocalPeer *local = remote->local;
+  OvLocalPeerPrivate *local_priv;
+
+  local_priv = ov_local_peer_get_private (remote->local);
 
   builder = g_variant_builder_new (G_VARIANT_TYPE ("a(ss)"));
 
   /* We don't add ourselves here because each peer already knows about us */
 
-  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
-    OvRemotePeer *peer = g_ptr_array_index (local->priv->remote_peers, ii);
+  for (ii = 0; ii < local_priv->remote_peers->len; ii++) {
+    OvRemotePeer *peer = g_ptr_array_index (local_priv->remote_peers, ii);
     if (peer != remote)
       /* Here we inform this remote about the address to use to connect to all
        * the other remotes */
@@ -342,13 +369,18 @@ static void
 ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
 {
   guint ii;
+  gchar *local_id;
   const gchar *in_vtype;
+  OvLocalPeerPrivate *local_priv;
+
+  g_object_get (OV_PEER (local), "id", &local_id, NULL);
+  local_priv = ov_local_peer_get_private (local);
 
   in_vtype = ov_tcp_msg_type_to_variant_type (
       OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION);
 
   /* For each remote peer, find the ports *we* need to send to */
-  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
+  for (ii = 0; ii < local_priv->remote_peers->len; ii++) {
     GVariant *value;
     GVariantIter *iter;
     OvRemotePeer *remote;
@@ -356,7 +388,7 @@ ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
     gchar *send_acaps, *send_vcaps, *peer_id;
     guint32 ports[6] = {};
 
-    remote = g_ptr_array_index (local->priv->remote_peers, ii);
+    remote = g_ptr_array_index (local_priv->remote_peers, ii);
 
     value = g_hash_table_lookup (in, remote);
     g_variant_get (value, in_vtype, NULL, &ports[2], &ports[5], &send_acaps,
@@ -373,7 +405,7 @@ ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
 
     while (g_variant_iter_loop (iter, "(suuuu)", &peer_id, &ports[0],
           &ports[1], &ports[3], &ports[4])) {
-      if (g_strcmp0 (local->id, peer_id) != 0)
+      if (g_strcmp0 (local_id, peer_id) != 0)
         continue;
       remote->priv->send_ports[0] = ports[0];
       remote->priv->send_ports[1] = ports[1];
@@ -386,6 +418,7 @@ ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
     }
     g_variant_iter_free (iter);
   }
+  g_free (local_id);
 }
 
 /* Format of GHashTable *in is: {OvRemotePeer*: GVariant*}
@@ -396,10 +429,15 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
 {
   guint ii, jj;
   GHashTable *out;
+  GPtrArray *remotes;
   /* The caps of the data that we will send to everyone */
-  gchar *send_acaps, *send_vcaps;
+  gchar *send_acaps, *send_vcaps, *local_id;
   const gchar *in_vtype, *out_vtype;
-  GPtrArray *remotes = local->priv->remote_peers;
+  OvLocalPeerPrivate *local_priv;
+
+  local_priv = ov_local_peer_get_private (local);
+  g_object_get (OV_PEER (local), "id", &local_id, NULL);
+  remotes = local_priv->remote_peers;
 
   in_vtype = ov_tcp_msg_type_to_variant_type (
       OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION);
@@ -411,16 +449,16 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
   out = g_hash_table_new_full (NULL, NULL, NULL,
       (GDestroyNotify) g_variant_unref);
 
-  local->priv->send_acaps = gst_caps_fixate (
-      gst_caps_copy (local->priv->supported_send_acaps));
-  send_acaps = gst_caps_to_string (local->priv->send_acaps);
+  local_priv->send_acaps = gst_caps_fixate (
+      gst_caps_copy (local_priv->supported_send_acaps));
+  send_acaps = gst_caps_to_string (local_priv->send_acaps);
   /* TODO: Right now, we just select the best video caps available. Instead, we
    * should decide send_vcaps based on our upload bandwidth limit and based on
    * the recv_caps of other peers. This is ok right now because other peers
    * just accept any JPEG video anyway. */
-  local->priv->send_vcaps = gst_caps_fixate (
-      gst_caps_copy (local->priv->supported_send_vcaps));
-  send_vcaps = gst_caps_to_string (local->priv->send_vcaps);
+  local_priv->send_vcaps = gst_caps_fixate (
+      gst_caps_copy (local_priv->supported_send_vcaps));
+  send_vcaps = gst_caps_to_string (local_priv->send_vcaps);
 
   /* For each remote peer, iterate over the reply-caps messages received from
    * all *other* peers and find the udpsink send_ports and recv caps that each
@@ -479,10 +517,10 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
     /* Besides all the other (remote) peers, also add the recv ports that we
      * have allocated for this remote peer and the recv rtcp ports that are
      * common between all remote peers */
-    g_variant_builder_add (thisb, "(sssuuuuuu)", local->id, send_acaps,
+    g_variant_builder_add (thisb, "(sssuuuuuu)", local_id, send_acaps,
         send_vcaps, this->priv->recv_ports[0], this->priv->recv_ports[1],
-        local->priv->recv_rtcp_ports[0], this->priv->recv_ports[2],
-        this->priv->recv_ports[3], local->priv->recv_rtcp_ports[1]);
+        local_priv->recv_rtcp_ports[0], this->priv->recv_ports[2],
+        this->priv->recv_ports[3], local_priv->recv_rtcp_ports[1]);
     /* Create the aggregated CALL_DETAILS GVariant for this remote peer */
     negotiated =
       g_variant_new (out_vtype, call_id, send_acaps, send_vcaps, thisb);
@@ -492,6 +530,7 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
 
   g_free (send_acaps);
   g_free (send_vcaps);
+  g_free (local_id);
   return out;
 }
 
@@ -593,12 +632,16 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
 {
   gint ii;
   guint64 call_id;
+  GPtrArray *remotes;
   GHashTable *in, *out;
-  GPtrArray *remotes = local->priv->remote_peers;
+  OvLocalPeerPrivate *local_priv;
   GError *error = NULL;
 
+  local_priv = ov_local_peer_get_private (local);
+  remotes = local_priv->remote_peers;
+
   if (g_cancellable_is_cancelled (cancellable)) {
-    local->priv->negotiator_task = NULL;
+    local_priv->negotiator_task = NULL;
     return;
   }
 
@@ -610,12 +653,12 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   call_id = g_get_monotonic_time ();
 
   /* Send START_NEGOTIATE + QUERY_CAPS to remote peers and get REPLY_CAPS */
-  g_rec_mutex_lock (&local->priv->lock);
+  ov_local_peer_lock (local);
   /* Every time we take the lock, check if our task has been cancelled */
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
-  local->state = OV_LOCAL_STATE_NEGOTIATING |
-    OV_LOCAL_STATE_NEGOTIATOR;
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_NEGOTIATING);
+  ov_local_peer_set_state_negotiator (local);
   /* Begin negotiation with all peers first (which returns a peer id) */
   /* TODO: Synchronous for now, make this async to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
@@ -639,9 +682,9 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     GST_ERROR ("No peers left to call, all failed to negotiate");
     goto err;
   }
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
 
-  g_rec_mutex_lock (&local->priv->lock);
+  ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
   /* Continue negotiation now that we have the peer id for all peers */
@@ -661,17 +704,17 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     g_hash_table_insert (in, remote, g_variant_ref (reply->variant));
     ov_tcp_msg_free (reply);
   }
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
   
-  g_rec_mutex_lock (&local->priv->lock);
+  ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
   /* Transform REPLY_CAPS to CALL_DETAILS */
   out = ov_aggregate_call_details_for_remotes (local, in, call_id);
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
 
   /* Distribute call details to all remotes */
-  g_rec_mutex_lock (&local->priv->lock);
+  ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable)) {
     g_hash_table_unref (out);
     goto cancelled;
@@ -692,13 +735,13 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
       goto err;
     }
   }
-  local->state = OV_LOCAL_STATE_NEGOTIATED |
-    OV_LOCAL_STATE_NEGOTIATOR;
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_NEGOTIATED);
+  ov_local_peer_set_state_negotiator (local);
+  ov_local_peer_unlock (local);
 
   /* Start the call
    * FIXME: Do this in ov_local_start() ? */
-  g_rec_mutex_lock (&local->priv->lock);
+  ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable)) {
     g_hash_table_unref (out);
     goto cancelled;
@@ -724,8 +767,8 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   }
   /* Set our own call details */
   ov_local_peer_set_call_details (local, in);
-  local->state = OV_LOCAL_STATE_READY |
-    OV_LOCAL_STATE_NEGOTIATOR;
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_READY);
+  ov_local_peer_set_state_negotiator (local);
 
   g_hash_table_unref (out);
 
@@ -733,13 +776,13 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
   if (!g_task_set_return_on_cancel (task, FALSE))
     goto cancelled;
 
-  local->priv->active_call_id = call_id;
+  local_priv->active_call_id = call_id;
   g_task_return_boolean (task, TRUE);
 
 out:
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
   g_hash_table_unref (in);
-  local->priv->negotiator_task = NULL;
+  local_priv->negotiator_task = NULL;
   return;
 
   /* Called with the lock TAKEN */
@@ -751,8 +794,8 @@ cancelled:
     OvRemotePeer *remote = g_ptr_array_index (remotes, ii);
     ov_remote_peer_tcp_client_cancel_negotiate (remote, call_id);
   }
-  local->state |= OV_LOCAL_STATE_FAILED;
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_set_state_failed (local);
+  ov_local_peer_unlock (local);
   goto out;
 }
 
@@ -799,29 +842,36 @@ no_reply:
 }
 
 void
-ov_local_peer_end_call (OvLocalPeer * local)
+ov_local_peer_send_end_call (OvLocalPeer * local)
 {
   guint ii;
   OvTcpMsg *msg;
+  gchar *local_id;
   const gchar *variant_type;
+  OvLocalPeerPrivate *local_priv;
 
-  if (!local->priv->active_call_id)
+  local_priv = ov_local_peer_get_private (local);
+  g_object_get (OV_PEER (local), "id", &local_id, NULL);
+
+  if (!local_priv->active_call_id)
     /* No active call */
     return;
 
   variant_type = ov_tcp_msg_type_to_variant_type (
       OV_TCP_MSG_TYPE_END_CALL, OV_TCP_MAX_VERSION);
   msg = ov_tcp_msg_new (OV_TCP_MSG_TYPE_END_CALL,
-      g_variant_new (variant_type, local->priv->active_call_id, local->id));
+      g_variant_new (variant_type, local_priv->active_call_id, local_id));
+  g_free (local_id);
 
-  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
+  GST_DEBUG ("Sending END_CALL to remote peers");
+  for (ii = 0; ii < local_priv->remote_peers->len; ii++) {
     OvRemotePeer *remote;
 
-    remote = g_ptr_array_index (local->priv->remote_peers, ii);
+    remote = g_ptr_array_index (local_priv->remote_peers, ii);
     ov_remote_peer_tcp_client_end_call (remote, msg, NULL, NULL);
   }
 
-  local->priv->active_call_id = 0;
+  local_priv->active_call_id = 0;
 
   ov_tcp_msg_free (msg);
 }

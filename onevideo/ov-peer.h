@@ -25,29 +25,25 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __OV_LIB_SETUP_H__
-#define __OV_LIB_SETUP_H__
+#ifndef __OV_PEER_H__
+#define __OV_PEER_H__
 
-#include "lib-priv.h"
+#include <glib-object.h>
+#include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-void      ov_on_gst_bus_error                     (GstBus *bus,
-                                                          GstMessage *msg,
-                                                          gpointer user_data);
+#define OV_TYPE_PEER ov_peer_get_type ()
+G_DECLARE_DERIVABLE_TYPE (OvPeer, ov_peer, OV, PEER, GObject)
 
-GSocket*  ov_get_socket_for_addr                  (const gchar *addr_s,
-                                                          guint port);
+typedef struct _OvPeerPrivate  OvPeerPrivate;
 
-gboolean  ov_local_peer_setup_transmit_pipeline   (OvLocalPeer *local);
-gboolean  ov_local_peer_setup_playback_pipeline   (OvLocalPeer *local);
-gboolean  ov_local_peer_setup_comms               (OvLocalPeer *local);
+struct _OvPeerClass {
+  GObjectClass parent_class;
+};
 
-void      ov_local_peer_setup_remote_receive      (OvLocalPeer *local,
-                                                          OvRemotePeer *remote);
-void      ov_local_peer_setup_remote_playback     (OvLocalPeer *local,
-                                                          OvRemotePeer *remote);
+OvPeer*     ov_peer_new         (GInetSocketAddress * addr);
 
 G_END_DECLS
 
-#endif /* __OV_LIB_SETUP_H__ */
+#endif /* __OV_PEER_H__ */

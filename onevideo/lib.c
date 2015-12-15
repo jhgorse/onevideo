@@ -25,13 +25,15 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "lib.h"
 #include "lib-priv.h"
-#include "lib-setup.h"
 #include "comms.h"
 #include "utils.h"
 #include "outgoing.h"
 #include "discovery.h"
+
+#include "ov-local-peer.h"
+#include "ov-local-peer-priv.h"
+#include "ov-local-peer-setup.h"
 
 #include <string.h>
 
@@ -46,12 +48,16 @@ static void
 ov_local_peer_stop_transmit (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
-  if (local->transmit != NULL) {
-    ret = gst_element_set_state (local->transmit, GST_STATE_NULL);
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->transmit != NULL) {
+    ret = gst_element_set_state (priv->transmit, GST_STATE_NULL);
     g_assert (ret == GST_STATE_CHANGE_SUCCESS);
   }
   /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
-  g_clear_object (&local->transmit);
+  g_clear_object (&priv->transmit);
   GST_DEBUG ("Stopped transmitting");
 }
 
@@ -59,159 +65,12 @@ static void
 ov_local_peer_stop_playback (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
-  ret = gst_element_set_state (local->playback, GST_STATE_NULL);
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
+  ret = gst_element_set_state (priv->playback, GST_STATE_NULL);
   g_assert (ret == GST_STATE_CHANGE_SUCCESS);
   GST_DEBUG ("Stopped playback");
-}
-
-static void
-ov_local_peer_stop_comms (OvLocalPeer * local)
-{
-  if (local->priv->tcp_server != NULL) {
-    g_signal_handlers_disconnect_by_data (local->priv->tcp_server, local);
-    g_socket_service_stop (local->priv->tcp_server);
-  }
-  if (local->priv->mc_socket_source != NULL)
-    g_source_destroy (local->priv->mc_socket_source);
-}
-
-OvLocalPeer *
-ov_local_peer_new (const gchar * iface, guint16 port)
-{
-  gchar *guid;
-  GstCaps *vcaps;
-  GInetAddress *addr;
-  GSocketAddress *listen_addr;
-  OvLocalPeer *local;
-  guint16 tcp_port;
-  gboolean ret;
-
-  if (onevideo_debug == NULL)
-    GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
-        "Ov VoIP library");
-
-  if (iface == NULL)
-    addr = g_inet_address_new_any (G_SOCKET_FAMILY_IPV4);
-  else
-    addr = ov_get_inet_addr_for_iface (iface);
-  if (addr == NULL)
-    return NULL;
-
-  listen_addr = g_inet_socket_address_new (addr,
-      port ? port : OV_DEFAULT_COMM_PORT);
-  g_object_unref (addr);
-
-  local = g_new0 (OvLocalPeer, 1);
-  local->addr = G_INET_SOCKET_ADDRESS (listen_addr);
-  local->addr_s = ov_inet_socket_address_to_string (local->addr);
-  guid = g_dbus_generate_guid (); /* Generate a UUIDesque string */
-  local->id = g_strdup_printf ("%s:%u-%s", g_get_host_name (),
-      g_inet_socket_address_get_port (local->addr), guid);
-  g_free (guid);
-  local->state = OV_LOCAL_STATE_NULL;
-  local->priv = g_new0 (OvLocalPeerPriv, 1);
-
-  /* Set interfaces, or auto-detect them */
-  if (iface)
-    local->priv->mc_ifaces = g_list_append (NULL, g_strdup (iface));
-  else
-    local->priv->mc_ifaces = ov_get_network_interfaces ();
-
-  /* Allocate ports for recv RTCP RRs from all remotes */
-  tcp_port = g_inet_socket_address_get_port (local->addr);
-  local->priv->recv_rtcp_ports[0] = tcp_port + 1;
-  local->priv->recv_rtcp_ports[1] = tcp_port + 2;
-
-  /* Initialize the V4L2 device monitor */
-  /* We only want native formats: JPEG, (and later) YUY2 and H.264 */
-  vcaps = gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
-  /*gst_caps_append (vcaps,
-      gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "YUY2"));
-  gst_caps_append (vcaps, gst_caps_new_empty_simple (VIDEO_FORMAT_H264));*/
-  local->priv->dm = gst_device_monitor_new ();
-  gst_device_monitor_add_filter (local->priv->dm, "Video/Source", vcaps);
-  gst_caps_unref (vcaps);
-  GST_DEBUG ("Starting device monitor");
-  /* Start probing devices asynchronously. We don't listen to the bus messages
-   * for this right now, and just get the list of all devices later. */
-  gst_device_monitor_start (local->priv->dm);
-
-  /* NOTE: GArray and GPtrArray are not thread-safe; we must lock accesses */
-  local->priv->used_ports = g_array_sized_new (FALSE, TRUE, sizeof (guint), 4);
-  local->priv->remote_peers = g_ptr_array_new ();
-  g_rec_mutex_init (&local->priv->lock);
-
-  /*-- Initialize (non-RTP) caps supported by us --*/
-  /* NOTE: Caps negotiated/exchanged between peers are always non-RTP caps */
-  /* We will only ever use 48KHz Opus */
-  local->priv->supported_send_acaps =
-    gst_caps_from_string (AUDIO_FORMAT_OPUS CAPS_SEP AUDIO_CAPS_STR);
-  /* supported_send_vcaps is set in set_video_device() */
-
-  /* We will only ever use 48KHz Opus */
-  local->priv->supported_recv_acaps =
-    gst_caps_new_empty_simple (AUDIO_FORMAT_OPUS);
-  /* For now, only support JPEG.
-   * TODO: Add other supported formats here */
-  local->priv->supported_recv_vcaps =
-    gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
-
-  /*-- Setup various pipelines and resources --*/
-
-  /* Transmit pipeline is setup in set_video_device() */
-
-  /* Setup components of the playback pipeline */
-  ret = ov_local_peer_setup_playback_pipeline (local);
-  g_assert (ret);
-
-  /* Setup negotiation/comms */
-  if (!ov_local_peer_setup_comms (local)) {
-    ov_local_peer_free (local);
-    return NULL;
-  }
-
-  local->state = OV_LOCAL_STATE_INITIALISED;
-
-  return local;
-}
-
-void
-ov_local_peer_free (OvLocalPeer * local)
-{
-  GST_DEBUG ("Stopping communication");
-  ov_local_peer_stop_comms (local);
-
-  GST_DEBUG ("Freeing local peer");
-  g_ptr_array_free (local->priv->remote_peers, TRUE);
-  g_array_free (local->priv->used_ports, TRUE);
-  g_rec_mutex_clear (&local->priv->lock);
-
-  gst_device_monitor_stop (local->priv->dm);
-  g_object_unref (local->priv->dm);
-
-  /* ov_local_peer_setup_tcp_comms */
-  if (local->priv->tcp_server)
-    g_object_unref (local->priv->tcp_server);
-
-  gst_caps_unref (local->priv->supported_send_acaps);
-  /* Set in set_video_device, so check before unref */
-  if (local->priv->supported_send_vcaps)
-    gst_caps_unref (local->priv->supported_send_vcaps);
-  gst_caps_unref (local->priv->supported_recv_acaps);
-  gst_caps_unref (local->priv->supported_recv_vcaps);
-
-  if (local->transmit)
-    g_object_unref (local->transmit);
-  g_object_unref (local->playback);
-  g_object_unref (local->addr);
-
-  g_list_free_full (local->priv->mc_ifaces, g_free);
-  g_free (local->addr_s);
-  g_free (local->id);
-
-  g_free (local->priv);
-
-  g_free (local);
 }
 
 static gint
@@ -225,16 +84,19 @@ static gboolean
 set_free_recv_ports (OvLocalPeer * local, guint (*recv_ports)[4])
 {
   guint ii, start;
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
 
   /* Start from the port right after the video RTCP recv port */
-  start = 1 + local->priv->recv_rtcp_ports[1];
+  start = 1 + priv->recv_rtcp_ports[1];
 
-  g_array_sort (local->priv->used_ports, compare_ints);
+  g_array_sort (priv->used_ports, compare_ints);
 
   /* Recv ports are always in contiguous sets of 4, so if we
    * find a hole in the sorted list of used ports, it has 4 unused ports */
-  for (ii = 0; ii < local->priv->used_ports->len; ii++)
-    if (g_array_index (local->priv->used_ports, guint, ii) == start)
+  for (ii = 0; ii < priv->used_ports->len; ii++)
+    if (g_array_index (priv->used_ports, guint, ii) == start)
       start++;
     else
       break;
@@ -243,7 +105,7 @@ set_free_recv_ports (OvLocalPeer * local, guint (*recv_ports)[4])
 
   for (ii = 0; ii < 4; ii++)
     (*recv_ports)[ii] = start + ii;
-  g_array_append_vals (local->priv->used_ports, recv_ports, 4);
+  g_array_append_vals (priv->used_ports, recv_ports, 4);
   return TRUE;
 }
 
@@ -254,7 +116,7 @@ ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
   GstBus *bus;
   gboolean ret;
   OvRemotePeer *remote;
-
+  
   remote = g_new0 (OvRemotePeer, 1);
   remote->state = OV_REMOTE_STATE_NULL;
   remote->local = local;
@@ -265,7 +127,7 @@ ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
   remote->receive = gst_pipeline_new (name);
   g_free (name);
 
-  remote->priv = g_new0 (OvRemotePeerPriv, 1);
+  remote->priv = g_new0 (OvRemotePeerPrivate, 1);
   name = g_strdup_printf ("audio-playback-bin-%s", remote->addr_s);
   remote->priv->aplayback = gst_bin_new (name);
   g_free (name);
@@ -275,10 +137,10 @@ ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
 
   /* We need a lock for set_free_recv_ports() which manipulates
    * local->priv->used_ports */
-  g_rec_mutex_lock (&local->priv->lock);
+  ov_local_peer_lock (local);
   ret = set_free_recv_ports (local, &remote->priv->recv_ports);
   g_assert (ret);
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
 
   /* Use the system clock and explicitly reset the base/start times to ensure
    * that all the pipelines started by us have the same base/start times */
@@ -324,20 +186,22 @@ ov_remote_peer_pause (OvRemotePeer * remote)
 {
   GstStateChangeReturn ret;
   gchar *addr_only;
-  OvLocalPeer *local = remote->local;
+  OvLocalPeerPrivate *local_priv;
+  
+  local_priv = ov_local_peer_get_private (remote->local);
 
   g_assert (remote->state == OV_REMOTE_STATE_PLAYING);
 
   /* Stop transmitting */
   addr_only = g_inet_address_to_string (
       g_inet_socket_address_get_address (remote->addr));
-  g_signal_emit_by_name (local->priv->asend_rtp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->asend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[0]);
-  g_signal_emit_by_name (local->priv->asend_rtcp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->asend_rtcp_sink, "remove", addr_only,
       remote->priv->send_ports[1]);
-  g_signal_emit_by_name (local->priv->vsend_rtp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->vsend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[3]);
-  g_signal_emit_by_name (local->priv->vsend_rtcp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->vsend_rtcp_sink, "remove", addr_only,
       remote->priv->send_ports[4]);
   g_free (addr_only);
 
@@ -355,7 +219,7 @@ ov_remote_peer_pause (OvRemotePeer * remote)
     gst_object_unref (srcpad);
     GST_DEBUG ("Unlinked audio pads of %s", remote->addr_s);
 
-    gst_element_release_request_pad (local->priv->audiomixer, sinkpad);
+    gst_element_release_request_pad (local_priv->audiomixer, sinkpad);
     gst_object_unref (sinkpad);
     GST_DEBUG ("Released audiomixer sinkpad of %s", remote->addr_s);
 
@@ -380,26 +244,28 @@ ov_remote_peer_resume (OvRemotePeer * remote)
   gboolean res;
   GstStateChangeReturn ret;
   gchar *addr_only;
-  OvLocalPeer *local = remote->local;
+  OvLocalPeerPrivate *local_priv;
+  
+  local_priv = ov_local_peer_get_private (remote->local);
 
   g_assert (remote->state == OV_REMOTE_STATE_PAUSED);
 
   /* Start transmitting */
   addr_only = g_inet_address_to_string (
       g_inet_socket_address_get_address (remote->addr));
-  g_signal_emit_by_name (local->priv->asend_rtp_sink, "add", addr_only,
+  g_signal_emit_by_name (local_priv->asend_rtp_sink, "add", addr_only,
       remote->priv->send_ports[0]);
-  g_signal_emit_by_name (local->priv->asend_rtcp_sink, "add", addr_only,
+  g_signal_emit_by_name (local_priv->asend_rtcp_sink, "add", addr_only,
       remote->priv->send_ports[1]);
-  g_signal_emit_by_name (local->priv->vsend_rtp_sink, "add", addr_only,
+  g_signal_emit_by_name (local_priv->vsend_rtp_sink, "add", addr_only,
       remote->priv->send_ports[3]);
-  g_signal_emit_by_name (local->priv->vsend_rtcp_sink, "add", addr_only,
+  g_signal_emit_by_name (local_priv->vsend_rtcp_sink, "add", addr_only,
       remote->priv->send_ports[4]);
   g_free (addr_only);
 
   if (remote->priv->audio_proxysrc != NULL) {
     res = gst_element_link_pads (remote->priv->aplayback, "audiopad",
-          local->priv->audiomixer, "sink_%u");
+          local_priv->audiomixer, "sink_%u");
     g_assert (res);
     ret = gst_element_set_state (remote->priv->aplayback, GST_STATE_PLAYING);
     g_assert (ret == GST_STATE_CHANGE_SUCCESS);
@@ -429,18 +295,20 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
   gboolean res;
   GstStateChangeReturn ret;
   gchar *tmp, *addr_only;
-  OvLocalPeer *local = remote->local;
+  OvLocalPeerPrivate *local_priv;
+  
+  local_priv = ov_local_peer_get_private (remote->local);
 
   /* Stop transmitting */
   addr_only = g_inet_address_to_string (
       g_inet_socket_address_get_address (remote->addr));
-  g_signal_emit_by_name (local->priv->asend_rtp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->asend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[0]);
-  g_signal_emit_by_name (local->priv->asend_rtcp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->asend_rtcp_sink, "remove", addr_only,
       remote->priv->send_ports[1]);
-  g_signal_emit_by_name (local->priv->vsend_rtp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->vsend_rtp_sink, "remove", addr_only,
       remote->priv->send_ports[3]);
-  g_signal_emit_by_name (local->priv->vsend_rtcp_sink, "remove", addr_only,
+  g_signal_emit_by_name (local_priv->vsend_rtcp_sink, "remove", addr_only,
       remote->priv->send_ports[4]);
   g_free (addr_only);
 
@@ -455,8 +323,7 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
       gst_pad_unlink (srcpad, sinkpad);
       GST_DEBUG ("Unlinked audio pad of %s", remote->addr_s);
 
-      gst_element_release_request_pad (local->priv->audiomixer,
-          sinkpad);
+      gst_element_release_request_pad (local_priv->audiomixer, sinkpad);
       gst_object_unref (sinkpad);
       GST_DEBUG ("Released audiomixer sinkpad of %s", remote->addr_s);
     } else {
@@ -466,7 +333,8 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
 
     ret = gst_element_set_state (remote->priv->aplayback, GST_STATE_NULL);
     g_assert (ret == GST_STATE_CHANGE_SUCCESS);
-    res = gst_bin_remove (GST_BIN (local->playback), remote->priv->aplayback);
+    res =
+      gst_bin_remove (GST_BIN (local_priv->playback), remote->priv->aplayback);
     g_assert (res);
     remote->priv->aplayback = NULL;
     GST_DEBUG ("Released audio playback bin of remote %s", remote->addr_s);
@@ -475,7 +343,8 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
   if (remote->priv->video_proxysrc != NULL) {
     ret = gst_element_set_state (remote->priv->vplayback, GST_STATE_NULL);
     g_assert (ret == GST_STATE_CHANGE_SUCCESS);
-    res = gst_bin_remove (GST_BIN (local->playback), remote->priv->vplayback);
+    res =
+      gst_bin_remove (GST_BIN (local_priv->playback), remote->priv->vplayback);
     g_assert (res);
     remote->priv->vplayback = NULL;
     GST_DEBUG ("Released video playback bin of remote %s", remote->addr_s);
@@ -495,10 +364,13 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
 void
 ov_remote_peer_remove (OvRemotePeer * remote)
 {
+  OvLocalPeerPrivate *local_priv;
+  
+  ov_local_peer_lock (remote->local);
+  local_priv = ov_local_peer_get_private (remote->local);
   /* Remove from the peers list first so nothing else tries to use it */
-  g_rec_mutex_lock (&remote->local->priv->lock);
-  g_ptr_array_remove (remote->local->priv->remote_peers, remote);
-  g_rec_mutex_unlock (&remote->local->priv->lock);
+  g_ptr_array_remove (local_priv->remote_peers, remote);
+  ov_local_peer_unlock (remote->local);
 
   ov_remote_peer_remove_not_array (remote);
 }
@@ -507,17 +379,19 @@ void
 ov_remote_peer_free (OvRemotePeer * remote)
 {
   guint ii;
-  OvLocalPeer *local = remote->local;
+  OvLocalPeerPrivate *local_priv;
+  
+  ov_local_peer_lock (remote->local);
+  local_priv = ov_local_peer_get_private (remote->local);
 
   GST_DEBUG ("Freeing remote %s", remote->addr_s);
-  g_rec_mutex_lock (&local->priv->lock);
-  for (ii = 0; ii < local->priv->used_ports->len; ii++)
+  for (ii = 0; ii < local_priv->used_ports->len; ii++)
     /* Port numbers are unique, sorted, and contiguous. So if we find the first
      * port, we've found all of them. */
-    if (g_array_index (local->priv->used_ports, guint, ii) ==
+    if (g_array_index (local_priv->used_ports, guint, ii) ==
         remote->priv->recv_ports[0])
-      g_array_remove_range (local->priv->used_ports, ii, 4);
-  g_rec_mutex_unlock (&local->priv->lock);
+      g_array_remove_range (local_priv->used_ports, ii, 4);
+  ov_local_peer_unlock (remote->local);
 
   /* Free relevant bins and pipelines */
   if (remote->priv->aplayback)
@@ -670,7 +544,18 @@ remove:
 GList *
 ov_local_peer_get_video_devices (OvLocalPeer * local)
 {
-  return gst_device_monitor_get_devices (local->priv->dm);
+  OvLocalPeerState state;
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
+
+  state = ov_local_peer_get_state (local);
+  if (!(state & OV_LOCAL_STATE_STARTED)) {
+    GST_ERROR ("Can't get video devices before being started!");
+    return NULL;
+  }
+
+  return gst_device_monitor_get_devices (priv->dm);
 }
 
 gboolean
@@ -679,24 +564,34 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
 {
   gchar *caps;
   OvMediaType video_media_type;
+  OvLocalPeerPrivate *priv;
+  OvLocalPeerState state;
+  
+  priv = ov_local_peer_get_private (local);
+
+  state = ov_local_peer_get_state (local);
+  if (!(state & OV_LOCAL_STATE_STARTED)) {
+    GST_ERROR ("Can't set video device before being started!");
+    return FALSE;
+  }
 
   /* TODO: Currently, we can only get a device that outputs JPEG and our
    * transmit code assumes that. When we fix that to also support YUY2 and
    * H.264, we need to fix all this code too. */
   if (device) {
-    local->priv->supported_send_vcaps =
+    priv->supported_send_vcaps =
       ov_device_get_usable_caps (device, &video_media_type);
   } else {
-    local->priv->supported_send_vcaps =
+    priv->supported_send_vcaps =
       gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_SEP VIDEO_CAPS_STR);
   }
 
-  caps = gst_caps_to_string (local->priv->supported_send_vcaps);
+  caps = gst_caps_to_string (priv->supported_send_vcaps);
   GST_DEBUG ("Supported send vcaps: %s", caps);
   g_free (caps);
 
   /* Setup transmit pipeline */
-  local->priv->video_device = device;
+  priv->video_device = device;
   return ov_local_peer_setup_transmit_pipeline (local);
 }
 
@@ -791,14 +686,16 @@ ov_local_peer_find_remotes_create_source (OvLocalPeer * local,
   GSource *source;
   GSocket *recv_socket;
   OvDiscoveryReplyData *reply_data;
+  GInetSocketAddress *addr;
 
   recv_socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
       G_SOCKET_PROTOCOL_UDP, error);
   if (!recv_socket)
     return NULL;
-
-  ret =
-    g_socket_bind (recv_socket, G_SOCKET_ADDRESS (local->addr), TRUE, error);
+  
+  g_object_get (OV_PEER (local), "address", &addr, NULL);
+  ret = g_socket_bind (recv_socket, G_SOCKET_ADDRESS (addr), TRUE, error);
+  g_object_unref (addr);
   if (!ret) {
     g_object_unref (recv_socket);
     return NULL;
@@ -833,14 +730,17 @@ ov_local_peer_get_remote_by_id (OvLocalPeer * local,
 {
   guint ii;
   OvRemotePeer *remote;
+  OvLocalPeerPrivate *priv;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
 
-  g_rec_mutex_lock (&local->priv->lock);
-  for (ii = 0; ii < local->priv->remote_peers->len; ii++) {
-    remote = g_ptr_array_index (local->priv->remote_peers, ii);
+  for (ii = 0; ii < priv->remote_peers->len; ii++) {
+    remote = g_ptr_array_index (priv->remote_peers, ii);
     if (g_strcmp0 (id, remote->id))
       break;
   }
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
 
   return remote;
 }
@@ -874,7 +774,11 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   GSocket *socket;
   GString **clients;
   gchar *local_addr_s;
+  GInetSocketAddress *addr;
   GstStateChangeReturn ret;
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
 
   /* {audio RTP, audio RTCP SR, video RTP, video RTCP SR} */
   clients = g_malloc0_n (sizeof (GString*), 4);
@@ -882,34 +786,34 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   clients[1] = g_string_new ("");
   clients[2] = g_string_new ("");
   clients[3] = g_string_new ("");
-  g_ptr_array_foreach (local->priv->remote_peers, append_clients, clients);
+  g_ptr_array_foreach (priv->remote_peers, append_clients, clients);
 
+  g_object_get (OV_PEER (local), "address", &addr, NULL);
   local_addr_s =
-    g_inet_address_to_string (g_inet_socket_address_get_address (local->addr));
+    g_inet_address_to_string (g_inet_socket_address_get_address (addr));
+  g_object_unref (addr);
 
   /* Send audio RTP to all remote peers */
-  g_object_set (local->priv->asend_rtp_sink, "clients", clients[0]->str, NULL);
+  g_object_set (priv->asend_rtp_sink, "clients", clients[0]->str, NULL);
   /* Send audio RTCP SRs to all remote peers */
-  socket = ov_get_socket_for_addr (local_addr_s,
-      local->priv->recv_rtcp_ports[0]);
-  g_object_set (local->priv->asend_rtcp_sink, "clients", clients[1]->str,
+  socket = ov_get_socket_for_addr (local_addr_s, priv->recv_rtcp_ports[0]);
+  g_object_set (priv->asend_rtcp_sink, "clients", clients[1]->str,
       "socket", socket, NULL);
   /* Recv audio RTCP RRs from all remote peers (same socket as above) */
-  g_object_set (local->priv->arecv_rtcp_src, "socket", socket, NULL);
+  g_object_set (priv->arecv_rtcp_src, "socket", socket, NULL);
   g_object_unref (socket);
 
   /* Send video RTP to all remote peers */
-  g_object_set (local->priv->vsend_rtp_sink, "clients", clients[2]->str, NULL);
+  g_object_set (priv->vsend_rtp_sink, "clients", clients[2]->str, NULL);
   /* Send video RTCP SRs to all remote peers */
-  socket = ov_get_socket_for_addr (local_addr_s,
-      local->priv->recv_rtcp_ports[1]);
-  g_object_set (local->priv->vsend_rtcp_sink, "clients", clients[3]->str,
+  socket = ov_get_socket_for_addr (local_addr_s, priv->recv_rtcp_ports[1]);
+  g_object_set (priv->vsend_rtcp_sink, "clients", clients[3]->str,
       "socket", socket, NULL);
   /* Recv video RTCP RRs from all remote peers (same socket as above) */
-  g_object_set (local->priv->vrecv_rtcp_src, "socket", socket, NULL);
+  g_object_set (priv->vrecv_rtcp_src, "socket", socket, NULL);
   g_object_unref (socket);
 
-  ret = gst_element_set_state (local->transmit, GST_STATE_PLAYING);
+  ret = gst_element_set_state (priv->transmit, GST_STATE_PLAYING);
   GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
       clients[0]->str, clients[2]->str);
 
@@ -924,18 +828,19 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
 }
 
 void
-ov_local_peer_add_remote (OvLocalPeer * local,
-    OvRemotePeer * remote)
+ov_local_peer_add_remote (OvLocalPeer * local, OvRemotePeer * remote)
 {
+  OvLocalPeerPrivate *priv;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
   /* Add to our list of remote peers */
-  g_rec_mutex_lock (&local->priv->lock);
-  g_ptr_array_add (local->priv->remote_peers, remote);
-  g_rec_mutex_unlock (&local->priv->lock);
+  g_ptr_array_add (priv->remote_peers, remote);
+  ov_local_peer_unlock (local);
 }
 
 static gboolean
-ov_local_peer_setup_remote (OvLocalPeer * local,
-    OvRemotePeer * remote)
+ov_local_peer_setup_remote (OvLocalPeer * local, OvRemotePeer * remote)
 {
   ov_local_peer_setup_remote_receive (local, remote);
   ov_local_peer_setup_remote_playback (local, remote);
@@ -949,7 +854,7 @@ ov_local_peer_setup_remote (OvLocalPeer * local,
  * remote peer replies with the recv/send caps it supports. Once all the peers
  * have replied, we'll decide caps for everyone and send them to everyone. All
  * this will happen asynchronously. The caller should just call 
- * ov_local_peer_start() when it wants to start the call, and it will 
+ * ov_local_peer_start_call() when it wants to start the call, and it will 
  * start when everyone is ready. */
 gboolean
 ov_local_peer_negotiate_async (OvLocalPeer * local,
@@ -958,14 +863,19 @@ ov_local_peer_negotiate_async (OvLocalPeer * local,
 {
   GTask *task;
   GCancellable *our_cancellable;
+  OvLocalPeerPrivate *priv;
+  OvLocalPeerState state;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
 
-  if (local->state != OV_LOCAL_STATE_INITIALISED &&
-      local->state != OV_LOCAL_STATE_STOPPED) {
-    GST_ERROR ("State is %u instead of INITIALISED or STOPPED", local->state);
+  state = ov_local_peer_get_state (local);
+
+  if (!(state & OV_LOCAL_STATE_STARTED)) {
+    GST_ERROR ("State is %u instead of STARTED", state);
     return FALSE;
   }
-
-  local->state = OV_LOCAL_STATE_INITIALISED;
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
 
   if (cancellable)
     our_cancellable = g_object_ref (cancellable);
@@ -977,9 +887,11 @@ ov_local_peer_negotiate_async (OvLocalPeer * local,
   g_task_set_return_on_cancel (task, TRUE);
   g_task_run_in_thread (task,
       (GTaskThreadFunc) ov_local_peer_negotiate_thread);
-  local->priv->negotiator_task = task;
+  priv->negotiator_task = task;
   g_object_unref (our_cancellable); /* Hand over ref to the task */
   g_object_unref (task);
+
+  ov_local_peer_unlock (local);
 
   return TRUE;
 }
@@ -988,61 +900,129 @@ gboolean
 ov_local_peer_negotiate_finish (OvLocalPeer * local,
     GAsyncResult * result, GError ** error)
 {
-  local->priv->negotiator_task = NULL;
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
+  priv->negotiator_task = NULL;
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 gboolean
 ov_local_peer_negotiate_stop (OvLocalPeer * local)
 {
-  g_rec_mutex_lock (&local->priv->lock);
+  OvLocalPeerState state;
+  OvLocalPeerPrivate *priv;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
 
-  if (!(local->state & OV_LOCAL_STATE_NEGOTIATING) &&
-      !(local->state & OV_LOCAL_STATE_NEGOTIATED)) {
+  GST_DEBUG ("Cancelling call negotiation");
+  state = ov_local_peer_get_state (local);
+  if (!(state & OV_LOCAL_STATE_NEGOTIATING) &&
+      !(state & OV_LOCAL_STATE_NEGOTIATED)) {
     GST_ERROR ("Can't stop negotiating when not negotiating");
-    g_rec_mutex_unlock (&local->priv->lock);
+    ov_local_peer_unlock (local);
     return FALSE;
   }
 
-  if (local->state & OV_LOCAL_STATE_NEGOTIATOR) {
-    g_assert (local->priv->negotiator_task != NULL);
+  if (state & OV_LOCAL_STATE_NEGOTIATOR) {
+    g_assert (priv->negotiator_task != NULL);
     GST_DEBUG ("Stopping negotiation as the negotiator");
     g_cancellable_cancel (
-        g_task_get_cancellable (local->priv->negotiator_task));
+        g_task_get_cancellable (priv->negotiator_task));
     /* Unlock mutex so that the other thread gets access */
-  } else if (local->state & OV_LOCAL_STATE_NEGOTIATEE) {
+  } else if (state & OV_LOCAL_STATE_NEGOTIATEE) {
     GST_DEBUG ("Stopping negotiation as the negotiatee");
-    g_source_remove (local->priv->negotiate->check_timeout_id);
-    g_clear_pointer (&local->priv->negotiate->remotes,
+    g_source_remove (priv->negotiate->check_timeout_id);
+    g_clear_pointer (&priv->negotiate->remotes,
         (GDestroyNotify) g_hash_table_unref);
-    g_clear_pointer (&local->priv->negotiate, g_free);
+    g_clear_pointer (&priv->negotiate, g_free);
     /* Reset state so we accept incoming connections again */
-    local->state = OV_LOCAL_STATE_INITIALISED;
+    ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
   } else {
     g_assert_not_reached ();
   }
 
-  local->state |= OV_LOCAL_STATE_FAILED;
+  ov_local_peer_set_state_failed (local);
 
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_unlock (local);
   return TRUE;
 }
 
 gboolean
 ov_local_peer_start (OvLocalPeer * local)
 {
+  gboolean ret;
+  OvLocalPeerState state;
+  OvLocalPeerPrivate *priv;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
+  state = ov_local_peer_get_state (local);
+
+  if (state != OV_LOCAL_STATE_NULL) {
+    GST_ERROR ("Local peer has already been started!");
+    ret = FALSE;
+    goto out;
+  }
+
+  /* Set interfaces, or auto-detect them */
+  if (priv->iface)
+    priv->mc_ifaces = g_list_append (NULL, g_strdup (priv->iface));
+  else
+    priv->mc_ifaces = ov_get_network_interfaces ();
+
+  GST_DEBUG ("Starting device monitor");
+  /* Start probing devices asynchronously. We don't listen to the bus messages
+   * for this right now, and just get the list of all devices later. */
+  gst_device_monitor_start (priv->dm);
+
+  /*-- Setup various pipelines and resources --*/
+
+  /* Transmit pipeline is setup in set_video_device() */
+
+  /* Setup components of the playback pipeline */
+  if (!ov_local_peer_setup_playback_pipeline (local))
+    goto err;
+
+  /* Setup negotiation/comms */
+  if (!ov_local_peer_setup_comms (local))
+    goto err;
+
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
+
+  ret = TRUE;
+out:
+  ov_local_peer_unlock (local);
+  return ret;
+err:
+  ret = FALSE;
+  gst_device_monitor_stop (priv->dm);
+  g_list_free_full (priv->mc_ifaces, g_free);
+  priv->mc_ifaces = NULL;
+  goto out;
+}
+
+gboolean
+ov_local_peer_start_call (OvLocalPeer * local)
+{
   guint index;
   gboolean res;
   GstStateChangeReturn ret;
   OvRemotePeer *remote;
+  OvLocalPeerPrivate *priv;
+  OvLocalPeerState state;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
+  state = ov_local_peer_get_state (local);
 
-  if (!(local->state & OV_LOCAL_STATE_READY)) {
+  if (!(state & OV_LOCAL_STATE_READY)) {
     GST_ERROR ("Negotiation hasn't been done yet!");
     return FALSE;
   }
 
-  g_rec_mutex_lock (&local->priv->lock);
-  if (local->transmit == NULL) {
+  if (priv->transmit == NULL) {
     /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
     res = ov_local_peer_setup_transmit_pipeline (local);
     g_assert (res);
@@ -1050,8 +1030,8 @@ ov_local_peer_start (OvLocalPeer * local)
   res = ov_local_peer_begin_transmit (local);
   g_assert (res);
 
-  for (index = 0; index < local->priv->remote_peers->len; index++) {
-    remote = g_ptr_array_index (local->priv->remote_peers, index);
+  for (index = 0; index < priv->remote_peers->len; index++) {
+    remote = g_ptr_array_index (priv->remote_peers, index);
     
     /* Call details have all been set, so we can do the setup */
     res = ov_local_peer_setup_remote (local, remote);
@@ -1069,63 +1049,101 @@ ov_local_peer_start (OvLocalPeer * local)
     remote->state = OV_REMOTE_STATE_PLAYING;
   }
 
-  ret = gst_element_set_state (local->playback, GST_STATE_PLAYING);
+  ret = gst_element_set_state (priv->playback, GST_STATE_PLAYING);
   if (ret == GST_STATE_CHANGE_FAILURE)
     goto play_fail;
 
   GST_DEBUG ("Ready to playback data from all remotes");
   /* The difference between negotiator and negotiatee ends with playback */
-  local->state = OV_LOCAL_STATE_PLAYING;
-  g_rec_mutex_unlock (&local->priv->lock);
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_PLAYING);
+  ov_local_peer_unlock (local);
   return TRUE;
 
   play_fail: {
     GST_ERROR ("Unable to set local playback pipeline to PLAYING!");
-    g_rec_mutex_unlock (&local->priv->lock);
+    ov_local_peer_unlock (local);
     return FALSE;
   }
 
   recv_fail: {
     GST_ERROR ("Unable to set %s receive pipeline to PLAYING!", remote->addr_s);
-    g_rec_mutex_unlock (&local->priv->lock);
+    ov_local_peer_unlock (local);
     return FALSE;
   }
 }
 
+/* Resets the local peer to a state equivalent to after callign
+ * ov_local_peer_start() */
 void
-ov_local_peer_stop (OvLocalPeer * local)
+ov_local_peer_end_call (OvLocalPeer * local)
 {
-  GST_DEBUG ("Stopping local peer");
-  g_rec_mutex_lock (&local->priv->lock);
-  /* Stop negotiating if negotiating */
-  if (local->state & OV_LOCAL_STATE_NEGOTIATING) {
-    GST_DEBUG ("Cancelling call negotiation");
-    ov_local_peer_negotiate_stop (local);
-  }
+  OvLocalPeerState state;
+  OvLocalPeerPrivate *priv;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
+  state = ov_local_peer_get_state (local);
 
-  /* Signal end of call if we're in a call */
-  if (local->state >= OV_LOCAL_STATE_READY &&
-      local->priv->remote_peers->len > 0) {
-    GST_DEBUG ("Sending END_CALL to remote peers");
-    ov_local_peer_end_call (local);
-  }
+  /* Signal end of call if we're in a call and haven't ended the call */
+  if (state >= OV_LOCAL_STATE_READY && priv->remote_peers->len > 0)
+    ov_local_peer_send_end_call (local);
 
+  GST_DEBUG ("Ending call on local peer");
   /* Remove all the remote peers added to the local peer */
-  if (local->priv->remote_peers->len > 0) {
-    g_ptr_array_foreach (local->priv->remote_peers,
+  if (priv->remote_peers->len > 0) {
+    g_ptr_array_foreach (priv->remote_peers,
         (GFunc) ov_remote_peer_remove_not_array, NULL);
-    g_ptr_array_free (local->priv->remote_peers, TRUE);
-    local->priv->remote_peers = g_ptr_array_new ();
+    g_ptr_array_free (priv->remote_peers, TRUE);
+    priv->remote_peers = g_ptr_array_new ();
   }
 
-  if (local->state >= OV_LOCAL_STATE_PLAYING) {
+  if (state >= OV_LOCAL_STATE_PLAYING) {
     GST_DEBUG ("Stopping transmit and playback");
     ov_local_peer_stop_transmit (local);
     ov_local_peer_stop_playback (local);
   }
 
-  local->state = OV_LOCAL_STATE_STOPPED;
-  g_clear_pointer (&local->priv->send_acaps, gst_caps_unref);
-  g_clear_pointer (&local->priv->send_vcaps, gst_caps_unref);
-  g_rec_mutex_unlock (&local->priv->lock);
+  g_clear_pointer (&priv->send_acaps, gst_caps_unref);
+  g_clear_pointer (&priv->send_vcaps, gst_caps_unref);
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
+  ov_local_peer_unlock (local);
+}
+
+void
+ov_local_peer_stop (OvLocalPeer * local)
+{
+  OvLocalPeerState state;
+  OvLocalPeerPrivate *priv;
+  
+  ov_local_peer_lock (local);
+  priv = ov_local_peer_get_private (local);
+  state = ov_local_peer_get_state (local);
+
+  GST_DEBUG ("Stopping local peer");
+  /* Stop negotiating if negotiating */
+  if (state & OV_LOCAL_STATE_NEGOTIATING)
+    ov_local_peer_negotiate_stop (local);
+
+  if (state >= OV_LOCAL_STATE_READY)
+    ov_local_peer_end_call (local);
+
+  if (state >= OV_LOCAL_STATE_STARTED) {
+    /* Stop video device monitor */
+    gst_device_monitor_stop (priv->dm);
+
+    /* Stop and free TCP server */
+    g_signal_handlers_disconnect_by_data (priv->tcp_server, local);
+    g_socket_service_stop (priv->tcp_server);
+    g_clear_object (&priv->tcp_server);
+
+    /* Stop and destroy multicast socket sources */
+    g_clear_pointer (&priv->mc_socket_source, g_source_destroy);
+
+    /* Free and unset detected interfaces */
+    g_list_free_full (priv->mc_ifaces, g_free);
+    priv->mc_ifaces = NULL;
+  }
+
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_STOPPED);
+  ov_local_peer_unlock (local);
 }

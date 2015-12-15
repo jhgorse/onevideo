@@ -71,22 +71,30 @@ kill_remote_peer (OvRemotePeer * remote)
 }
 
 static gboolean
-on_local_peer_stop (OvLocalPeer * local)
+on_local_peer_call_ended (OvLocalPeer * local)
 {
-  if (local->state & OV_LOCAL_STATE_STOPPED) {
-      g_print ("Local peer stopped, exiting...\n");
-      goto quit;
+  OvLocalPeerState state;
+  static OvLocalPeerState prev_state;
+
+  state = ov_local_peer_get_state (local);
+  if (state & OV_LOCAL_STATE_STARTED && prev_state > OV_LOCAL_STATE_STARTED) {
+    /* FIXME: This is broken. Must be fixed when signals are added. */
+    g_print ("Local peer call ended, exiting...\n");
+    goto quit;
   }
 
-  if (local->state & OV_LOCAL_STATE_FAILED &&
-      local->state & OV_LOCAL_STATE_NEGOTIATOR) {
-      g_print ("Local negotiator peer failed, exiting...\n");
-      ov_local_peer_stop (local);
-      goto quit;
+  if (state & OV_LOCAL_STATE_FAILED &&
+      state & OV_LOCAL_STATE_NEGOTIATOR) {
+    g_print ("Local negotiator peer failed, exiting...\n");
+    goto quit;
   }
+
+  if (prev_state != state)
+    prev_state = state;
 
   return G_SOURCE_CONTINUE;
 quit:
+  ov_local_peer_stop (local);
   g_main_loop_quit (loop);
 
   return G_SOURCE_REMOVE;
@@ -113,7 +121,7 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
   ret = ov_local_peer_negotiate_finish (local, res, &error);
   if (ret) {
     g_print ("All remotes have replied.\n");
-    ov_local_peer_start (local);
+    ov_local_peer_start_call (local);
     return;
   } else {
     if (error != NULL)
@@ -147,6 +155,7 @@ aggregate_and_dial_remotes (gpointer user_data)
 
   if (data->remotes == NULL) {
     g_print (" found no remotes. Exiting.\n");
+    ov_local_peer_stop (data->local);
     g_main_loop_quit (loop);
     goto out;
   }
@@ -343,14 +352,14 @@ main (int   argc,
   if (iface_name == NULL)
     g_printerr ("Interface not specified, listening on all interfaces\n");
   else
-    g_printerr ("Listening on all interface %s\n", iface_name);
+    g_printerr ("Listening on interface %s\n", iface_name);
 
-  g_print ("Probing devices...\n");
   local = ov_local_peer_new (iface_name, iface_port);
-
   if (local == NULL)
     goto out;
 
+  g_print ("Probing devices...\n");
+  ov_local_peer_start (local);
   devices = ov_local_peer_get_video_devices (local);
   g_print ("Probing finished\n");
   ov_local_peer_set_video_device (local, device_path ?
@@ -393,7 +402,7 @@ main (int   argc,
 remotes_done:
   /* If in passive mode, auto exit only when requested */
   if (remotes != NULL || discover_peers || auto_exit)
-    g_idle_add ((GSourceFunc) on_local_peer_stop, local);
+    g_idle_add ((GSourceFunc) on_local_peer_call_ended, local);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
@@ -401,8 +410,8 @@ remotes_done:
   g_main_loop_run (loop);
 
 out:
-  g_clear_pointer (&local, ov_local_peer_free);
   g_clear_pointer (&loop, g_main_loop_unref);
+  g_clear_object (&local);
   g_strfreev (remotes);
   g_free (device_path);
   g_free (iface_name);

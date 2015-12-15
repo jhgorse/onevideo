@@ -30,21 +30,17 @@
 
 #include <gst/gst.h>
 #include <gio/gio.h>
+#include "ov-peer.h"
+#include "ov-local-peer.h"
 
 G_BEGIN_DECLS
 
-typedef struct _OvLocalPeer       OvLocalPeer;
-typedef struct _OvLocalPeerPriv   OvLocalPeerPriv;
+typedef struct _OvRemotePeer        OvRemotePeer;
+typedef struct _OvRemotePeerPrivate OvRemotePeerPrivate;
 
-typedef struct _OvRemotePeer      OvRemotePeer;
-typedef struct _OvRemotePeerPriv  OvRemotePeerPriv;
-
-typedef enum _OvLocalPeerState    OvLocalPeerState;
 typedef enum _OvRemotePeerState   OvRemotePeerState;
 
 typedef struct _OvDiscoveredPeer OvDiscoveredPeer;
-
-#define OV_DEFAULT_COMM_PORT 5000
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
@@ -59,31 +55,6 @@ typedef struct _OvDiscoveredPeer OvDiscoveredPeer;
 typedef gboolean (*OvRemoteFoundCallback) (OvDiscoveredPeer *peer,
                                            gpointer user_data);
 
-enum _OvLocalPeerState {
-  OV_LOCAL_STATE_NULL          = 0,
-
-  /**~ Special states ~**/
-  /* These are ORed with other states to signal a special state */
-  /* This is ORed with the current state to signal failure */
-  OV_LOCAL_STATE_FAILED        = 1 << 0,
-  OV_LOCAL_STATE_TIMEOUT       = 1 << 1,
-  /* One of these is ORed with the current state when we're taking on the role
-   * of either negotiator or negotiatee */
-  OV_LOCAL_STATE_NEGOTIATOR    = 1 << 7,
-  OV_LOCAL_STATE_NEGOTIATEE    = 1 << 8,
-
-  /* Ordinary states. These are not ORed with each other. */
-  OV_LOCAL_STATE_INITIALISED   = 1 << 9,
-
-  OV_LOCAL_STATE_NEGOTIATING   = 1 << 10,
-  OV_LOCAL_STATE_NEGOTIATED    = 1 << 11,
-
-  OV_LOCAL_STATE_READY         = 1 << 12,
-  OV_LOCAL_STATE_PLAYING       = 1 << 13,
-  OV_LOCAL_STATE_PAUSED        = 1 << 14,
-  OV_LOCAL_STATE_STOPPED       = 1 << 15,
-};
-
 enum _OvRemotePeerState {
   OV_REMOTE_STATE_NULL,
   OV_REMOTE_STATE_FAILED,
@@ -92,26 +63,6 @@ enum _OvRemotePeerState {
   OV_REMOTE_STATE_READY,
   OV_REMOTE_STATE_PLAYING,
   OV_REMOTE_STATE_PAUSED,
-};
-
-/* Represents us; the library and the client implementing this local */
-struct _OvLocalPeer {
-  /* Transmit pipeline */
-  GstElement *transmit;
-  /* Playback pipeline */
-  GstElement *playback;
-  /* Address we're listening on */
-  GInetSocketAddress *addr;
-  /* String representation of the above address (for logging, etc) */
-  gchar *addr_s;
-  /* Unique id string representing this host */
-  gchar *id;
-
-  OvLocalPeerState state;
-
-  /* < private > */
-  OvLocalPeerPriv *priv;
-  gpointer _gst_reserved[GST_PADDING];
 };
 
 /* Represents a remote local */
@@ -131,7 +82,7 @@ struct _OvRemotePeer {
   OvRemotePeerState state;
 
   /* < private > */
-  OvRemotePeerPriv *priv;
+  OvRemotePeerPrivate *priv;
 };
 
 /* Represents a discovered peer */
@@ -145,12 +96,9 @@ struct _OvDiscoveredPeer {
   gint64 discover_time;
 };
 
-/* Local peer (us) */
-OvLocalPeer*  ov_local_peer_new               (const gchar *iface,
-                                               guint16 port);
-void                ov_local_peer_free              (OvLocalPeer *local);
 void                ov_local_peer_add_remote        (OvLocalPeer *local,
                                                      OvRemotePeer *remote);
+gboolean            ov_local_peer_start             (OvLocalPeer *local);
 /* Asynchronously negotiate with all setup remote peers */
 gboolean            ov_local_peer_negotiate_async   (OvLocalPeer *local,
                                                      GCancellable *cancellable,
@@ -160,7 +108,8 @@ gboolean            ov_local_peer_negotiate_finish  (OvLocalPeer *local,
                                                      GAsyncResult *result,
                                                      GError **error);
 gboolean            ov_local_peer_negotiate_stop    (OvLocalPeer *local);
-gboolean            ov_local_peer_start             (OvLocalPeer *local);
+gboolean            ov_local_peer_start_call        (OvLocalPeer *local);
+void                ov_local_peer_end_call          (OvLocalPeer *local);
 void                ov_local_peer_stop              (OvLocalPeer *local);
 
 /* Device discovery */

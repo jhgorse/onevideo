@@ -162,6 +162,12 @@ ovg_app_startup (GApplication * app)
     return;
   }
 
+  if (!ov_local_peer_start (priv->ov_local)) {
+    /* FIXME: Print some GUI message */
+    g_application_quit (app);
+    return;
+  }
+
   /* Just use the first device for now. Need to create GSettings for this. */
   devices = ov_local_peer_get_video_devices (priv->ov_local);
 #ifdef __linux__
@@ -204,7 +210,7 @@ ovg_app_dispose (GObject * object)
 {
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (object));
 
-  g_clear_pointer (&priv->ov_local, ov_local_peer_free);
+  g_clear_object (&priv->ov_local);
 
   G_OBJECT_CLASS (ovg_app_parent_class)->dispose (object);
 }

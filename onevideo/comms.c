@@ -456,7 +456,7 @@ ov_tcp_msg_read_from_stream (GInputStream * input, GCancellable * cancellable,
       error);
   if (ret != TRUE) {
     GST_ERROR ("Unable to read message length prefix: %s",
-        error ? (*error)->message : "Unknown error");
+        error && *error ? (*error)->message : "Unknown error");
     goto err_no_body;
   }
 

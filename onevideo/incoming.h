@@ -30,6 +30,8 @@
 
 #include <gio/gio.h>
 
+#include "ov-local-peer.h"
+
 G_BEGIN_DECLS
 
 gboolean on_incoming_peer_tcp_connection (GSocketService *service,

@@ -28,10 +28,11 @@
 #ifndef __OV_DISCOVERY_H__
 #define __OV_DISCOVERY_H__
 
-#include "comms.h"
-
 #include <glib.h>
 #include <gio/gio.h>
+
+#include "comms.h"
+#include "ov-local-peer.h"
 
 G_BEGIN_DECLS
 

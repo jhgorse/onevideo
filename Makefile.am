@@ -7,13 +7,21 @@ plugin_LTLIBRARIES = gst/proxy/libgstproxy.la
 
 noinst_HEADERS = \
 	onevideo/lib-priv.h \
-	onevideo/lib-setup.h \
+	onevideo/outgoing.h \
+	onevideo/incoming.h \
+	onevideo/comms.h \
+	onevideo/discovery.h \
+	onevideo/ov-local-peer-priv.h \
+	onevideo/ov-local-peer-setup.h \
 	gst/proxy/gstproxysink-priv.h \
 	gst/proxy/gstproxysrc-priv.h
 
 onevideo_libonevideo_la_SOURCES = \
+	onevideo/ov-peer.c onevideo/ov-peer.h \
+	onevideo/ov-local-peer.c onevideo/ov-local-peer.h \
+	onevideo/ov-local-peer-priv.h \
+	onevideo/ov-local-peer-setup.c onevideo/ov-local-peer-setup.h \
 	onevideo/lib.c onevideo/lib-priv.h onevideo/lib.h \
-	onevideo/lib-setup.c onevideo/lib-setup.h \
 	onevideo/outgoing.c onevideo/outgoing.h \
 	onevideo/incoming.c onevideo/incoming.h \
 	onevideo/utils.c onevideo/utils.h \
@@ -67,4 +75,4 @@ gui_one_video_gui_CFLAGS = \
 gui_one_video_gui_LDADD = \
 	$(top_srcdir)/onevideo/libonevideo.la \
 	$(top_srcdir)/gst/proxy/libgstproxy.la \
-	$(GLIB_LIBS) $(GST_LIBS) $(GTK_LIBS)
+	-lm $(GLIB_LIBS) $(GST_LIBS) $(GTK_LIBS)

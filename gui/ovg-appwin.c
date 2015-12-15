@@ -531,7 +531,7 @@ on_negotiate_done (GObject * source_object, GAsyncResult * res,
   ret = ov_local_peer_negotiate_finish (local, res, &error);
   if (ret) {
     g_print ("All remotes have replied.\n");
-    ov_local_peer_start (local);
+    ov_local_peer_start_call (local);
     return ovg_app_window_show_peers_video (user_data);
   } else {
     if (error != NULL)
@@ -607,7 +607,7 @@ on_end_call_button_clicked (OvgAppWindow * win, GtkButton * b)
   app = gtk_window_get_application (GTK_WINDOW (win));
   local = ovg_app_get_ov_local_peer (OVG_APP (app));
 
-  ov_local_peer_stop (local);
+  ov_local_peer_end_call (local);
   ovg_app_window_reset_state (win);
 }
 
