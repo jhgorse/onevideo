@@ -33,6 +33,21 @@
 
 G_BEGIN_DECLS
 
+enum
+{
+  DISCOVERY_SENT,
+  PEER_DISCOVERED,
+  NEGOTIATE_INCOMING,
+  NEGOTIATE_STARTED,
+  NEGOTIATE_SKIPPED_REMOTE,
+  NEGOTIATE_FINISHED,
+  NEGOTIATE_ABORTED,
+  CALL_REMOTES_HUNGUP,
+  OV_LOCAL_PEER_N_SIGNALS
+};
+
+guint ov_local_peer_signals[OV_LOCAL_PEER_N_SIGNALS];
+
 typedef struct _OvNegotiate OvNegotiate;
 
 struct _OvNegotiate {
@@ -97,8 +112,10 @@ struct _OvLocalPeerPrivate {
   GList *mc_ifaces;
   /* TCP Server for comms (listens on all interfaces if none are specified) */
   GSocketService *tcp_server;
-  /* The UDP message listener for all interfaces */
+  /* The incoming multicast UDP message listener for all interfaces */
   GSource *mc_socket_source;
+  /* The incoming discovery unicast UDP message listener for all interfaces */
+  GSource *discover_socket_source;
 
   /* The local ports we receive rtcp data on with udpsrc, in order:
    * {audio_recv_rtcp RRs, video_recv_rtcp RRs}

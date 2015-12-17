@@ -32,115 +32,42 @@
 #include <gio/gio.h>
 #include "ov-peer.h"
 #include "ov-local-peer.h"
+#include "ov-discovered-peer.h"
+#include "ov-remote-peer.h"
 
 G_BEGIN_DECLS
 
-typedef struct _OvRemotePeer        OvRemotePeer;
-typedef struct _OvRemotePeerPrivate OvRemotePeerPrivate;
+/* Peer discovery */
+gboolean            ov_local_peer_discovery_start   (OvLocalPeer *local,
+                                                     guint interval,
+                                                     GError **error);
+void                ov_local_peer_discovery_stop    (OvLocalPeer *local);
 
-typedef enum _OvRemotePeerState   OvRemotePeerState;
-
-typedef struct _OvDiscoveredPeer OvDiscoveredPeer;
-
-#define RTP_DEFAULT_LATENCY_MS 10
-
-/**
- * OvRemoteFoundCallback:
- * @remote: (transfer full): a #OvDiscoveredPeer representing the found
- * remote peer
- * @user_data: the user data passed
- *
- * See the documentation for ov_local_peer_find_remotes_create_source()
- */
-typedef gboolean (*OvRemoteFoundCallback) (OvDiscoveredPeer *peer,
-                                           gpointer user_data);
-
-enum _OvRemotePeerState {
-  OV_REMOTE_STATE_NULL,
-  OV_REMOTE_STATE_FAILED,
-  OV_REMOTE_STATE_ALLOCATED,
-
-  OV_REMOTE_STATE_READY,
-  OV_REMOTE_STATE_PLAYING,
-  OV_REMOTE_STATE_PAUSED,
-};
-
-/* Represents a remote local */
-struct _OvRemotePeer {
-  OvLocalPeer *local;
-
-  /* Receive pipeline */
-  GstElement *receive;
-  /* Address of remote peer */
-  GInetSocketAddress *addr;
-  /* String representation (for logging, etc) */
-  gchar *addr_s;
-  /* Unique id string representing this host
-   * Retrieved from the peer during negotiation */
-  gchar *id;
-
-  OvRemotePeerState state;
-
-  /* < private > */
-  OvRemotePeerPrivate *priv;
-};
-
-/* Represents a discovered peer */
-struct _OvDiscoveredPeer {
-  /* Address of the discovered peer */
-  GInetSocketAddress *addr;
-  /* String representation; contains port if non-default port */
-  gchar *addr_s;
-
-  /* Monotonic time when this peer was discovered */
-  gint64 discover_time;
-};
-
+/* Setup, negotiation, and calling */
 void                ov_local_peer_add_remote        (OvLocalPeer *local,
                                                      OvRemotePeer *remote);
 gboolean            ov_local_peer_start             (OvLocalPeer *local);
 /* Asynchronously negotiate with all setup remote peers */
-gboolean            ov_local_peer_negotiate_async   (OvLocalPeer *local,
-                                                     GCancellable *cancellable,
-                                                     GAsyncReadyCallback callback,
-                                                     gpointer callback_data);
-gboolean            ov_local_peer_negotiate_finish  (OvLocalPeer *local,
-                                                     GAsyncResult *result,
-                                                     GError **error);
-gboolean            ov_local_peer_negotiate_stop    (OvLocalPeer *local);
-gboolean            ov_local_peer_start_call        (OvLocalPeer *local);
-void                ov_local_peer_end_call          (OvLocalPeer *local);
+gboolean            ov_local_peer_negotiate_start   (OvLocalPeer *local);
+gboolean            ov_local_peer_negotiate_abort   (OvLocalPeer *local);
+gboolean            ov_local_peer_call_start        (OvLocalPeer *local);
+void                ov_local_peer_call_hangup       (OvLocalPeer *local);
 void                ov_local_peer_stop              (OvLocalPeer *local);
 
-/* Device discovery */
+/* Video device discovery */
 GList*              ov_local_peer_get_video_devices (OvLocalPeer *local);
 gboolean            ov_local_peer_set_video_device  (OvLocalPeer *local,
                                                      GstDevice *device);
 
-/* Peer discovery */
-GSource*            ov_local_peer_find_remotes_create_source  (OvLocalPeer *local,
-                                                               GCancellable *cancellable,
-                                                               OvRemoteFoundCallback callback,
-                                                               gpointer callback_data,
-                                                               GError **error);
-
 /* Remote peers */
-OvRemotePeer*       ov_remote_peer_new                (OvLocalPeer *local,
-                                                       GInetSocketAddress *addr);
-OvRemotePeer*       ov_remote_peer_new_from_string    (OvLocalPeer *local,
-                                                       const gchar *addr_s);
-void                ov_remote_peer_free               (OvRemotePeer *remote);
 gpointer            ov_remote_peer_add_gtkglsink      (OvRemotePeer *remote);
 void                ov_remote_peer_pause              (OvRemotePeer *remote);
 void                ov_remote_peer_resume             (OvRemotePeer *remote);
 void                ov_remote_peer_remove             (OvRemotePeer *remote);
 
+GPtrArray*          ov_local_peer_get_remotes         (OvLocalPeer *local);
 OvRemotePeer*       ov_local_peer_get_remote_by_id    (OvLocalPeer *local,
                                                        const gchar *peer_id);
-
-/* Discovered peers */
-OvDiscoveredPeer*   ov_discovered_peer_new    (GInetSocketAddress *addr);
-void                ov_discovered_peer_free   (OvDiscoveredPeer *peer);
 
 G_END_DECLS
 

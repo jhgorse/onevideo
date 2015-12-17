@@ -41,6 +41,8 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 
 #define CAPS_SEP ", "
 
+#define RTP_DEFAULT_LATENCY_MS 10
+
 /* We force the same raw audio format everywhere */
 #define AUDIO_CAPS_STR "format=S16LE, channels=2, rate=48000, layout=interleaved"
 /* This is only used for the test video source */

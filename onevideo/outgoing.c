@@ -190,8 +190,7 @@ ov_remote_peer_tcp_client_start_negotiate (OvRemotePeer * remote,
   OvTcpMsg *msg, *reply = NULL;
   gboolean ret = FALSE;
 
-  g_object_get (OV_PEER (remote->local), "address", &local_addr, "id",
-      &local_id, NULL);
+  g_object_get (remote->local, "address", &local_addr, "id", &local_id, NULL);
   msg = ov_tcp_msg_new_start_negotiate (call_id, local_id,
       g_inet_socket_address_get_port (local_addr));
   g_object_unref (local_addr);
@@ -211,14 +210,14 @@ ov_remote_peer_tcp_client_start_negotiate (OvRemotePeer * remote,
       /* Try again? */
       error_msg = handle_tcp_msg_error (reply);
       GST_ERROR ("Remote %s returned an error while starting negotiation: %s",
-          remote->id, error_msg);
+          remote->addr_s, error_msg);
       g_free (error_msg);
       goto err;
     default:
       GST_ERROR ("Expected message type '%s' from %s, got '%s'",
           ov_tcp_msg_type_to_string (
             OV_TCP_MSG_TYPE_ACK, OV_TCP_MAX_VERSION),
-          remote->id, ov_tcp_msg_type_to_string (reply->type,
+          remote->addr_s, ov_tcp_msg_type_to_string (reply->type,
             reply->version));
       goto err;
   }
@@ -627,8 +626,8 @@ no_reply:
  * CALL_DETAILS → ACK
  * START_CALL → ACK */
 void
-ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
-    OvLocalPeer * local, GCancellable * cancellable)
+ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
+    gpointer task_data, GCancellable * cancellable)
 {
   gint ii;
   guint64 call_id;
@@ -671,10 +670,29 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     ret = ov_remote_peer_tcp_client_start_negotiate (remote, call_id,
         cancellable, &error);
     if (!ret) {
+      OvPeer *skipped;
       GST_WARNING ("Unable to start negotiation with remote %s: %s. Skipped.",
           /* We don't know remote->id yet */
           remote->addr_s, error ? error->message : "Unknown error");
+
+      skipped = ov_peer_new (remote->addr);
       g_ptr_array_remove_index (remotes, ii);
+      
+      /* Unlock local and emit signal */
+      ov_local_peer_unlock (local);
+      g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_SKIPPED_REMOTE], 0,
+          skipped, error);
+      ov_local_peer_lock (local);
+
+      g_object_unref (skipped);
+
+      if (g_cancellable_is_cancelled (cancellable)) {
+        /* We didn't START_NEGOTIATE with the rest, so don't send
+         * CANCEL_NEGOTIATE to them while cancelling */
+        g_ptr_array_remove_range (remotes, ii, remotes->len - ii);
+        goto cancelled;
+      }
+      /* This will be incremented in the next loop */
       ii--;
     }
   }
@@ -683,6 +701,9 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
     goto err;
   }
   ov_local_peer_unlock (local);
+
+  /* Emit signal after unlocking */
+  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_STARTED], 0);
 
   ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable))
@@ -774,29 +795,44 @@ ov_local_peer_negotiate_thread (GTask * task, gpointer source_object,
 
   /* Unset return-on-cancel so we can do our own return */
   if (!g_task_set_return_on_cancel (task, FALSE))
+    /* FIXME: This won't actually cancel the negotiation because we've already
+     * started the call above */
     goto cancelled;
 
   local_priv->active_call_id = call_id;
   g_task_return_boolean (task, TRUE);
 
-out:
   ov_local_peer_unlock (local);
   g_hash_table_unref (in);
   local_priv->negotiator_task = NULL;
+
+  /* Emit signal after unlocking */
+  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_FINISHED], 0);
   return;
 
   /* Called with the lock TAKEN */
 err:
-  g_task_return_error (task, error);
+  /* Return a copy of the error which the task takes ownership of
+   * We pass the old error to our NEGOTIATE_ABORTED closures (transfer-none) */
+  g_task_return_error (task, error ? g_error_copy (error) : NULL);
 cancelled:
   GST_DEBUG ("Negotiation cancelled, sending CANCEL_NEGOTIATE");
   for (ii = 0; ii < remotes->len; ii++) {
     OvRemotePeer *remote = g_ptr_array_index (remotes, ii);
     ov_remote_peer_tcp_client_cancel_negotiate (remote, call_id);
   }
+  /* Revert state to STARTED */
+  ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
   ov_local_peer_set_state_failed (local);
+
   ov_local_peer_unlock (local);
-  goto out;
+  g_hash_table_unref (in);
+  local_priv->negotiator_task = NULL;
+
+  /* Emit signal after unlocking. FIXME: Set the error. */
+  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_ABORTED], 0, error);
+  g_error_free (error);
+  return;
 }
 
 static gboolean

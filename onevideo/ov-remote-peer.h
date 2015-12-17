@@ -25,22 +25,57 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __OV_NEGOTIATE_H__
-#define __OV_NEGOTIATE_H__
+#ifndef __OV_REMOTE_PEER_H__
+#define __OV_REMOTE_PEER_H__
 
+#include <gst/gst.h>
 #include <gio/gio.h>
-
-#include "lib.h"
+#include "ov-local-peer.h"
+#include "ov-discovered-peer.h"
 
 G_BEGIN_DECLS
 
-void	ov_local_peer_negotiate_thread    (GTask *task,
-                                           OvLocalPeer *local,
-                                           gpointer task_data,
-                                           GCancellable *cancellable);
+typedef enum _OvRemotePeerState   OvRemotePeerState;
 
-void    ov_local_peer_send_end_call       (OvLocalPeer *local);
+enum _OvRemotePeerState {
+  OV_REMOTE_STATE_NULL,
+  OV_REMOTE_STATE_FAILED,
+  OV_REMOTE_STATE_ALLOCATED,
+
+  OV_REMOTE_STATE_READY,
+  OV_REMOTE_STATE_PLAYING,
+  OV_REMOTE_STATE_PAUSED,
+};
+
+typedef struct _OvRemotePeer        OvRemotePeer;
+typedef struct _OvRemotePeerPrivate OvRemotePeerPrivate;
+
+/* Represents a remote peer */
+struct _OvRemotePeer {
+  OvLocalPeer *local;
+
+  /* Receive pipeline */
+  GstElement *receive;
+  /* Address of remote peer */
+  GInetSocketAddress *addr;
+  /* String representation (for logging, etc) */
+  gchar *addr_s;
+  /* Unique id string representing this host
+   * Retrieved from the peer during negotiation */
+  gchar *id;
+
+  OvRemotePeerState state;
+
+  /* < private > */
+  OvRemotePeerPrivate *priv;
+};
+
+OvRemotePeer*       ov_remote_peer_new                (OvLocalPeer *local,
+                                                       GInetSocketAddress *addr);
+OvRemotePeer*       ov_remote_peer_new_from_string    (OvLocalPeer *local,
+                                                       const gchar *addr_s);
+void                ov_remote_peer_free               (OvRemotePeer *remote);
 
 G_END_DECLS
 
-#endif /* __OV_NEGOTIATE_H__ */
+#endif /* __OV_REMOTE_PEER_H__ */

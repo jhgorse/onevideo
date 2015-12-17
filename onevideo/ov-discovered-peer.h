@@ -25,22 +25,28 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __OV_NEGOTIATE_H__
-#define __OV_NEGOTIATE_H__
+#ifndef __OV_DISCOVERED_PEER_H__
+#define __OV_DISCOVERED_PEER_H__
 
+#include <glib-object.h>
 #include <gio/gio.h>
-
-#include "lib.h"
 
 G_BEGIN_DECLS
 
-void	ov_local_peer_negotiate_thread    (GTask *task,
-                                           OvLocalPeer *local,
-                                           gpointer task_data,
-                                           GCancellable *cancellable);
+#define OV_TYPE_DISCOVERED_PEER ov_discovered_peer_get_type ()
+G_DECLARE_DERIVABLE_TYPE (OvDiscoveredPeer, ov_discovered_peer, OV, DISCOVERED_PEER, GObject)
 
-void    ov_local_peer_send_end_call       (OvLocalPeer *local);
+typedef struct _OvDiscoveredPeerPrivate  OvDiscoveredPeerPrivate;
+
+struct _OvDiscoveredPeerClass {
+  GObjectClass parent_class;
+
+  /* Padding to allow up to 12 new virtual functions without breaking ABI */
+  gpointer padding[12];
+};
+
+OvDiscoveredPeer*     ov_discovered_peer_new         (GInetSocketAddress * addr);
 
 G_END_DECLS
 
-#endif /* __OV_NEGOTIATE_H__ */
+#endif /* __OV_DISCOVERED_PEER_H__ */

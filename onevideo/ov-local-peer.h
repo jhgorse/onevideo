@@ -29,6 +29,7 @@
 #define __OV_LOCAL_PEER_H__
 
 #include "ov-peer.h"
+#include "ov-discovered-peer.h"
 
 #include <gst/gst.h>
 #include <gio/gio.h>
@@ -38,14 +39,34 @@ G_BEGIN_DECLS
 #define OV_DEFAULT_COMM_PORT 5000
 
 #define OV_TYPE_LOCAL_PEER ov_local_peer_get_type ()
-G_DECLARE_FINAL_TYPE (OvLocalPeer, ov_local_peer, OV, LOCAL_PEER, OvPeer)
+G_DECLARE_DERIVABLE_TYPE (OvLocalPeer, ov_local_peer, OV, LOCAL_PEER, OvPeer)
 
 typedef struct _OvLocalPeerPrivate  OvLocalPeerPrivate;
 
 typedef enum _OvLocalPeerState    OvLocalPeerState;
 
 struct _OvLocalPeerClass {
-  GObject parent_class;
+  GObjectClass parent_class;
+
+  /* signals */
+  void (*discovery_sent)            (OvLocalPeer *local);
+  void (*peer_discovered)           (OvLocalPeer *local,
+                                     OvDiscoveredPeer *peer);
+
+  void (*negotiate_incoming)        (OvLocalPeer *local,
+                                     OvPeer *peer);
+
+  void (*negotiate_started)         (OvLocalPeer *local);
+  void (*negotiate_skipped_remote)  (OvLocalPeer *local,
+                                     OvPeer *skipped,
+                                     GError *error);
+  void (*negotiate_finished)        (OvLocalPeer *local);
+  void (*negotiate_aborted)         (OvLocalPeer *local,
+                                     GError *error);
+  void (*call_remotes_hungup)       (OvLocalPeer *local);
+
+  /* Padding to allow up to 12 new virtual functions without breaking ABI */
+  gpointer padding[12];
 };
 
 enum _OvLocalPeerState {

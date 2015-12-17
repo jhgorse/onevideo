@@ -154,5 +154,5 @@ ov_peer_finalize (GObject * object)
 OvPeer *
 ov_peer_new (GInetSocketAddress * addr)
 {
-  return g_object_new (OV_TYPE_PEER, "addr", addr, NULL);
+  return g_object_new (OV_TYPE_PEER, "address", addr, NULL);
 }

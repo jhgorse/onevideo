@@ -412,33 +412,6 @@ ov_remote_peer_free (OvRemotePeer * remote)
   g_free (remote);
 }
 
-OvDiscoveredPeer *
-ov_discovered_peer_new (GInetSocketAddress * addr)
-{
-  OvDiscoveredPeer *d;
-
-  d = g_new0 (OvDiscoveredPeer, 1);
-  d->addr = g_object_ref (addr);
-  d->discover_time = g_get_monotonic_time ();
-
-  if (g_inet_socket_address_get_port (addr) == OV_DEFAULT_COMM_PORT)
-    d->addr_s =
-      g_inet_address_to_string (g_inet_socket_address_get_address (addr));
-  else
-    d->addr_s =
-      ov_inet_socket_address_to_string (addr);
-
-  return d;
-}
-
-void
-ov_discovered_peer_free (OvDiscoveredPeer * peer)
-{
-  g_object_unref (peer->addr);
-  g_free (peer->addr_s);
-  g_free (peer);
-}
-
 static GstCaps *
 ov_media_type_to_caps (OvMediaType type)
 {
@@ -595,30 +568,51 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
   return ov_local_peer_setup_transmit_pipeline (local);
 }
 
-typedef struct {
-  OvRemoteFoundCallback callback;
-  gpointer callback_data;
-  GCancellable *cancellable;
-} OvDiscoveryReplyData;
+static gboolean
+ov_local_peer_discovery_send (OvLocalPeer * local, GError ** error)
+{
+  gboolean ret;
+
+  /* Broadcast to the entire subnet to find listening peers */
+  ret = ov_discovery_send_multicast_discover (local, NULL, error);
+  if (!ret)
+    return ret;
+
+  g_signal_emit (local, ov_local_peer_signals[DISCOVERY_SENT], 0);
+
+  return G_SOURCE_CONTINUE;
+}
 
 static gboolean
-recv_discovery_reply (GSocket * socket, GIOCondition condition,
-    gpointer user_data)
+discovery_send_cb (OvLocalPeer * local)
 {
-  gchar *tmp;
+  OvLocalPeerPrivate *priv;
+  
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->discover_socket_source == NULL ||
+      g_source_is_destroyed (priv->discover_socket_source))
+    return G_SOURCE_REMOVE;
+
+  ov_local_peer_discovery_send (local, NULL);
+
+  /* We must always return CONTINUE here unless the source has been destroyed */
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean
+on_incoming_discovery_reply (GSocket * socket, GIOCondition condition,
+    OvLocalPeer * local)
+{
   gboolean ret;
   OvUdpMsg msg;
   GSocketAddress *from;
   OvDiscoveredPeer *d;
-  OvDiscoveryReplyData *data = user_data;
-  GCancellable *cancellable = data->cancellable;
+  gchar *addr_s, *tmp;
   GError *error = NULL;
 
-  if (g_cancellable_is_cancelled (cancellable))
-    return G_SOURCE_REMOVE;
-
   ret = ov_udp_msg_read_message_from (&msg, &from, socket,
-      cancellable, &error);
+      NULL, &error);
   if (!ret) {
     GST_WARNING ("Error reading discovery reply: %s", error->message);
     g_clear_error (&error);
@@ -626,7 +620,7 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
   }
 
   tmp = ov_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (from));
-  GST_DEBUG ("Incoming potential discovery reply from %s", tmp);
+  GST_TRACE ("Incoming potential discovery reply from %s", tmp);
   g_free (tmp);
 
   /* We don't care about the payload of the message */
@@ -640,11 +634,12 @@ recv_discovery_reply (GSocket * socket, GIOCondition condition,
   }
 
   d = ov_discovered_peer_new (G_INET_SOCKET_ADDRESS (from));
-  GST_DEBUG ("Found a remote peer: %s. Calling user-provided callback.",
-      d->addr_s);
+  g_object_get (d, "address-string", &addr_s, NULL);
+  GST_TRACE ("Found a remote peer: %s; emitting signal", addr_s);
+  g_free (addr_s);
 
-  /* Call user-provided callback */
-  ret = data->callback (d, data->callback_data);
+  g_signal_emit (local, ov_local_peer_signals[PEER_DISCOVERED], 0, d);
+  g_object_unref (d);
 
 out:
   g_object_unref (from);
@@ -652,76 +647,91 @@ out:
 }
 
 /**
- * ov_local_peer_find_remotes_create_source:
- * @local: a #OvLocalPeer
- * @cancellable: a #GCancellable
- * @callback: a #GFunc called for every remote peer found
- * @callback_data: the data passed to @callback
- * @error: a #GError
+ * ov_local_peer_discovery_start:
+ * @local: the local peer
+ * @interval: time in seconds between each discovery probe
  *
- * Creates and returns a #GSource that calls the passed-in @callback for every
- * remote peer found with the #GSocketAddress of the remote peer as the first
- * argument and @callback_data as the second argument. The source is already
- * setup, so you do not need to do anything.
+ * Enables emission of the #OvLocalPeer::peer_discovered signal, which is
+ * emitted whenever a peer is discovered using multicast UDP probes.
  *
- * To stop searching, call g_cancellable_cancel() on @cancellable, destroy the
- * source with g_source_destroy(), or return %FALSE from @callback. The caller
- * keeps full ownership of @callback_data.
+ * Connect to that signal before calling this and set @interval to the number of
+ * seconds between multicast UDP probes for peers. Setting @interval to 0 uses
+ * the default duration (5 seconds).
  *
- * On failure to initiate searching for peers, %NULL is returned and @error is
- * set.
- *
- * Returns: (transfer full): a newly allocated #GSource, free with
- * g_source_unref()
+ * Returns: %TRUE if discovery was started successfully, %FALSE otherwise
  */
-/* FIXME: Replace this with an action-signal-based system so users of this API
- * don't have to destroy and re-create the source every time they want to send
- * another multicast discover. */
-GSource *
-ov_local_peer_find_remotes_create_source (OvLocalPeer * local,
-    GCancellable * cancellable, OvRemoteFoundCallback callback,
-    gpointer callback_data, GError ** error)
+gboolean
+ov_local_peer_discovery_start (OvLocalPeer * local, guint interval,
+    GError ** error)
 {
   gboolean ret;
-  GSource *source;
   GSocket *recv_socket;
-  OvDiscoveryReplyData *reply_data;
   GInetSocketAddress *addr;
+  OvLocalPeerPrivate *priv;
+
+  priv = ov_local_peer_get_private (local);
 
   recv_socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
       G_SOCKET_PROTOCOL_UDP, error);
   if (!recv_socket)
-    return NULL;
+    return FALSE;
   
   g_object_get (OV_PEER (local), "address", &addr, NULL);
   ret = g_socket_bind (recv_socket, G_SOCKET_ADDRESS (addr), TRUE, error);
   g_object_unref (addr);
   if (!ret) {
     g_object_unref (recv_socket);
-    return NULL;
+    return FALSE;
   }
 
-  reply_data = g_new0 (OvDiscoveryReplyData, 1);
-  reply_data->callback = callback;
-  reply_data->callback_data = callback_data;
-  reply_data->cancellable = cancellable;
-
-  source = g_socket_create_source (recv_socket, G_IO_IN, cancellable);
-  g_source_set_callback (source, (GSourceFunc) recv_discovery_reply, reply_data,
-      g_free);
-  g_source_set_priority (source, G_PRIORITY_HIGH);
-  g_source_attach (source, NULL);
+  priv->discover_socket_source =
+    g_socket_create_source (recv_socket, G_IO_IN, NULL);
+  g_source_set_callback (priv->discover_socket_source,
+      (GSourceFunc) on_incoming_discovery_reply, local, NULL);
+  g_source_set_priority (priv->discover_socket_source, G_PRIORITY_HIGH);
+  g_source_attach (priv->discover_socket_source, NULL);
   g_object_unref (recv_socket);
-  GST_DEBUG ("Searching for remote peers");
 
-  /* Broadcast to the entire subnet to find listening peers */
-  ret = ov_discovery_send_multicast_discover (local, cancellable, error);
+  GST_DEBUG ("Searching for remote peers");
+  ret = ov_local_peer_discovery_send (local, error);
   if (!ret) {
-    g_source_destroy (source);
-    return NULL;
+    g_clear_pointer (&priv->discover_socket_source, g_source_destroy);
+    return FALSE;
   }
 
-  return source;
+  g_timeout_add_seconds (interval ? interval : 5,
+      (GSourceFunc) discovery_send_cb, local);
+
+  return ret;
+}
+
+void
+ov_local_peer_discovery_stop (OvLocalPeer * local)
+{
+  OvLocalPeerPrivate *priv;
+
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->discover_socket_source == NULL ||
+      g_source_is_destroyed (priv->discover_socket_source))
+    return;
+
+  /* TODO: We don't use g_source_destroy() here because of a strange bug that
+   * I wasn't able to track down. Destroying the source was causing all future
+   * sources attached to the same socket address to not fire events for
+   * incoming unicast UDP messages. It would still fire for incoming multicast
+   * messages. */
+  g_source_remove (g_source_get_id (priv->discover_socket_source));
+  g_clear_pointer (&priv->discover_socket_source, g_source_unref);
+}
+
+GPtrArray *
+ov_local_peer_get_remotes (OvLocalPeer * local)
+{
+  /* XXX: Access to this is not thread-safe
+   * Perhaps we should return a copy with OvPeers? */
+  OvLocalPeerPrivate *priv = ov_local_peer_get_private (local);
+  return priv->remote_peers;
 }
 
 OvRemotePeer *
@@ -850,105 +860,6 @@ ov_local_peer_setup_remote (OvLocalPeer * local, OvRemotePeer * remote)
   return TRUE;
 }
 
-/* Will send each remote peer the list of all other remote peers, and each
- * remote peer replies with the recv/send caps it supports. Once all the peers
- * have replied, we'll decide caps for everyone and send them to everyone. All
- * this will happen asynchronously. The caller should just call 
- * ov_local_peer_start_call() when it wants to start the call, and it will 
- * start when everyone is ready. */
-gboolean
-ov_local_peer_negotiate_async (OvLocalPeer * local,
-    GCancellable * cancellable, GAsyncReadyCallback callback,
-    gpointer callback_data)
-{
-  GTask *task;
-  GCancellable *our_cancellable;
-  OvLocalPeerPrivate *priv;
-  OvLocalPeerState state;
-  
-  ov_local_peer_lock (local);
-  priv = ov_local_peer_get_private (local);
-
-  state = ov_local_peer_get_state (local);
-
-  if (!(state & OV_LOCAL_STATE_STARTED)) {
-    GST_ERROR ("State is %u instead of STARTED", state);
-    return FALSE;
-  }
-  ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
-
-  if (cancellable)
-    our_cancellable = g_object_ref (cancellable);
-  else
-    our_cancellable = g_cancellable_new ();
-
-  task = g_task_new (NULL, our_cancellable, callback, callback_data);
-  g_task_set_task_data (task, local, NULL);
-  g_task_set_return_on_cancel (task, TRUE);
-  g_task_run_in_thread (task,
-      (GTaskThreadFunc) ov_local_peer_negotiate_thread);
-  priv->negotiator_task = task;
-  g_object_unref (our_cancellable); /* Hand over ref to the task */
-  g_object_unref (task);
-
-  ov_local_peer_unlock (local);
-
-  return TRUE;
-}
-
-gboolean
-ov_local_peer_negotiate_finish (OvLocalPeer * local,
-    GAsyncResult * result, GError ** error)
-{
-  OvLocalPeerPrivate *priv;
-  
-  priv = ov_local_peer_get_private (local);
-  priv->negotiator_task = NULL;
-  return g_task_propagate_boolean (G_TASK (result), error);
-}
-
-gboolean
-ov_local_peer_negotiate_stop (OvLocalPeer * local)
-{
-  OvLocalPeerState state;
-  OvLocalPeerPrivate *priv;
-  
-  ov_local_peer_lock (local);
-  priv = ov_local_peer_get_private (local);
-
-  GST_DEBUG ("Cancelling call negotiation");
-  state = ov_local_peer_get_state (local);
-  if (!(state & OV_LOCAL_STATE_NEGOTIATING) &&
-      !(state & OV_LOCAL_STATE_NEGOTIATED)) {
-    GST_ERROR ("Can't stop negotiating when not negotiating");
-    ov_local_peer_unlock (local);
-    return FALSE;
-  }
-
-  if (state & OV_LOCAL_STATE_NEGOTIATOR) {
-    g_assert (priv->negotiator_task != NULL);
-    GST_DEBUG ("Stopping negotiation as the negotiator");
-    g_cancellable_cancel (
-        g_task_get_cancellable (priv->negotiator_task));
-    /* Unlock mutex so that the other thread gets access */
-  } else if (state & OV_LOCAL_STATE_NEGOTIATEE) {
-    GST_DEBUG ("Stopping negotiation as the negotiatee");
-    g_source_remove (priv->negotiate->check_timeout_id);
-    g_clear_pointer (&priv->negotiate->remotes,
-        (GDestroyNotify) g_hash_table_unref);
-    g_clear_pointer (&priv->negotiate, g_free);
-    /* Reset state so we accept incoming connections again */
-    ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
-  } else {
-    g_assert_not_reached ();
-  }
-
-  ov_local_peer_set_state_failed (local);
-
-  ov_local_peer_unlock (local);
-  return TRUE;
-}
-
 gboolean
 ov_local_peer_start (OvLocalPeer * local)
 {
@@ -1004,7 +915,7 @@ err:
 }
 
 gboolean
-ov_local_peer_start_call (OvLocalPeer * local)
+ov_local_peer_call_start (OvLocalPeer * local)
 {
   guint index;
   gboolean res;
@@ -1019,6 +930,7 @@ ov_local_peer_start_call (OvLocalPeer * local)
 
   if (!(state & OV_LOCAL_STATE_READY)) {
     GST_ERROR ("Negotiation hasn't been done yet!");
+    ov_local_peer_unlock (local);
     return FALSE;
   }
 
@@ -1075,7 +987,7 @@ ov_local_peer_start_call (OvLocalPeer * local)
 /* Resets the local peer to a state equivalent to after callign
  * ov_local_peer_start() */
 void
-ov_local_peer_end_call (OvLocalPeer * local)
+ov_local_peer_call_hangup (OvLocalPeer * local)
 {
   OvLocalPeerState state;
   OvLocalPeerPrivate *priv;
@@ -1105,6 +1017,7 @@ ov_local_peer_end_call (OvLocalPeer * local)
 
   g_clear_pointer (&priv->send_acaps, gst_caps_unref);
   g_clear_pointer (&priv->send_vcaps, gst_caps_unref);
+  /* Revert state to STARTED */
   ov_local_peer_set_state (local, OV_LOCAL_STATE_STARTED);
   ov_local_peer_unlock (local);
 }
@@ -1122,10 +1035,10 @@ ov_local_peer_stop (OvLocalPeer * local)
   GST_DEBUG ("Stopping local peer");
   /* Stop negotiating if negotiating */
   if (state & OV_LOCAL_STATE_NEGOTIATING)
-    ov_local_peer_negotiate_stop (local);
+    ov_local_peer_negotiate_abort (local);
 
   if (state >= OV_LOCAL_STATE_READY)
-    ov_local_peer_end_call (local);
+    ov_local_peer_call_hangup (local);
 
   if (state >= OV_LOCAL_STATE_STARTED) {
     /* Stop video device monitor */

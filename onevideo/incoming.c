@@ -52,8 +52,9 @@ check_negotiate_timeout (OvLocalPeer * local)
     GST_DEBUG ("Timed out during negotiation, stopping...");
     ov_local_peer_set_state_failed (local);
     ov_local_peer_set_state_timedout (local);
-    ov_local_peer_negotiate_stop (local);
+    ov_local_peer_negotiate_abort (local);
     timeout_value = 0;
+    g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_ABORTED], 0, NULL);
     return G_SOURCE_REMOVE;
   }
 
@@ -73,6 +74,7 @@ ov_local_peer_handle_start_negotiate (OvLocalPeer * local,
   gchar *local_id, *negotiator_id;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
+  OvPeer *incoming;
   gboolean ret = FALSE;
 
   priv = ov_local_peer_get_private (local);
@@ -86,16 +88,12 @@ ov_local_peer_handle_start_negotiate (OvLocalPeer * local,
   g_variant_get (msg->variant, variant_type, &call_id, &negotiator_id,
       &negotiator_port);
 
-  ov_local_peer_lock (local);
-
   state = ov_local_peer_get_state (local);
   if (!(state & OV_LOCAL_STATE_STARTED)) {
     reply = ov_tcp_msg_new_error (msg->id, "Busy");
-    goto send_reply_unlock;
+    g_free (negotiator_id);
+    goto send_reply;
   }
-
-  priv->negotiate = g_new0 (OvNegotiate, 1);
-  priv->negotiate->call_id = call_id;
 
   /* We receive the port to use while talking to the negotiator, but we must
    * derive the host to use from the connection itself because the negotiator
@@ -105,6 +103,21 @@ ov_local_peer_handle_start_negotiate (OvLocalPeer * local,
       g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (remote_addr)),
       negotiator_port);
   g_object_unref (remote_addr);
+
+  incoming = ov_peer_new (G_INET_SOCKET_ADDRESS (negotiator_addr));
+  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_INCOMING], 0, incoming,
+      &ret);
+  g_object_unref (incoming);
+  if (!ret) {
+    reply = ov_tcp_msg_new_error (msg->id, "Refused");
+    g_free (negotiator_id);
+    goto send_reply;
+  }
+
+  ov_local_peer_lock (local);
+
+  priv->negotiate = g_new0 (OvNegotiate, 1);
+  priv->negotiate->call_id = call_id;
   priv->negotiate->negotiator =
     ov_remote_peer_new (local, G_INET_SOCKET_ADDRESS (negotiator_addr));
   g_object_unref (negotiator_addr);
@@ -125,7 +138,6 @@ ov_local_peer_handle_start_negotiate (OvLocalPeer * local,
 
   ret = TRUE;
 
-send_reply_unlock:
   ov_local_peer_unlock (local);
 send_reply:
   output = g_io_stream_get_output_stream (G_IO_STREAM (connection));
@@ -162,11 +174,7 @@ ov_local_peer_handle_cancel_negotiate (OvLocalPeer * local,
 
   GST_DEBUG ("Received a CANCEL_NEGOTIATE");
 
-  /* TODO: For now, we completely cancel the negotiation process. Should have
-   * a list of peers that have signalled a cancel and just append to it. It
-   * should be the job of the negotiating thread to check this and handle it
-   * gracefully. */
-  if (!ov_local_peer_negotiate_stop (local)) {
+  if (!ov_local_peer_negotiate_abort (local)) {
     reply = ov_tcp_msg_new_error (msg->id, "Unable to stop negotiation");
     goto send_reply;
   }
@@ -177,6 +185,9 @@ ov_local_peer_handle_cancel_negotiate (OvLocalPeer * local,
 
 send_reply:
   ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+
+  if (ret)
+    g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_ABORTED], 0, NULL);
 
   ov_tcp_msg_free (reply);
   return ret;
@@ -312,6 +323,8 @@ ov_local_peer_handle_query_reply_caps (OvLocalPeer * local,
   g_free (send_acaps); g_free (send_vcaps);
   g_free (recv_acaps); g_free (recv_vcaps);
 
+  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_STARTED], 0);
+
   tmp = g_variant_print (reply->variant, FALSE);
   GST_DEBUG ("Replying to 'query caps' with %s", tmp);
   g_free (tmp);
@@ -319,6 +332,8 @@ ov_local_peer_handle_query_reply_caps (OvLocalPeer * local,
 send_reply:
   output = g_io_stream_get_output_stream (G_IO_STREAM (connection));
   ret = ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+  /* XXX: Failure return here is not a fatal error. If our message did not get
+   * through, the negotiation will just timeout instead. */
   ov_tcp_msg_free (reply);
 
   return ret;
@@ -429,6 +444,9 @@ ov_local_peer_handle_call_details (OvLocalPeer * local, GOutputStream * output,
   /* Set call details */
   if (!set_call_details (local, msg)) {
     reply = ov_tcp_msg_new_error_call (call_id, "Invalid call details");
+    /* XXX: We don't abort the negotiation because of invalid call details.
+     * We give the negotiator another chance to send us the call details or to
+     * abort negotiation, or we just timeout eventually. */
     goto send_reply_unlock;
   }
 
@@ -493,7 +511,7 @@ start_call (OvLocalPeer * local, OvTcpMsg * msg)
       (GDestroyNotify) g_hash_table_unref);
   g_clear_pointer (&priv->negotiate, g_free);
 
-  return ov_local_peer_start_call (local);
+  return TRUE;
 err:
   g_free (peer_id);
   g_variant_iter_free (iter);
@@ -540,6 +558,9 @@ ov_local_peer_handle_start_call (OvLocalPeer * local, GOutputStream * output,
   /* Start calling the specified list of peers */
   if (!start_call (local, msg)) {
     reply = ov_tcp_msg_new_error_call (call_id, "Invalid list of peers");
+    /* XXX: We don't abort the negotiation because of this error here.
+     * We give the negotiator another chance to start the call, or to
+     * abort negotiation, or we just timeout eventually. */
     goto send_reply_unlock;
   }
 
@@ -550,6 +571,9 @@ send_reply_unlock:
   ov_local_peer_unlock (local);
 send_reply:
   ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+  /* Emit signal after unlocking and after writing the reply */
+  if (ret)
+    g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_FINISHED], 0);
 
   ov_tcp_msg_free (reply);
   return ret;
@@ -564,11 +588,8 @@ ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output
   OvTcpMsg *reply;
   OvRemotePeer *remote;
   const gchar *variant_type;
-  OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
   gboolean ret = FALSE;
-
-  priv = ov_local_peer_get_private (local);
 
   variant_type = ov_tcp_msg_type_to_variant_type (
       OV_TCP_MSG_TYPE_END_CALL, OV_TCP_MAX_VERSION);
@@ -598,10 +619,16 @@ ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output
   /* Remove the specified peer from the call */
   ov_remote_peer_remove (remote);
 
+  /* TODO: Implement partial call continuation */
+#if 0
   if (priv->remote_peers->len == 0) {
     GST_DEBUG ("No peers left in call, ending call...");
-    ov_local_peer_end_call (local);
+    ov_local_peer_call_hangup (local);
   }
+#else
+  GST_DEBUG ("A remote peer ended the call, hanging up...");
+  ov_local_peer_call_hangup (local);
+#endif
 
   reply = ov_tcp_msg_new_ack (msg->id);
 
@@ -611,6 +638,10 @@ send_reply_unlock:
   ov_local_peer_unlock (local);
 send_reply:
   ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
+
+  /* Emit signal after unlocking and after writing the reply */
+  if (ret)
+    g_signal_emit (local, ov_local_peer_signals[CALL_REMOTES_HUNGUP], 0);
 
   ov_tcp_msg_free (reply);
   g_free (peer_id);

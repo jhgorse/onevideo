@@ -188,7 +188,7 @@ ov_local_peer_send_info (OvLocalPeer * local, GSocketAddress * addr,
       NULL, 0);
 
   tmp = ov_inet_socket_address_to_string (G_INET_SOCKET_ADDRESS (addr));
-  GST_DEBUG ("Sending HI_THERE to %s, id: %lu", tmp, send->id);
+  GST_TRACE ("Sending HI_THERE to %s, id: %lu", tmp, send->id);
   g_free (tmp);
 
   g_object_get (OV_PEER (local), "address", &local_addr, NULL);
@@ -227,13 +227,13 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
   
   if (ov_inet_socket_address_is_iface (sfrom, priv->mc_ifaces,
         g_inet_socket_address_get_port (local_addr))) {
-    GST_DEBUG ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
+    GST_TRACE ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
         msg->type, msg->id);
     g_free (tmp);
     goto out;
   }
 
-  GST_DEBUG ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
+  GST_TRACE ("Incoming UDP msg: %s, id: %lu, from: %s", msg->data, msg->id, tmp);
   g_free (tmp);
 
   switch (msg->type) {
@@ -272,7 +272,7 @@ ov_discovery_send_multicast_discover (OvLocalPeer * local,
   msg = ov_udp_msg_new (OV_UDP_MSG_TYPE_MULTICAST_DISCOVER,
       NULL, 0);
 
-  GST_DEBUG ("Sending multicast discover (id %lu) to %s:%u",
+  GST_TRACE ("Sending multicast discover (id %lu) to %s:%u",
       msg->id, OV_MULTICAST_GROUP, OV_DEFAULT_COMM_PORT);
 
   g_object_get (OV_PEER (local), "address", &local_addr, NULL);

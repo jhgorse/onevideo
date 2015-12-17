@@ -41,10 +41,11 @@ typedef struct {
 } FindRemotesData;
 
 static gboolean
-found_remote_cb (OvDiscoveredPeer * d, gpointer user_data)
+found_remote_cb (OvLocalPeer * local, OvDiscoveredPeer * d,
+    FindRemotesData * data)
 {
   guint len;
-  FindRemotesData *data = user_data;
+  gchar *addr_s;
 
   if (data->remotes == NULL)
     data->remotes = g_malloc0_n (sizeof (gchar*), 1);
@@ -54,10 +55,10 @@ found_remote_cb (OvDiscoveredPeer * d, gpointer user_data)
   /* Expand to include another gchar* pointer */
   data->remotes = g_realloc_n (data->remotes, sizeof (gchar*), len + 1);
 
-  data->remotes[len - 1] = ov_inet_socket_address_to_string (d->addr);
+  g_object_get (d, "address-string", &addr_s, NULL);
+  data->remotes[len - 1] = addr_s;
   data->remotes[len] = NULL;
 
-  ov_discovered_peer_free (d);
   return TRUE;
 }
 
@@ -70,34 +71,12 @@ kill_remote_peer (OvRemotePeer * remote)
   return G_SOURCE_REMOVE;
 }
 
-static gboolean
-on_local_peer_call_ended (OvLocalPeer * local)
+static void
+on_call_ended (OvLocalPeer * local)
 {
-  OvLocalPeerState state;
-  static OvLocalPeerState prev_state;
-
-  state = ov_local_peer_get_state (local);
-  if (state & OV_LOCAL_STATE_STARTED && prev_state > OV_LOCAL_STATE_STARTED) {
-    /* FIXME: This is broken. Must be fixed when signals are added. */
-    g_print ("Local peer call ended, exiting...\n");
-    goto quit;
-  }
-
-  if (state & OV_LOCAL_STATE_FAILED &&
-      state & OV_LOCAL_STATE_NEGOTIATOR) {
-    g_print ("Local negotiator peer failed, exiting...\n");
-    goto quit;
-  }
-
-  if (prev_state != state)
-    prev_state = state;
-
-  return G_SOURCE_CONTINUE;
-quit:
+  g_print ("Local peer call ended, exiting...\n");
   ov_local_peer_stop (local);
   g_main_loop_quit (loop);
-
-  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -109,24 +88,42 @@ on_app_exit (OvLocalPeer * local)
   return G_SOURCE_REMOVE;
 }
 
-static void
-on_negotiate_done (GObject * source_object, GAsyncResult * res,
-    gpointer user_data)
+static gboolean
+on_negotiate_incoming (OvLocalPeer * local, OvPeer * peer, gpointer user_data)
 {
-  gboolean ret;
-  OvLocalPeer *local;
-  GError *error = NULL;
+  gchar *addr_s;
 
-  local = g_task_get_task_data (G_TASK (res));
-  ret = ov_local_peer_negotiate_finish (local, res, &error);
-  if (ret) {
-    g_print ("All remotes have replied.\n");
-    ov_local_peer_start_call (local);
-    return;
-  } else {
-    if (error != NULL)
-      g_printerr ("Error while negotiating: %s\n", error->message);
-  }
+  g_object_get (peer, "address-string", &addr_s, NULL);
+  g_print ("Accepting incoming call from %s\n", addr_s);
+  g_free (addr_s);
+
+  return TRUE;
+}
+
+static void
+on_negotiate_finished (OvLocalPeer * local, gpointer user_data)
+{
+  g_print ("Negotiation finished successfully; starting call\n");
+  ov_local_peer_call_start (local);
+}
+
+static void
+on_negotiate_skipped (OvLocalPeer * local, OvPeer * skipped,
+    GError * error, gpointer user_data)
+{
+  gchar *addr_s;
+  g_object_get (skipped, "address-string", &addr_s, NULL);
+  g_print ("Remote %s skipped because it did not respond\n", addr_s);
+  g_free (addr_s);
+}
+
+static void
+on_negotiate_aborted (OvLocalPeer * local, GError * error, gpointer user_data)
+{
+  g_printerr ("Error while negotiating: %s\n",
+      error ? error->message : "Unknown error");
+  ov_local_peer_stop (local);
+  g_main_loop_quit (loop);
 }
 
 static void
@@ -144,7 +141,9 @@ dial_remotes (OvLocalPeer * local, gchar ** remotes)
     g_print ("Created and added remote peer %s\n", remote->addr_s);
   }
 
-  ov_local_peer_negotiate_async (local, NULL, on_negotiate_done, NULL);
+  g_signal_connect (local, "negotiate-skipped-remote",
+      G_CALLBACK (on_negotiate_skipped), NULL);
+  ov_local_peer_negotiate_start (local);
   g_print ("Waiting for remotes to reply...\n");
 }
 
@@ -160,10 +159,12 @@ aggregate_and_dial_remotes (gpointer user_data)
     goto out;
   }
 
+  ov_local_peer_discovery_stop (data->local);
   g_print (" found %u remotes.\n", g_strv_length (data->remotes));
   dial_remotes (data->local, data->remotes);
 
 out:
+  g_strfreev (data->remotes);
   g_free (data);
   return G_SOURCE_REMOVE;
 }
@@ -366,25 +367,32 @@ main (int   argc,
         get_device (devices, device_path) : get_device_choice (devices));
   g_list_free_full (devices, g_object_unref);
 
+  /* Signals common for incoming and outgoing calls */
+  g_signal_connect (local, "negotiate-finished",
+      G_CALLBACK (on_negotiate_finished), NULL);
+  g_signal_connect (local, "negotiate-aborted",
+      G_CALLBACK (on_negotiate_aborted), NULL);
+
   if (remotes == NULL && !discover_peers) {
       g_print ("No remotes specified; listening for incoming connections\n");
+      g_signal_connect (local, "negotiate-incoming",
+          G_CALLBACK (on_negotiate_incoming), NULL);
       goto remotes_done;
   }
 
   if (remotes == NULL) {
-    GSource *source;
     FindRemotesData *data;
     GError *error = NULL;
-
-    g_print ("Discovering remote peers using multicast discovery...");
 
     data = g_new0 (FindRemotesData, 1);
     data->local = local;
 
-    source = ov_local_peer_find_remotes_create_source (local, NULL,
-        found_remote_cb, data, &error);
-    if (source == NULL) {
-      g_print (" unable to search: %s. Exiting.", error->message);
+    g_print ("Discovering remote peers using multicast discovery...");
+
+    g_signal_connect (local, "peer-discovered", G_CALLBACK (found_remote_cb),
+        data);
+    if (!ov_local_peer_discovery_start (local, 0, &error)) {
+      g_print (" unable to search: %s. Exiting", error->message);
       g_error_free (error);
       g_free (data);
       goto out;
@@ -402,7 +410,8 @@ main (int   argc,
 remotes_done:
   /* If in passive mode, auto exit only when requested */
   if (remotes != NULL || discover_peers || auto_exit)
-    g_idle_add ((GSourceFunc) on_local_peer_call_ended, local);
+    g_signal_connect (local, "call-remotes-hungup", G_CALLBACK (on_call_ended),
+        NULL);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
