@@ -98,7 +98,7 @@ gst_proxy_src_get_property (GObject * object,
 
   switch (prop_id) {
     case PROP_PROXYSINK:
-      g_value_set_object (value, g_weak_ref_get (&self->priv->proxysink));
+      g_value_take_object (value, g_weak_ref_get (&self->priv->proxysink));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, spec);
@@ -115,17 +115,25 @@ gst_proxy_src_set_property (GObject * object,
 
   switch (prop_id) {
     case PROP_PROXYSINK:
-      sink = g_value_get_object (value);
-      if (sink == NULL)
-        gst_proxy_sink_set_proxysrc (g_weak_ref_get (&self->priv->proxysink),
-            NULL);
-      else
+      sink = g_value_dup_object (value);
+      if (sink == NULL) {
+        /* Unset proxysrc property on the existing proxysink to break the
+         * connection in that direction */
+        GstProxySink *old_sink = g_weak_ref_get (&self->priv->proxysink);
+        if (old_sink) {
+          gst_proxy_sink_set_proxysrc (old_sink, NULL);
+          g_object_unref (old_sink);
+        }
+        g_weak_ref_set (&self->priv->proxysink, NULL);
+      } else {
+        /* Set proxysrc property on the new proxysink to point to us */
         gst_proxy_sink_set_proxysrc (sink, self);
-      g_weak_ref_set (&self->priv->proxysink, sink);
+        g_weak_ref_set (&self->priv->proxysink, sink);
+        g_object_unref (sink);
+      }
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, spec);
-      break;
   }
 }
 

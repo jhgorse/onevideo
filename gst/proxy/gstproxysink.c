@@ -83,7 +83,6 @@ static GstStateChangeReturn gst_proxy_sink_change_state (GstElement *element,
 static void
 gst_proxy_sink_class_init (GstProxySinkClass * klass)
 {
-  GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *gstelement_class = (GstElementClass *) klass;
 
   GST_DEBUG_CATEGORY_INIT (gst_proxy_sink_debug, "proxysink", 0, "proxy sink");
@@ -292,7 +291,6 @@ gst_proxy_sink_sink_chain_list (GstPad * pad, GstObject * parent,
 GstPad *
 gst_proxy_sink_get_internal_sinkpad (GstProxySink * self)
 {
-  /* This function is only used internally, so it should never be passed NULL */
   g_return_val_if_fail (self, NULL);
   return gst_object_ref (self->priv->sinkpad);
 }
@@ -300,7 +298,6 @@ gst_proxy_sink_get_internal_sinkpad (GstProxySink * self)
 void
 gst_proxy_sink_set_proxysrc (GstProxySink * self, GstProxySrc * src)
 {
-  /* This function is given user-supplied arguments, and self can be NULL */
-  if (self != NULL)
-    g_weak_ref_set (&self->priv->proxysrc, src);
+  g_return_if_fail (self);
+  g_weak_ref_set (&self->priv->proxysrc, src);
 }
