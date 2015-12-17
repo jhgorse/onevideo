@@ -216,7 +216,7 @@ gst_proxy_src_dispose (GObject * object)
   gst_object_unparent (GST_OBJECT (self->priv->internal_srcpad));
   self->priv->internal_srcpad = NULL;
 
-  g_weak_ref_clear (&self->priv->proxysink);
+  g_weak_ref_set (&self->priv->proxysink, NULL);
 
   G_OBJECT_CLASS (gst_proxy_src_parent_class)->dispose (object);
 }
