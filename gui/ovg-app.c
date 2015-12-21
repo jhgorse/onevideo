@@ -104,16 +104,8 @@ ovg_app_init (OvgApp * app)
 static void
 ovg_app_activate (GApplication * app)
 {
-  GtkWidget *win;
-
-  win = ovg_app_window_new (OVG_APP (app));
-  gtk_window_present (GTK_WINDOW (win));
-}
-
-static void
-ovg_app_raise (GApplication * app)
-{
   GList *l;
+  GtkWidget *win;
 
   g_return_if_fail (OVG_IS_APP (app));
 
@@ -122,8 +114,8 @@ ovg_app_raise (GApplication * app)
     if (OVG_IS_APP_WINDOW (l->data))
       return gtk_window_present (GTK_WINDOW (l->data));
 
-  /* Create a new window */
-  ovg_app_activate (app);
+  win = ovg_app_window_new (OVG_APP (app));
+  gtk_window_present (GTK_WINDOW (win));
 }
 
 static void
@@ -190,7 +182,7 @@ static gint
 ovg_app_command_line (GApplication * app, GApplicationCommandLine * cmdline)
 {
   /* No command-line options; just raise */
-  ovg_app_raise (app);
+  ovg_app_activate (app);
   return 0;
 }
 
