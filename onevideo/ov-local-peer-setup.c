@@ -140,7 +140,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   GstCaps *video_caps, *raw_audio_caps;
   GstElement *asrc, *afilter, *aencode, *apay;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
-  GstElement *vsrc, *vfilter, *vqueue, *vqueue2, *vpay;
+  GstElement *vsrc, *vfilter, *vqueue, *vpay;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
@@ -192,16 +192,15 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     video_caps = gst_caps_from_string ("video/x-raw, " VIDEO_CAPS_STR);
     g_object_set (vfilter, "caps", video_caps, NULL);
     gst_caps_unref (video_caps);
-    vqueue = gst_element_factory_make ("queue", "v4l2-queue");
+    vqueue = gst_element_factory_make ("jpegenc", "video-encoder");
+    g_object_set (vqueue, "quality", 30, NULL);
   } else {
     vsrc = gst_device_create_element (priv->video_device, NULL);
     vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
     /* These have already been fixated */
     g_object_set (vfilter, "caps", priv->send_vcaps, NULL);
-    vqueue = gst_element_factory_make ("jpegdec", "v4l2-queue");
+    vqueue = gst_element_factory_make ("queue", "video-queue");
   }
-  vqueue2 = gst_element_factory_make ("jpegenc", NULL);
-  g_object_set (vqueue2, "quality", 30, NULL);
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);
@@ -215,7 +214,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 
   gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc,
       afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
-      vsrc, vfilter, vqueue, vqueue2, vpay, vrtpqueue, vsink, vrtcpqueue,
+      vsrc, vfilter, vqueue, vpay, vrtpqueue, vsink, vrtcpqueue,
       vrtcpsink, vrtcpsrc, NULL);
 
   /* Link audio branch */
@@ -248,7 +247,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   g_assert (ret);
 
   /* Link video branch */
-  ret = gst_element_link_many (vsrc, vfilter, vqueue, vqueue2, vpay, NULL);
+  ret = gst_element_link_many (vsrc, vfilter, vqueue, vpay, NULL);
   g_assert (ret);
   ret = gst_element_link (vrtcpqueue, vrtcpsink);
   g_assert (ret);
