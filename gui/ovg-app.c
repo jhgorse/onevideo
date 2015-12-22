@@ -85,7 +85,7 @@ static GActionEntry app_entries[] =
 static gboolean
 on_ovg_app_sigint (GApplication * app)
 {
-  g_printerr ("SIGINT caught, quitting application...");
+  g_printerr ("SIGINT caught, quitting application...\n");
   quit_activated (NULL, NULL, app);
 
   return G_SOURCE_REMOVE;
@@ -161,17 +161,14 @@ ovg_app_startup (GApplication * app)
   }
 
   devices = ov_local_peer_get_video_devices (priv->ov_local);
-#ifdef __linux__
-  device = ov_get_device_from_device_path (devices, device_path);
-#else
   if (device_path != NULL)
+#ifdef __linux__
+    device = ov_get_device_from_device_path (devices, device_path);
+#else
     GST_WARNING ("The -d/--device option is not supported on this platform;"
         " selecting the first available video device");
+  device = GST_DEVICE (devices->data);
 #endif
-  /* TODO: Just use the first device for now.
-   * Need to create GSettings for this. */
-  if (device == NULL)
-    device = GST_DEVICE (devices->data);
 
   /* This currently always returns TRUE (aborts on error) */
   ov_local_peer_set_video_device (priv->ov_local, device);
