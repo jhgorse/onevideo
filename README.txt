@@ -1,8 +1,10 @@
 Introduction
 ============
 These are testing instructions when running all instances on a single machine.
-The special options passed to each peer can be skipped when running on separate
-machines.
+As you will see, the -p/--port option needs to be passed to instances of the
+GUI/CLI after the first GUI/CLI to use non-default ports for communication for
+doing so. One must also use the -d/--device option when running multiple
+instances or when one wants to select a particular video source device.
 
 In general, a peer can either act as a call initiator or a call receiver. This
 distinction is only valid for initiation and during the negotiation process.
