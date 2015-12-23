@@ -4020,3 +4020,83 @@
    Memcheck:Addr8
    fun:do_lookup_x
 }
+
+{
+   <ignore mesa>
+   Memcheck:Leak
+   ...
+   fun:_mesa_*
+   ...
+}
+
+{
+   <ignore dri>
+   Memcheck:Leak
+   ...
+   fun:dri*
+   ...
+}
+
+{
+   <ignore drm>
+   Memcheck:Leak
+   ...
+   fun:drm_*
+   ...
+}
+
+{
+   <ignore shader compilation>
+   Memcheck:Leak
+   ...
+   fun:gst_gl_shader_compile
+   ...
+}
+
+{
+   <ignore intel>
+   Memcheck:Leak
+   ...
+   fun:intel_*
+   ...
+}
+
+{
+   <ignore shaders>
+   Memcheck:Leak
+   ...
+   fun:brw_*
+   ...
+}
+
+{
+   <ignore shaders v2>
+   Memcheck:Leak
+   ...
+   fun:*_shader
+   ...
+}
+
+{
+   <ignore fontconfig>
+   Memcheck:Leak
+   ...
+   fun:Fc*
+   ...
+}
+
+{
+   <ignore GtkStyle>
+   Memcheck:Leak
+   ...
+   fun:gtk_style_*
+   ...
+}
+
+{
+   <temp ignore gst_gl>
+   Memcheck:Leak
+   ...
+   fun:gst_gl_context*
+   ...
+}
