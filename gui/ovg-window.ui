@@ -32,7 +32,7 @@
         <property name="visible">True</property>
         <property name="can-focus">True</property>
         <property name="orientation">horizontal</property>
-        <property name="halign">fill</property>
+        <property name="halign">start</property>
         <child>
           <object class="GtkBox" id="connect_sidebar">
             <property name="visible">True</property>
@@ -65,6 +65,7 @@
                       <object class="GtkScrolledWindow" id="peers_d_scroll">
                         <property name="visible">True</property>
                         <property name="min-content-height">200</property>
+                        <property name="hscrollbar-policy">never</property>
                         <child>
                           <object class="GtkListBox" id="peers_d">
                             <property name="selection-mode">GTK_SELECTION_NONE</property>
@@ -110,6 +111,7 @@
                       <object class="GtkScrolledWindow" id="peers_c_scroll">
                         <property name="visible">True</property>
                         <property name="min-content-height">200</property>
+                        <property name="hscrollbar-policy">never</property>
                         <child>
                           <object class="GtkListBox" id="peers_c">
                             <property name="selection-mode">GTK_SELECTION_NONE</property>
@@ -184,6 +186,10 @@
               </packing>
             </child>
           </object><!-- connect_sidebar -->
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+          </packing>
         </child>
         <child>
           <object class="GtkFlowBox" id="peers_video">

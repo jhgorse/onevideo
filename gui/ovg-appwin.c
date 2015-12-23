@@ -441,7 +441,6 @@ ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
     GPtrArray * remotes)
 {
   guint ii, n_cols;
-  gint sidebar_height, child_width;
   OvgAppWindowPrivate *priv;
 
   priv = ovg_app_window_get_instance_private (win);
@@ -450,11 +449,6 @@ ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
   n_cols = (unsigned int) ceilf (sqrtf (remotes->len));
   gtk_flow_box_set_min_children_per_line (GTK_FLOW_BOX (priv->peers_video),
       n_cols);
-  gtk_widget_get_preferred_height (priv->connect_sidebar, &sidebar_height,
-      NULL);
-  /* Set child width from the min sidebar height assuming the video is 16:9
-   * and taking into account the number of videos to show */
-  child_width = (int) floorf ((sidebar_height * 16) / (remotes->len * 9));
 
   for (ii = 0; ii < remotes->len; ii++) {
     GtkWidget *child, *area;
@@ -463,7 +457,6 @@ ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
     remote = g_ptr_array_index (remotes, ii);
 
     child = gtk_flow_box_child_new ();
-    gtk_widget_set_size_request (child, child_width, -1);
     area = ov_remote_peer_add_gtkglsink (remote);
     gtk_container_add (GTK_CONTAINER (child), area);
     gtk_container_add (GTK_CONTAINER (priv->peers_video), child);
@@ -474,6 +467,7 @@ static gboolean
 ovg_app_window_show_peers_video (OvgAppWindow * win)
 {
   OvgAppWindowPrivate *priv;
+  gint videoh, titleh, curw, neww;
 
   priv = ovg_app_window_get_instance_private (win);
 
@@ -485,6 +479,15 @@ ovg_app_window_show_peers_video (OvgAppWindow * win)
       CALL_WINDOW_TITLE);
   gtk_widget_show_all (priv->peers_video);
   gtk_widget_show (priv->end_call);
+
+  /* Set window resizable and set a better size for it */
+  videoh = gtk_widget_get_allocated_height (priv->peers_video);
+  titleh = gtk_widget_get_allocated_height (priv->header_bar);
+  /* Set new width from the current height assuming the video is 16:9 */
+  neww = (int) floorf ((videoh * 16) / 9);
+  gtk_window_set_resizable (GTK_WINDOW (win), TRUE);
+  gtk_window_resize (GTK_WINDOW (win), neww, videoh + titleh);
+
   return G_SOURCE_REMOVE;
 }
 
@@ -619,7 +622,8 @@ ovg_app_window_reset_state (OvgAppWindow * win)
   gtk_widget_set_sensitive (priv->start_call, TRUE);
   gtk_widget_show (priv->connect_sidebar);
 
-  gtk_widget_set_size_request (priv->outer_box, -1, -1);
+  /* Connect window doesn't need to be resizable */
+  gtk_window_set_resizable (GTK_WINDOW (win), FALSE);
 
   /* Disconnect all handlers */
   g_signal_handlers_disconnect_by_data (local, win);
@@ -715,6 +719,8 @@ ovg_app_window_init (OvgAppWindow * win)
 
   gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar),
       CONNECT_WINDOW_TITLE);
+  /* Connect window doesn't need to be resizable */
+  gtk_window_set_resizable (GTK_WINDOW (win), FALSE);
 
   gtk_list_box_set_header_func (GTK_LIST_BOX (priv->peers_d),
       ovg_list_box_update_header_func, NULL, NULL);
