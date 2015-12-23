@@ -176,7 +176,13 @@ gpointer
 ov_remote_peer_add_gtkglsink (OvRemotePeer * remote)
 {
   gpointer widget;
-  remote->priv->video_sink = gst_element_factory_make ("gtksink", NULL);
+
+  remote->priv->video_sink = gst_element_factory_make ("gtkglsink", NULL);
+  if (!remote->priv->video_sink) {
+    GST_ERROR ("Unable to create gtkglsink; falling back to glimagesink");
+    return NULL;
+  }
+
   g_object_get (remote->priv->video_sink, "widget", &widget, NULL);
   return widget;
 }

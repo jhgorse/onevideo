@@ -27,8 +27,49 @@
 
 #include "ovg-app.h"
 
+#ifdef GDK_WINDOWING_X11
+#include <gmodule.h>
+#define __USE_GNU
+#include <dlfcn.h>
+#endif
+
 int
 main (int argc, char * argv[])
 {
+#ifdef GDK_WINDOWING_X11
+  GModule *module;
+  int (*XInitThreads) (void);
+
+  if (!g_module_supported ())
+    goto done;
+
+  module = g_module_open (NULL, 0);
+  if (!module)
+    goto done;
+
+  /* gstgtkglsink uses threaded Xlib, so we need to initialize threading in Xlib
+   * by calling XInitThreads() before any other calls to Xlib
+   *
+   * If GTK+ is linked with libX11, this will return a pointer to XInitThreads()
+   * which we need to call before GTK+ does anything; which means we need to
+   * call this as the first thing in main()
+   *
+   * If GTK+ is built with X11 but is running under a different backend, calling
+   * this will not cause problems anyway, so no need to call it conditionally */
+  if (!g_module_symbol (module, "XInitThreads", (gpointer *) &XInitThreads))
+    goto done;
+
+  if (XInitThreads == NULL)
+    goto done;
+
+  if (XInitThreads () == 0) {
+    g_printerr ("FATAL: Unable to initialize Xlib threading\n");
+    return -1;
+  } else {
+    g_print ("Xlib threading initialized\n");
+  }
+done:
+#endif
+
   return g_application_run (G_APPLICATION (ovg_app_new ()), argc, argv);
 }

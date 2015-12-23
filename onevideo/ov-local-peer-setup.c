@@ -430,7 +430,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   GSocket *socket;
   GstElement *rtpbin;
   GstElement *asrc, *artcpsrc, *adecode, *asink, *artcpsink;
-  GstElement *vsrc, *vrtcpsrc, *vdecode, *vconvert, *vsink, *vrtcpsink;
+  GstElement *vsrc, *vrtcpsrc, *vdecode, *vsink, *vrtcpsink;
   GInetSocketAddress *local_addr;
   gchar *local_addr_s, *remote_addr_s;
   GstCaps *rtpcaps;
@@ -496,9 +496,6 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_object_unref (socket);
   remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
   vdecode = gst_element_factory_make ("jpegdec", NULL);
-  /* We need this despite setting caps everywhere because the jpeg might have
-   * been encoded by the webcam, in which case it could be in any raw format */
-  vconvert = gst_element_factory_make ("videoconvert", NULL);
   vsink = gst_element_factory_make ("proxysink", "video-proxysink-%u");
   g_assert (vsink != NULL);
   /* Recv RTCP SR for video */
@@ -518,7 +515,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
 
   gst_bin_add_many (GST_BIN (remote->receive), rtpbin,
       asrc, remote->priv->adepay, adecode, asink, artcpsink, artcpsrc,
-      vsrc, remote->priv->vdepay, vdecode, vconvert, vsink, vrtcpsink, vrtcpsrc,
+      vsrc, remote->priv->vdepay, vdecode, vsink, vrtcpsink, vrtcpsrc,
       NULL);
 
   /* Link audio branch via rtpbin */
@@ -538,8 +535,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_assert (ret);
 
   /* Link video branch via rtpbin */
-  ret = gst_element_link_many (remote->priv->vdepay, vdecode, vconvert, vsink,
-      NULL);
+  ret = gst_element_link_many (remote->priv->vdepay, vdecode, vsink, NULL);
   g_assert (ret);
 
   /* Recv video RTP and send to rtpbin */
@@ -613,6 +609,8 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
   /* Setup pipeline (priv->playback) to render video from each local to the
    * provided video sink */
   if (remote->priv->video_proxysink) {
+    GstElement *sinkbin;
+
     remote->priv->video_proxysrc = 
       gst_element_factory_make ("proxysrc", "video-proxysrc-%u");
     g_assert (remote->priv->video_proxysrc != NULL);
@@ -621,16 +619,20 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
     g_object_set (remote->priv->video_proxysrc, "proxysink",
         remote->priv->video_proxysink, NULL);
 
-    /* If a remote_peer_add_sink wasn't used, use a fallback xvimagesink */
+    /* If a remote_peer_add_sink wasn't used, use a fallback glimagesink */
     if (remote->priv->video_sink == NULL)
-      remote->priv->video_sink = gst_element_factory_make ("xvimagesink", NULL);
+      remote->priv->video_sink =
+        gst_element_factory_make ("glimagesinkelement", NULL);
+    g_assert (remote->priv->video_sink);
+    sinkbin = gst_element_factory_make ("glsinkbin", NULL);
+    g_assert (sinkbin);
+    g_object_set (sinkbin, "sink", remote->priv->video_sink, NULL);
 
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
-        remote->priv->video_proxysrc, remote->priv->video_sink, NULL);
+        remote->priv->video_proxysrc, sinkbin, NULL);
     res = gst_bin_add (GST_BIN (priv->playback), remote->priv->vplayback);
     g_assert (res);
-    res = gst_element_link_many (remote->priv->video_proxysrc,
-        remote->priv->video_sink, NULL);
+    res = gst_element_link (remote->priv->video_proxysrc, sinkbin);
     g_assert (res);
   }
 
