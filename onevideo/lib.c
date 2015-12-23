@@ -124,7 +124,7 @@ ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
   remote->addr_s = ov_inet_socket_address_to_string (remote->addr);
 
   name = g_strdup_printf ("receive-%s", remote->addr_s);
-  remote->receive = gst_pipeline_new (name);
+  remote->receive = gst_object_ref_sink (gst_pipeline_new (name));
   g_free (name);
 
   remote->priv = g_new0 (OvRemotePeerPrivate, 1);
@@ -400,11 +400,9 @@ ov_remote_peer_free (OvRemotePeer * remote)
   ov_local_peer_unlock (remote->local);
 
   /* Free relevant bins and pipelines */
-  if (remote->priv->aplayback)
-    gst_object_unref (remote->priv->aplayback);
-  if (remote->priv->vplayback)
-    gst_object_unref (remote->priv->vplayback);
-  gst_object_unref (remote->receive);
+  g_clear_object (&remote->priv->aplayback);
+  g_clear_object (&remote->priv->vplayback);
+  g_clear_object (&remote->receive);
 
   if (remote->priv->recv_acaps)
     gst_caps_unref (remote->priv->recv_acaps);
@@ -412,8 +410,7 @@ ov_remote_peer_free (OvRemotePeer * remote)
     gst_caps_unref (remote->priv->recv_vcaps);
   g_object_unref (remote->addr);
   g_free (remote->addr_s);
-  if (remote->id)
-    g_free (remote->id);
+  g_free (remote->id);
   g_free (remote->priv);
   g_free (remote);
 }

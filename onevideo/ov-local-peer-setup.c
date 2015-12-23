@@ -98,7 +98,7 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
     return TRUE;
 
   /* Setup audio bits */
-  priv->playback = gst_pipeline_new ("playback-%u");
+  priv->playback = gst_object_ref_sink (gst_pipeline_new ("playback-%u"));
   gst_pipeline_set_auto_flush_bus (GST_PIPELINE (priv->playback), FALSE);
   priv->audiomixer = gst_element_factory_make ("audiomixer", NULL);
   priv->audiosink = gst_element_factory_make ("pulsesink", NULL);
@@ -159,7 +159,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     gst_object_unref (priv->transmit);
   }
 
-  priv->transmit = gst_pipeline_new ("transmit-pipeline");
+  priv->transmit = gst_object_ref_sink (gst_pipeline_new ("transmit-pipeline"));
   priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
   g_object_set (priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
 
