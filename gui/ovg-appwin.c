@@ -430,6 +430,7 @@ ovg_app_window_peers_d_rows_clean_timed_out (OvLocalPeer * local,
       gtk_container_remove (GTK_CONTAINER (priv->peers_d),
           GTK_WIDGET (l->data));
     }
+    g_free (addr_s);
   }
 
   g_list_free (children);
@@ -467,7 +468,7 @@ static gboolean
 ovg_app_window_show_peers_video (OvgAppWindow * win)
 {
   OvgAppWindowPrivate *priv;
-  gint videoh, titleh, curw, neww;
+  gint videoh, titleh, neww;
 
   priv = ovg_app_window_get_instance_private (win);
 
