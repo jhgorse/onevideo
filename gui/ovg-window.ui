@@ -32,7 +32,7 @@
         <property name="visible">True</property>
         <property name="can-focus">True</property>
         <property name="orientation">horizontal</property>
-        <property name="halign">start</property>
+        <property name="halign">fill</property>
         <child>
           <object class="GtkBox" id="connect_sidebar">
             <property name="visible">True</property>
