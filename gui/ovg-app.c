@@ -122,9 +122,9 @@ static void
 ovg_app_startup (GApplication * app)
 {
   GList *devices;
+  GstDevice *device;
   GtkBuilder *builder;
   GMenuModel *app_menu;
-  GstDevice *device = NULL;
   const gchar *quit_accels[2] = { "<Ctrl>Q", NULL };
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (app));
 
@@ -161,13 +161,13 @@ ovg_app_startup (GApplication * app)
   }
 
   devices = ov_local_peer_get_video_devices (priv->ov_local);
+  device = GST_DEVICE (devices->data);
   if (device_path != NULL)
 #ifdef __linux__
     device = ov_get_device_from_device_path (devices, device_path);
 #else
     GST_WARNING ("The -d/--device option is not supported on this platform;"
         " selecting the first available video device");
-  device = GST_DEVICE (devices->data);
 #endif
 
   /* This currently always returns TRUE (aborts on error) */
