@@ -45,7 +45,7 @@ fi
 AC_SUBST(plugindir)
 
 # Check for libraries
-PKG_CHECK_MODULES(GLIB, glib-2.0 >= $GLIB_REQ gio-2.0 >= GLIB_REQ)
+PKG_CHECK_MODULES(GLIB, glib-2.0 >= $GLIB_REQ gio-2.0 >= GLIB_REQ gmodule-no-export-2.0)
 PKG_CHECK_MODULES(GST, gstreamer-1.0 >= $GST_REQ)
 PKG_CHECK_MODULES(GTK, gtk+-3.0 >= $GTK_REQ)
 
