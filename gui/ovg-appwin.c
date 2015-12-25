@@ -439,6 +439,41 @@ ovg_app_window_peers_d_rows_clean_timed_out (OvLocalPeer * local,
   return TRUE;
 }
 
+#define MUTE_BUTTON_DEFAULT_OPACITY 0.3
+
+static void
+on_mute_button_clicked (GtkWidget * button, OvRemotePeer * remote)
+{
+  GtkWidget *image = gtk_button_get_image (GTK_BUTTON (button));
+
+  if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (button))) {
+    gtk_image_set_from_icon_name (GTK_IMAGE (image),
+        "audio-volume-muted-symbolic", GTK_ICON_SIZE_BUTTON);
+    ov_remote_peer_set_muted (remote, TRUE);
+  } else {
+    gtk_image_set_from_icon_name (GTK_IMAGE (image),
+        "audio-volume-high-symbolic", GTK_ICON_SIZE_BUTTON);
+    ov_remote_peer_set_muted (remote, FALSE);
+  }
+}
+
+static gboolean
+on_mute_button_entered (GtkWidget * button, GdkEventCrossing * event,
+    gpointer user_data)
+{
+  gtk_widget_set_opacity (button, 1);
+  return FALSE;
+}
+
+static gboolean
+on_mute_button_left (GtkWidget * button, GdkEventCrossing * event,
+    gpointer user_data)
+{
+  if (!gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (button)))
+    gtk_widget_set_opacity (button, MUTE_BUTTON_DEFAULT_OPACITY);
+  return FALSE;
+}
+
 static void
 ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
     GPtrArray * remotes)
@@ -454,15 +489,36 @@ ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
       n_cols);
 
   for (ii = 0; ii < remotes->len; ii++) {
-    GtkWidget *child, *area;
     OvRemotePeer *remote;
+    GtkWidget *child, *overlay, *mute, *area;
 
     remote = g_ptr_array_index (remotes, ii);
 
     child = gtk_flow_box_child_new ();
     area = ov_remote_peer_add_gtkglsink (remote);
     gtk_container_add (GTK_CONTAINER (child), area);
-    gtk_container_add (GTK_CONTAINER (priv->peers_video), child);
+
+    overlay = gtk_overlay_new ();
+    gtk_container_add (GTK_CONTAINER (overlay), child);
+
+    mute = gtk_toggle_button_new ();
+    gtk_widget_set_opacity (mute, MUTE_BUTTON_DEFAULT_OPACITY);
+    gtk_widget_add_events (mute, GDK_ENTER_NOTIFY_MASK | GDK_LEAVE_NOTIFY_MASK);
+    gtk_button_set_image (GTK_BUTTON (mute),
+        gtk_image_new_from_icon_name ("audio-volume-high-symbolic",
+          GTK_ICON_SIZE_BUTTON));
+    g_object_set (G_OBJECT (mute), "halign", GTK_ALIGN_END, "valign",
+        GTK_ALIGN_END, "margin", 10, NULL);
+    gtk_overlay_add_overlay (GTK_OVERLAY (overlay), mute);
+
+    g_signal_connect (mute, "clicked",
+        G_CALLBACK (on_mute_button_clicked), remote);
+    g_signal_connect (mute, "enter-notify-event",
+        G_CALLBACK (on_mute_button_entered), NULL);
+    g_signal_connect (mute, "leave-notify-event",
+        G_CALLBACK (on_mute_button_left), NULL);
+
+    gtk_container_add (GTK_CONTAINER (priv->peers_video), overlay);
   }
 }
 

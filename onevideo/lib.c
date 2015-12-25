@@ -291,6 +291,42 @@ ov_remote_peer_resume (OvRemotePeer * remote)
   GST_DEBUG ("Fully resumed remote peer %s", remote->addr_s);
 }
 
+void
+ov_remote_peer_set_muted (OvRemotePeer * remote, gboolean muted)
+{
+  GstPad *srcpad, *sinkpad;
+
+  g_return_if_fail (remote != NULL);
+
+  srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
+  g_assert (srcpad);
+
+  sinkpad = gst_pad_get_peer (srcpad);
+  g_object_unref (srcpad);
+
+  g_object_set (sinkpad, "mute", muted, NULL);
+  g_object_unref (sinkpad);
+}
+
+gboolean
+ov_remote_peer_get_muted (OvRemotePeer * remote)
+{
+  gboolean muted;
+  GstPad *srcpad, *sinkpad;
+
+  g_return_val_if_fail (remote != NULL, FALSE);
+
+  srcpad = gst_element_get_static_pad (remote->priv->aplayback, "audiopad");
+  g_assert (srcpad);
+
+  sinkpad = gst_pad_get_peer (srcpad);
+  g_object_unref (srcpad);
+
+  g_object_get (sinkpad, "mute", &muted, NULL);
+  g_object_unref (sinkpad);
+  return muted;
+}
+
 /* Does not do any operations that involve taking the OvLocalPeer lock.
  * See: ov_remote_peer_remove() 
  *
