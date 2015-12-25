@@ -698,6 +698,27 @@ ovg_app_window_reset_state (OvgAppWindow * win)
 }
 
 static gboolean
+ovg_app_window_show_scheduled_error (OvgAppWindow * win)
+{
+  gchar *msg;
+  GtkWidget *error;
+  GtkApplication *app;
+
+  app = gtk_window_get_application (GTK_WINDOW (win));
+  msg = ovg_app_get_scheduled_error (OVG_APP (app));
+  if (msg == NULL)
+    return FALSE;
+
+  error = gtk_message_dialog_new (GTK_WINDOW (win),
+      GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+      GTK_BUTTONS_CLOSE, "Error initializing:\n%s", msg);
+
+  gtk_dialog_run (GTK_DIALOG (error));
+  g_application_quit (G_APPLICATION (app));
+  return TRUE;
+}
+
+static gboolean
 setup_window (OvgAppWindow * win)
 {
   OvLocalPeer *local;
@@ -705,6 +726,9 @@ setup_window (OvgAppWindow * win)
 
   app = gtk_window_get_application (GTK_WINDOW (win));
   local = ovg_app_get_ov_local_peer (OVG_APP (app));
+
+  if (ovg_app_window_show_scheduled_error (win))
+    return G_SOURCE_REMOVE;
 
   setup_default_handlers (local, win);
 

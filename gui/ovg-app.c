@@ -46,8 +46,9 @@ struct _OvgAppClass
 
 struct _OvgAppPrivate
 {
-  OvLocalPeer *ov_local;
   GtkWidget *window;
+  OvLocalPeer *ov_local;
+  gchar *scheduled_error;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (OvgApp, ovg_app, GTK_TYPE_APPLICATION);
@@ -94,6 +95,16 @@ on_ovg_app_sigint (GApplication * app)
 #endif
 
 static void
+ovg_app_schedule_error (GApplication * app, const gchar * msg)
+{
+  OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (app));
+
+  g_return_if_fail (priv->scheduled_error == NULL);
+
+  priv->scheduled_error = g_strdup (msg);
+}
+
+static void
 ovg_app_init (OvgApp * app)
 {
   g_set_prgname ("OneVideo");
@@ -122,6 +133,7 @@ ovg_app_startup (GApplication * app)
   GList *devices;
   GstDevice *device;
   GtkBuilder *builder;
+  GHashTable *missing;
   GMenuModel *app_menu;
   const gchar *quit_accels[2] = { "<Ctrl>Q", NULL };
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (app));
@@ -143,19 +155,33 @@ ovg_app_startup (GApplication * app)
 
   /* Initiate OneVideo library; listen on all interfaces and default port */
   gst_init (NULL, NULL);
+  missing = ov_get_missing_gstreamer_plugins ();
+  if (missing != NULL) {
+    GString *msg;
+    GHashTableIter iter;
+    gpointer key, value;
+
+    msg = g_string_new ("The following GStreamer plugins were not found:\n");
+    g_hash_table_iter_init (&iter, missing);
+    while (g_hash_table_iter_next (&iter, &key, &value))
+      g_string_append_printf (msg, "%s (from package %s)\n", (gchar*) key,
+          (gchar*) value);
+    g_hash_table_unref (missing);
+    ovg_app_schedule_error (app, msg->str);
+    g_string_free (msg, TRUE);
+    goto out;
+  }
 
   /* This probes available devices at start, so start-up can be slow */
   priv->ov_local = ov_local_peer_new (iface_name, iface_port);
   if (priv->ov_local == NULL) {
-    /* FIXME: Print some GUI message */
-    g_application_quit (app);
-    return;
+    ovg_app_schedule_error (app, "Unable to create local peer!");
+    goto out;
   }
 
   if (!ov_local_peer_start (priv->ov_local)) {
-    /* FIXME: Print some GUI message */
-    g_application_quit (app);
-    return;
+    ovg_app_schedule_error (app, "Unable to start local peer!");
+    goto out;
   }
 
   devices = ov_local_peer_get_video_devices (priv->ov_local);
@@ -172,6 +198,7 @@ ovg_app_startup (GApplication * app)
   ov_local_peer_set_video_device (priv->ov_local, device);
   g_list_free_full (devices, g_object_unref);
 
+out:
 #ifdef G_OS_UNIX
   g_unix_signal_add (SIGINT, (GSourceFunc) on_ovg_app_sigint, app);
 #endif
@@ -208,6 +235,16 @@ ovg_app_dispose (GObject * object)
 }
 
 static void
+ovg_app_finalize (GObject * object)
+{
+  OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (object));
+
+  g_free (priv->scheduled_error);
+
+  G_OBJECT_CLASS (ovg_app_parent_class)->finalize (object);
+}
+
+static void
 ovg_app_class_init (OvgAppClass * class)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (class);
@@ -219,6 +256,7 @@ ovg_app_class_init (OvgAppClass * class)
   application_class->shutdown = ovg_app_shutdown;
 
   object_class->dispose = ovg_app_dispose;
+  object_class->finalize = ovg_app_finalize;
 }
 
 OvgApp *
@@ -235,8 +273,16 @@ ovg_app_get_ov_local_peer (OvgApp * app)
   OvgAppPrivate *priv;
 
   g_return_val_if_fail (OVG_IS_APP (app), NULL);
-
   priv = ovg_app_get_instance_private (app);
-
   return priv->ov_local;
+}
+
+gchar *
+ovg_app_get_scheduled_error (OvgApp * app)
+{
+  OvgAppPrivate *priv;
+
+  g_return_val_if_fail (OVG_IS_APP (app), NULL);
+  priv = ovg_app_get_instance_private (app);
+  return priv->scheduled_error;
 }
