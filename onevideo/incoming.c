@@ -617,7 +617,7 @@ ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output
   GST_DEBUG ("Removing remote peer %s from the call", remote->id);
 
   /* Remove the specified peer from the call */
-  ov_remote_peer_remove (remote);
+  ov_local_peer_remove_remote (local, remote);
 
   /* TODO: Implement partial call continuation */
 #if 0

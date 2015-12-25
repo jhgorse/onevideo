@@ -65,7 +65,7 @@ found_remote_cb (OvLocalPeer * local, OvDiscoveredPeer * d,
 static gboolean
 kill_remote_peer (OvRemotePeer * remote)
 {
-  ov_remote_peer_remove (remote);
+  ov_local_peer_remove_remote (remote->local, remote);
   g_main_loop_quit (loop);
 
   return G_SOURCE_REMOVE;

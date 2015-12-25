@@ -46,6 +46,8 @@ void                ov_local_peer_discovery_stop    (OvLocalPeer *local);
 /* Setup, negotiation, and calling */
 void                ov_local_peer_add_remote        (OvLocalPeer *local,
                                                      OvRemotePeer *remote);
+void                ov_local_peer_remove_remote     (OvLocalPeer *local,
+                                                     OvRemotePeer *remote);
 gboolean            ov_local_peer_start             (OvLocalPeer *local);
 /* Asynchronously negotiate with all setup remote peers */
 gboolean            ov_local_peer_negotiate_start   (OvLocalPeer *local);
@@ -66,7 +68,6 @@ void                ov_remote_peer_set_muted          (OvRemotePeer *remote,
 gboolean            ov_remote_peer_get_muted          (OvRemotePeer *remote);
 void                ov_remote_peer_pause              (OvRemotePeer *remote);
 void                ov_remote_peer_resume             (OvRemotePeer *remote);
-void                ov_remote_peer_remove             (OvRemotePeer *remote);
 
 GPtrArray*          ov_local_peer_get_remotes         (OvLocalPeer *local);
 OvRemotePeer*       ov_local_peer_get_remote_by_id    (OvLocalPeer *local,

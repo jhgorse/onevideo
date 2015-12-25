@@ -328,10 +328,10 @@ ov_remote_peer_get_muted (OvRemotePeer * remote)
 }
 
 /* Does not do any operations that involve taking the OvLocalPeer lock.
- * See: ov_remote_peer_remove() 
+ * See: ov_local_peer_remove_remote() 
  *
  * NOT a public symbol */
-void
+static void
 ov_remote_peer_remove_not_array (OvRemotePeer * remote)
 {
   gboolean res;
@@ -401,20 +401,6 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
   ov_remote_peer_free (remote);
   GST_DEBUG ("Freed everything for remote peer %s", tmp);
   g_free (tmp);
-}
-
-void
-ov_remote_peer_remove (OvRemotePeer * remote)
-{
-  OvLocalPeerPrivate *local_priv;
-  
-  ov_local_peer_lock (remote->local);
-  local_priv = ov_local_peer_get_private (remote->local);
-  /* Remove from the peers list first so nothing else tries to use it */
-  g_ptr_array_remove (local_priv->remote_peers, remote);
-  ov_local_peer_unlock (remote->local);
-
-  ov_remote_peer_remove_not_array (remote);
 }
 
 void
@@ -899,6 +885,20 @@ ov_local_peer_setup_remote (OvLocalPeer * local, OvRemotePeer * remote)
   remote->state = OV_REMOTE_STATE_READY;
 
   return TRUE;
+}
+
+void
+ov_local_peer_remove_remote (OvLocalPeer * local, OvRemotePeer * remote)
+{
+  OvLocalPeerPrivate *local_priv;
+  
+  ov_local_peer_lock (local);
+  local_priv = ov_local_peer_get_private (local);
+  /* Remove from the peers list first so nothing else tries to use it */
+  g_ptr_array_remove (local_priv->remote_peers, remote);
+  ov_local_peer_unlock (local);
+
+  ov_remote_peer_remove_not_array (remote);
 }
 
 gboolean
