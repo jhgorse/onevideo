@@ -183,7 +183,7 @@ static struct {
   { "audiomixer", OV_PACKAGE_BAD },
   { "gstgtk",     OV_PACKAGE_BAD },
   { "opengl",     OV_PACKAGE_BAD },
-  { "lpus",       OV_PACKAGE_BAD },
+  { "opus",       OV_PACKAGE_BAD },
 };
 
 GHashTable *
