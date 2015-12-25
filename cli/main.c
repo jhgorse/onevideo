@@ -306,6 +306,7 @@ main (int   argc,
 {
   OvLocalPeer *local;
   GOptionContext *optctx;
+  GHashTable *missing;
   GError *error = NULL;
   GList *devices;
 
@@ -347,6 +348,20 @@ main (int   argc,
     return -1;
   }
   g_option_context_free (optctx);
+
+  /* Ensure that we have all the gstreamer plugins needed */
+  missing = ov_get_missing_gstreamer_plugins ();
+  if (missing != NULL) {
+    gpointer key, value;
+    GHashTableIter iter;
+
+    g_printerr ("The following GStreamer plugins could not be found:\n");
+    g_hash_table_iter_init (&iter, missing);
+    while (g_hash_table_iter_next (&iter, &key, &value))
+      g_printerr ("\tplugin %s,\tpackage %s\n", (gchar*) key, (gchar*) value);
+    g_hash_table_unref (missing);
+    return -1;
+  }
 
   loop = g_main_loop_new (NULL, FALSE);
 
