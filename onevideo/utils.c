@@ -171,19 +171,25 @@ ov_get_device_from_device_path (GList * devices, const gchar * device_path)
 #define OV_PACKAGE_UGLY "gst-plugins-ugly"
 
 static struct {
-  const gchar *plugin_name;
+  const gchar *feature_name;
   const gchar *package_name;
 } plugins_req[] = {
-  { "jpeg",       OV_PACKAGE_GOOD },
-  { "pulseaudio", OV_PACKAGE_GOOD },
-  { "rtp",        OV_PACKAGE_GOOD },
-  { "rtpmanager", OV_PACKAGE_GOOD },
-  { "udp",        OV_PACKAGE_GOOD },
+  { "jpegenc",            OV_PACKAGE_GOOD },
+  { "jpegdec",            OV_PACKAGE_GOOD },
+  { "pulsesrc",           OV_PACKAGE_GOOD },
+  { "pulsesink",          OV_PACKAGE_GOOD },
+  { "rtpjpegpay",         OV_PACKAGE_GOOD },
+  { "rtpjpegdepay",       OV_PACKAGE_GOOD },
+  { "rtpbin",             OV_PACKAGE_GOOD },
+  { "udpsink",            OV_PACKAGE_GOOD },
+  { "udpsrc",             OV_PACKAGE_GOOD },
 
-  { "audiomixer", OV_PACKAGE_BAD },
-  { "gstgtk",     OV_PACKAGE_BAD },
-  { "opengl",     OV_PACKAGE_BAD },
-  { "opus",       OV_PACKAGE_BAD },
+  { "audiomixer",         OV_PACKAGE_BAD },
+  { "glimagesinkelement", OV_PACKAGE_BAD },
+  { "glsinkbin",          OV_PACKAGE_BAD },
+  { "gtkglsink",          OV_PACKAGE_BAD },
+  { "opusenc",            OV_PACKAGE_BAD },
+  { "opusdec",            OV_PACKAGE_BAD },
 };
 
 GHashTable *
@@ -202,15 +208,10 @@ ov_get_missing_gstreamer_plugins (void)
   missing = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
   for (ii = 0; ii < G_N_ELEMENTS (plugins_req); ii++) {
-    GstPlugin *plugin;
-
-    plugin = gst_registry_find_plugin (reg, plugins_req[ii].plugin_name);
-    if (plugin != NULL) {
-      g_object_unref (plugin);
+    if (gst_registry_check_feature_version (reg, plugins_req[ii].feature_name,
+          1, 6, 0))
       continue;
-    }
-
-    g_hash_table_insert (missing, g_strdup (plugins_req[ii].plugin_name),
+    g_hash_table_insert (missing, g_strdup (plugins_req[ii].feature_name),
         g_strdup (plugins_req[ii].package_name));
   }
 
