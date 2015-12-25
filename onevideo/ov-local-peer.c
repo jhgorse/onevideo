@@ -546,3 +546,21 @@ out:
 
   return TRUE;
 }
+
+/*~~ Call Properties ~~*/
+
+void
+ov_local_peer_set_volume (OvLocalPeer * local, gdouble volume)
+{
+  gdouble converted_volume;
+  OvLocalPeerPrivate *priv;
+
+  priv = ov_local_peer_get_private (local);
+  if (volume > 1.0)
+    /* Linearly convert a volume between (1.0, 2.0) to (1.0, 10.0) */
+    converted_volume = 1 + (volume - 1) * 9;
+  else
+    converted_volume = volume;
+  /* XXX: This assumes that pulsesink is being used */
+  g_object_set (priv->audiosink, "volume", converted_volume, NULL);
+}

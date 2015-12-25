@@ -97,6 +97,8 @@ enum _OvLocalPeerState {
 OvLocalPeer*          ov_local_peer_new           (const gchar *iface,
                                                    guint16 port);
 OvLocalPeerState      ov_local_peer_get_state     (OvLocalPeer *self);
+void                  ov_local_peer_set_volume    (OvLocalPeer *self,
+                                                   gdouble volume);
 
 G_END_DECLS
 
