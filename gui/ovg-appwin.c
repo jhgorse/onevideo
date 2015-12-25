@@ -51,6 +51,8 @@ struct _OvgAppWindowClass
 struct _OvgAppWindowPrivate
 {
   GtkWidget *header_bar;
+  GtkWidget *volume_scale;
+  GtkWidget *volume_image;
   GtkWidget *end_call;
 
   GtkWidget *outer_box;
@@ -479,6 +481,8 @@ ovg_app_window_show_peers_video (OvgAppWindow * win)
   gtk_header_bar_set_title (GTK_HEADER_BAR (priv->header_bar),
       CALL_WINDOW_TITLE);
   gtk_widget_show_all (priv->peers_video);
+  gtk_widget_show (priv->volume_scale);
+  gtk_widget_show (priv->volume_image);
   gtk_widget_show (priv->end_call);
 
   /* Set window resizable and set a better size for it */
@@ -608,6 +612,8 @@ ovg_app_window_reset_state (OvgAppWindow * win)
 
   /* Hide */
   gtk_widget_hide (priv->end_call);
+  gtk_widget_hide (priv->volume_scale);
+  gtk_widget_hide (priv->volume_image);
   gtk_widget_hide (priv->peers_video);
 
   /* Remove old flowbox children */
@@ -697,6 +703,32 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
 }
 
 static void
+on_volume_changed (OvgAppWindow * win, GtkRange * scale)
+{
+  gdouble volume;
+  OvLocalPeer *local;
+  GtkApplication *app;
+  OvgAppWindowPrivate *priv;
+
+  priv = ovg_app_window_get_instance_private (win);
+  app = gtk_window_get_application (GTK_WINDOW (win));
+  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+
+  volume = gtk_range_get_value (scale);
+  ov_local_peer_set_volume (local, volume);
+
+  if (volume > 1.5)
+    gtk_image_set_from_icon_name (GTK_IMAGE (priv->volume_image),
+        "audio-volume-high-symbolic", GTK_ICON_SIZE_BUTTON);
+  else if (volume < 0.5)
+    gtk_image_set_from_icon_name (GTK_IMAGE (priv->volume_image),
+        "audio-volume-low-symbolic", GTK_ICON_SIZE_BUTTON);
+  else
+    gtk_image_set_from_icon_name (GTK_IMAGE (priv->volume_image),
+        "audio-volume-medium-symbolic", GTK_ICON_SIZE_BUTTON);
+}
+
+static void
 on_end_call_button_clicked (OvgAppWindow * win, GtkButton * b)
 {
   GtkApplication *app;
@@ -732,6 +764,9 @@ ovg_app_window_init (OvgAppWindow * win)
   g_idle_add ((GSourceFunc) setup_window, win);
 }
 
+#define ovg_bind_private gtk_widget_class_bind_template_child_private
+#define ovg_bind_callback gtk_widget_class_bind_template_callback
+
 static void
 ovg_app_window_class_init (OvgAppWindowClass *class)
 {
@@ -740,40 +775,27 @@ ovg_app_window_class_init (OvgAppWindowClass *class)
   gtk_widget_class_set_template_from_resource (widget_class,
       "/org/gtk/OneVideoGui/ovg-window.ui");
 
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      header_bar);
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      end_call);
+  ovg_bind_private (widget_class, OvgAppWindow, header_bar);
+  ovg_bind_private (widget_class, OvgAppWindow, volume_scale);
+  ovg_bind_private (widget_class, OvgAppWindow, volume_image);
+  ovg_bind_private (widget_class, OvgAppWindow, end_call);
 
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      outer_box);
+  ovg_bind_private (widget_class, OvgAppWindow, outer_box);
+  ovg_bind_private (widget_class, OvgAppWindow, connect_sidebar);
+  ovg_bind_private (widget_class, OvgAppWindow, peers_d);
+  ovg_bind_private (widget_class, OvgAppWindow, peers_c);
+  ovg_bind_private (widget_class, OvgAppWindow, peer_entry);
+  ovg_bind_private (widget_class, OvgAppWindow, peer_entry_button);
+  ovg_bind_private (widget_class, OvgAppWindow, start_call);
 
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      connect_sidebar);
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      peers_d);
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      peers_c);
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      peer_entry);
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      peer_entry_button);
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      start_call);
+  ovg_bind_private (widget_class, OvgAppWindow, peers_video);
 
-  gtk_widget_class_bind_template_child_private (widget_class, OvgAppWindow,
-      peers_video);
-
-  gtk_widget_class_bind_template_callback (widget_class,
-      on_peer_entry_button_clicked);
-  gtk_widget_class_bind_template_callback (widget_class,
-      on_peer_entry_text_changed);
-  gtk_widget_class_bind_template_callback (widget_class,
-      on_peer_entry_clear_pressed);
-  gtk_widget_class_bind_template_callback (widget_class,
-      on_call_peers_button_clicked);
-  gtk_widget_class_bind_template_callback (widget_class,
-      on_end_call_button_clicked);
+  ovg_bind_callback (widget_class, on_peer_entry_button_clicked);
+  ovg_bind_callback (widget_class, on_peer_entry_text_changed);
+  ovg_bind_callback (widget_class, on_peer_entry_clear_pressed);
+  ovg_bind_callback (widget_class, on_call_peers_button_clicked);
+  ovg_bind_callback (widget_class, on_volume_changed);
+  ovg_bind_callback (widget_class, on_end_call_button_clicked);
 }
 
 GtkWidget *

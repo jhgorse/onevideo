@@ -25,6 +25,36 @@
             <property name="pack_type">end</property>
           </packing>
         </child>
+        <child>
+          <object class="GtkAdjustment" id="volume_adj">
+            <property name="lower">0.0</property>
+            <property name="upper">2.0</property>
+            <property name="value">1.0</property>
+          </object>
+          <object class="GtkScale" id="volume_scale">
+            <property name="visible">False</property>
+            <property name="adjustment">volume_adj</property>
+            <property name="orientation">horizontal</property>
+            <property name="width-request">150</property>
+            <property name="draw-value">False</property>
+            <property name="round-digits">2</property>
+            <signal name="value-changed" handler="on_volume_changed" object="OvgAppWindow" swapped="yes"/>
+          </object>
+          <packing>
+            <property name="pack_type">end</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkImage" id="volume_image">
+            <property name="visible">False</property>
+            <property name="can-focus">False</property>
+            <property name="icon-name">audio-volume-medium-symbolic</property>
+            <property name="icon-size">4</property>
+          </object>
+          <packing>
+            <property name="pack_type">end</property>
+          </packing>
+        </child>
       </object>
     </child>
     <child>
