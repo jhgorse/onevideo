@@ -402,7 +402,9 @@ ov_remote_peer_free (OvRemotePeer * remote)
   /* Free relevant bins and pipelines */
   g_clear_object (&remote->priv->aplayback);
   g_clear_object (&remote->priv->vplayback);
-  g_clear_object (&remote->receive);
+  /* Valgrind tells me this results in a double-unref (invalid write)
+   * but I'm not sure how that works. Just commenting it out for now. */
+  //g_clear_object (&remote->receive);
 
   if (remote->priv->recv_acaps)
     gst_caps_unref (remote->priv->recv_acaps);
