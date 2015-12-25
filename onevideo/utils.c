@@ -26,8 +26,8 @@
  */
 
 #include "lib.h"
-#include "lib-priv.h"
 #include "utils.h"
+#include "lib-priv.h"
 
 #include <string.h>
 
@@ -164,6 +164,64 @@ ov_get_device_from_device_path (GList * devices, const gchar * device_path)
   return NULL;
 }
 #endif
+
+#define OV_PACKAGE_BASE "gst-plugins-base"
+#define OV_PACKAGE_GOOD "gst-plugins-good"
+#define OV_PACKAGE_BAD  "gst-plugins-bad"
+#define OV_PACKAGE_UGLY "gst-plugins-ugly"
+
+static struct {
+  const gchar *plugin_name;
+  const gchar *package_name;
+} plugins_req[] = {
+  { "jpeg",       OV_PACKAGE_GOOD },
+  { "pulseaudio", OV_PACKAGE_GOOD },
+  { "rtp",        OV_PACKAGE_GOOD },
+  { "rtpmanager", OV_PACKAGE_GOOD },
+  { "udp",        OV_PACKAGE_GOOD },
+
+  { "audiomixer", OV_PACKAGE_BAD },
+  { "gstgtk",     OV_PACKAGE_BAD },
+  { "opengl",     OV_PACKAGE_BAD },
+  { "lpus",       OV_PACKAGE_BAD },
+};
+
+GHashTable *
+ov_get_missing_gstreamer_plugins (void)
+{
+  int ii;
+  GstRegistry *reg;
+  GHashTable *missing;
+
+  if (!gst_is_initialized ()) {
+    g_printerr ("Must initialize GStreamer before calling this!\n");
+    return NULL;
+  }
+
+  reg = gst_registry_get ();
+  missing = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+  for (ii = 0; ii < G_N_ELEMENTS (plugins_req); ii++) {
+    GstPlugin *plugin;
+
+    plugin = gst_registry_find_plugin (reg, plugins_req[ii].plugin_name);
+    if (plugin != NULL) {
+      g_object_unref (plugin);
+      continue;
+    }
+
+    g_hash_table_insert (missing, g_strdup (plugins_req[ii].plugin_name),
+        g_strdup (plugins_req[ii].package_name));
+  }
+
+  if (g_hash_table_size (missing) > 0)
+    return missing;
+  
+  g_hash_table_unref (missing);
+  return NULL;
+}
+
+/* OS-specific implementations */
 
 #ifdef G_OS_UNIX
 
