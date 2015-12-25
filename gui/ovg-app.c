@@ -47,6 +47,7 @@ struct _OvgAppClass
 struct _OvgAppPrivate
 {
   OvLocalPeer *ov_local;
+  GtkWidget *window;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (OvgApp, ovg_app, GTK_TYPE_APPLICATION);
@@ -104,18 +105,15 @@ ovg_app_init (OvgApp * app)
 static void
 ovg_app_activate (GApplication * app)
 {
-  GList *l;
-  GtkWidget *win;
+  OvgAppPrivate *priv;
 
   g_return_if_fail (OVG_IS_APP (app));
+  
+  priv = ovg_app_get_instance_private (OVG_APP (app));
+  if (!OVG_IS_APP_WINDOW (priv->window))
+    priv->window = ovg_app_window_new (OVG_APP (app));
 
-  l = gtk_application_get_windows (GTK_APPLICATION (app));
-  for (; l; l = l->next)
-    if (OVG_IS_APP_WINDOW (l->data))
-      return gtk_window_present (GTK_WINDOW (l->data));
-
-  win = ovg_app_window_new (OVG_APP (app));
-  gtk_window_present (GTK_WINDOW (win));
+  gtk_window_present (GTK_WINDOW (priv->window));
 }
 
 static void
@@ -203,6 +201,7 @@ ovg_app_dispose (GObject * object)
 {
   OvgAppPrivate *priv = ovg_app_get_instance_private (OVG_APP (object));
 
+  g_clear_object (&priv->window);
   g_clear_object (&priv->ov_local);
 
   G_OBJECT_CLASS (ovg_app_parent_class)->dispose (object);
