@@ -159,7 +159,7 @@ ovg_app_startup (GApplication * app)
   }
 
   devices = ov_local_peer_get_video_devices (priv->ov_local);
-  device = GST_DEVICE (devices->data);
+  device = devices ? GST_DEVICE (devices->data) : NULL;
   if (device_path != NULL)
 #ifdef __linux__
     device = ov_get_device_from_device_path (devices, device_path);
