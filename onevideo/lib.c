@@ -605,7 +605,7 @@ ov_local_peer_discovery_send (OvLocalPeer * local, GError ** error)
   if (!ret)
     return ret;
 
-  g_signal_emit (local, ov_local_peer_signals[DISCOVERY_SENT], 0);
+  g_signal_emit_by_name (local, "discovery-sent");
 
   return G_SOURCE_CONTINUE;
 }
@@ -665,7 +665,7 @@ on_incoming_discovery_reply (GSocket * socket, GIOCondition condition,
   GST_TRACE ("Found a remote peer: %s; emitting signal", addr_s);
   g_free (addr_s);
 
-  g_signal_emit (local, ov_local_peer_signals[PEER_DISCOVERED], 0, d);
+  g_signal_emit_by_name (local, "peer-discovered", d);
   g_object_unref (d);
 
 out:

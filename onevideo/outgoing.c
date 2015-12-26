@@ -680,8 +680,7 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
       
       /* Unlock local and emit signal */
       ov_local_peer_unlock (local);
-      g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_SKIPPED_REMOTE], 0,
-          skipped, error);
+      g_signal_emit_by_name (local, "negotiate-skipped-remote", skipped, error);
       ov_local_peer_lock (local);
 
       g_object_unref (skipped);
@@ -703,7 +702,7 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
   ov_local_peer_unlock (local);
 
   /* Emit signal after unlocking */
-  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_STARTED], 0);
+  g_signal_emit_by_name (local, "negotiate-started");
 
   ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable))
@@ -807,7 +806,7 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
   local_priv->negotiator_task = NULL;
 
   /* Emit signal after unlocking */
-  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_FINISHED], 0);
+  g_signal_emit_by_name (local, "negotiate-finished");
   return;
 
   /* Called with the lock TAKEN */
@@ -830,7 +829,7 @@ cancelled:
   local_priv->negotiator_task = NULL;
 
   /* Emit signal after unlocking. FIXME: Set the error. */
-  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_ABORTED], 0, error);
+  g_signal_emit_by_name (local, "negotiate-aborted", error);
   g_error_free (error);
   return;
 }

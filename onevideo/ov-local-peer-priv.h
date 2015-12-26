@@ -33,21 +33,6 @@
 
 G_BEGIN_DECLS
 
-enum
-{
-  DISCOVERY_SENT,
-  PEER_DISCOVERED,
-  NEGOTIATE_INCOMING,
-  NEGOTIATE_STARTED,
-  NEGOTIATE_SKIPPED_REMOTE,
-  NEGOTIATE_FINISHED,
-  NEGOTIATE_ABORTED,
-  CALL_REMOTES_HUNGUP,
-  OV_LOCAL_PEER_N_SIGNALS
-};
-
-extern guint ov_local_peer_signals[OV_LOCAL_PEER_N_SIGNALS];
-
 typedef struct _OvNegotiate OvNegotiate;
 
 struct _OvNegotiate {

@@ -41,6 +41,21 @@ enum
   N_PROPERTIES
 };
 
+enum
+{
+  DISCOVERY_SENT,
+  PEER_DISCOVERED,
+  NEGOTIATE_INCOMING,
+  NEGOTIATE_STARTED,
+  NEGOTIATE_SKIPPED_REMOTE,
+  NEGOTIATE_FINISHED,
+  NEGOTIATE_ABORTED,
+  CALL_REMOTES_HUNGUP,
+  OV_LOCAL_PEER_N_SIGNALS
+};
+
+static guint signals[OV_LOCAL_PEER_N_SIGNALS];
+
 OvLocalPeerPrivate* ov_local_peer_get_private (OvLocalPeer *self);
 static void ov_local_peer_dispose (GObject *object);
 static void ov_local_peer_finalize (GObject *object);
@@ -100,7 +115,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    *
    * Emissions of this signal are guaranteed to happen from the main thread.
    **/
-  ov_local_peer_signals[DISCOVERY_SENT] =
+  signals[DISCOVERY_SENT] =
     g_signal_new ("discovery-sent", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_FIRST,
         G_STRUCT_OFFSET (OvLocalPeerClass, discovery_sent),
@@ -118,7 +133,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    *
    * Emissions of this signal are guaranteed to happen from the main thread.
    **/
-  ov_local_peer_signals[PEER_DISCOVERED] =
+  signals[PEER_DISCOVERED] =
     g_signal_new ("peer-discovered", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_FIRST,
         G_STRUCT_OFFSET (OvLocalPeerClass, peer_discovered),
@@ -139,7 +154,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    *
    * Returns: %TRUE if the incoming call was accepted
    **/
-  ov_local_peer_signals[NEGOTIATE_INCOMING] =
+  signals[NEGOTIATE_INCOMING] =
     g_signal_new ("negotiate-incoming", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_incoming),
@@ -167,7 +182,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * negotiation is cancelled by calling ov_local_peer_negotiate_cancel(),
    * #OvLocalPeer::negotiate_aborted is emitted.
    **/
-  ov_local_peer_signals[NEGOTIATE_STARTED] =
+  signals[NEGOTIATE_STARTED] =
     g_signal_new ("negotiate-started", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_FIRST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_started),
@@ -186,7 +201,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * negotiation. If all remote peers fail to respond,
    * #OvLocalPeer::negotiate_aborted is also emitted in the end.
    **/
-  ov_local_peer_signals[NEGOTIATE_SKIPPED_REMOTE] =
+  signals[NEGOTIATE_SKIPPED_REMOTE] =
     g_signal_new ("negotiate-skipped-remote", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_skipped_remote),
@@ -203,7 +218,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * Emitted when the local peer finishes negotiation successfully and the call
    * can be started by invoking ov_local_peer_call_start()
    **/
-  ov_local_peer_signals[NEGOTIATE_FINISHED] =
+  signals[NEGOTIATE_FINISHED] =
     g_signal_new ("negotiate-finished", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_finished),
@@ -221,7 +236,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * because negotiation was cancelled by calling
    * ov_local_peer_negotiate_cancel().
    **/
-  ov_local_peer_signals[NEGOTIATE_ABORTED] =
+  signals[NEGOTIATE_ABORTED] =
     g_signal_new ("negotiate-aborted", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_aborted),
@@ -242,7 +257,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * emitted as soon as any remote hangs up because implementing partial call
    * continuation is on the TODO list.
    **/
-  ov_local_peer_signals[CALL_REMOTES_HUNGUP] =
+  signals[CALL_REMOTES_HUNGUP] =
     g_signal_new ("call-remotes-hungup", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, call_remotes_hungup),

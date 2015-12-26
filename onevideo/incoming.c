@@ -54,7 +54,7 @@ check_negotiate_timeout (OvLocalPeer * local)
     ov_local_peer_set_state_timedout (local);
     ov_local_peer_negotiate_abort (local);
     timeout_value = 0;
-    g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_ABORTED], 0, NULL);
+    g_signal_emit_by_name (local, "negotiate-aborted", NULL);
     return G_SOURCE_REMOVE;
   }
 
@@ -105,8 +105,7 @@ ov_local_peer_handle_start_negotiate (OvLocalPeer * local,
   g_object_unref (remote_addr);
 
   incoming = ov_peer_new (G_INET_SOCKET_ADDRESS (negotiator_addr));
-  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_INCOMING], 0, incoming,
-      &ret);
+  g_signal_emit_by_name (local, "negotiate-incoming", incoming, &ret);
   g_object_unref (incoming);
   if (!ret) {
     reply = ov_tcp_msg_new_error (msg->id, "Refused");
@@ -187,7 +186,7 @@ send_reply:
   ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
   if (ret)
-    g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_ABORTED], 0, NULL);
+    g_signal_emit_by_name (local, "negotiate-aborted", NULL);
 
   ov_tcp_msg_free (reply);
   return ret;
@@ -323,7 +322,7 @@ ov_local_peer_handle_query_reply_caps (OvLocalPeer * local,
   g_free (send_acaps); g_free (send_vcaps);
   g_free (recv_acaps); g_free (recv_vcaps);
 
-  g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_STARTED], 0);
+  g_signal_emit_by_name (local, "negotiate-started");
 
   tmp = g_variant_print (reply->variant, FALSE);
   GST_DEBUG ("Replying to 'query caps' with %s", tmp);
@@ -573,7 +572,7 @@ send_reply:
   ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
   /* Emit signal after unlocking and after writing the reply */
   if (ret)
-    g_signal_emit (local, ov_local_peer_signals[NEGOTIATE_FINISHED], 0);
+    g_signal_emit_by_name (local, "negotiate-finished");
 
   ov_tcp_msg_free (reply);
   return ret;
@@ -641,7 +640,7 @@ send_reply:
 
   /* Emit signal after unlocking and after writing the reply */
   if (ret)
-    g_signal_emit (local, ov_local_peer_signals[CALL_REMOTES_HUNGUP], 0);
+    g_signal_emit_by_name (local, "call-remotes-hungup");
 
   ov_tcp_msg_free (reply);
   g_free (peer_id);
