@@ -35,6 +35,13 @@
 
 #include <string.h>
 
+/* The default buffer size for kernel-side UDP send/recv buffers varies
+ * between operating systems and installations. It's not unusual that
+ * these are smaller than the size of a single jpeg from a HD webcam,
+ * which is a problem, so try to make them larger if possible at all. */
+#define OV_VIDEO_SEND_BUFSIZE (2 * 1024 * 1024)
+#define OV_VIDEO_RECV_BUFSIZE (2 * 1024 * 1024)
+
 void
 ov_on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer user_data)
 {
@@ -205,6 +212,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);
   vsink = gst_element_factory_make ("udpsink", "vsend_rtp_sink");
+  g_object_set (vsink, "buffer-size", OV_VIDEO_SEND_BUFSIZE, NULL);
   /* Send RTCP SR for video (same packets for all peers) */
   vrtcpqueue = gst_element_factory_make ("queue", NULL);
   vrtcpsink = gst_element_factory_make ("udpsink", "vsend_rtcp_sink");
@@ -487,6 +495,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   socket = ov_get_socket_for_addr (local_addr_s,
       remote->priv->recv_ports[2]);
   vsrc = gst_element_factory_make ("udpsrc", "vrecv_rtp_src-%u");
+  g_object_set (vsrc, "buffer-size", OV_VIDEO_RECV_BUFSIZE, NULL);
   /* The depayloader will detect the height/width/framerate on the fly
    * This allows us to change that without communicating new caps
    * TODO: This hard-codes JPEG right now. Choose based on priv->recv_vcaps. */
