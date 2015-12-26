@@ -7,8 +7,6 @@ Items marked with a ★ are high priority
  - Retry sending of important messages
 
 * Asynchronous
- - All API is currently synchronous; add async when working on GUI once more of
-   the interactions have been mapped out and coded
  - Network communication is blocking and synchronous internally. Some of that
    should be asynchronous (it's all run in a separate thread so not a big issue
    right now)
@@ -55,8 +53,6 @@ Items marked with a ★ are high priority
      such as changing the resolution of the outputted JPEG
    + TODO: Only set generic caps without resolution for video and let the
      depayloader detect it at runtime. This works for JPEG, not sure about H.264
- - Add signals (move from structs to GObjects for OneVideo*Peer objects?) for
-   things like negotiation-done, remote-added, remote-removed, call-ended, etc.
    
 * Device probing/monitoring
  - GstDeviceMonitor API does not have a way to query whether a device is under
