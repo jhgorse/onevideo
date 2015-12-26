@@ -35,6 +35,8 @@
 
 #include <string.h>
 
+guint ov_local_peer_signals[OV_LOCAL_PEER_N_SIGNALS];
+
 void
 ov_on_gst_bus_error (GstBus * bus, GstMessage * msg, gpointer user_data)
 {

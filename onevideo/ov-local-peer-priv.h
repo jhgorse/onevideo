@@ -46,7 +46,7 @@ enum
   OV_LOCAL_PEER_N_SIGNALS
 };
 
-guint ov_local_peer_signals[OV_LOCAL_PEER_N_SIGNALS];
+extern guint ov_local_peer_signals[OV_LOCAL_PEER_N_SIGNALS];
 
 typedef struct _OvNegotiate OvNegotiate;
 
