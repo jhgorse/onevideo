@@ -350,7 +350,7 @@ main (int   argc,
   g_option_context_free (optctx);
 
   /* Ensure that we have all the gstreamer plugins needed */
-  missing = ov_get_missing_gstreamer_plugins ();
+  missing = ov_get_missing_gstreamer_plugins (NULL);
   if (missing != NULL) {
     gpointer key, value;
     GHashTableIter iter;

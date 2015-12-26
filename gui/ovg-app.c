@@ -155,7 +155,7 @@ ovg_app_startup (GApplication * app)
 
   /* Initiate OneVideo library; listen on all interfaces and default port */
   gst_init (NULL, NULL);
-  missing = ov_get_missing_gstreamer_plugins ();
+  missing = ov_get_missing_gstreamer_plugins ("gtk");
   if (missing != NULL) {
     GString *msg;
     GHashTableIter iter;

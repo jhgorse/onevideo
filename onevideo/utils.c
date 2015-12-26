@@ -159,7 +159,8 @@ ov_get_device_from_device_path (GList * devices, const gchar * device_path)
         " match with specified device path! Falling back to using the test"
         " video source. Upgrade GStreamer or choose the device yourself.");
   else
-    GST_ERROR ("Selected device path '%s' wasn't found", device_path);
+    GST_ERROR ("Selected device path '%s' wasn't found. Falling back to"
+        " using the test video source.", device_path);
 
   return NULL;
 }
@@ -170,10 +171,12 @@ ov_get_device_from_device_path (GList * devices, const gchar * device_path)
 #define OV_PACKAGE_BAD  "gst-plugins-bad"
 #define OV_PACKAGE_UGLY "gst-plugins-ugly"
 
-static struct {
+struct plugin_names {
   const gchar *feature_name;
   const gchar *package_name;
-} plugins_req[] = {
+};
+
+static struct plugin_names plugins_req[] = {
   { "jpegenc",            OV_PACKAGE_GOOD },
   { "jpegdec",            OV_PACKAGE_GOOD },
   { "pulsesrc",           OV_PACKAGE_GOOD },
@@ -185,15 +188,16 @@ static struct {
   { "udpsrc",             OV_PACKAGE_GOOD },
 
   { "audiomixer",         OV_PACKAGE_BAD },
-  { "glimagesinkelement", OV_PACKAGE_BAD },
-  { "glsinkbin",          OV_PACKAGE_BAD },
-  { "gtkglsink",          OV_PACKAGE_BAD },
+  { "glimagesink",        OV_PACKAGE_BAD },
   { "opusenc",            OV_PACKAGE_BAD },
   { "opusdec",            OV_PACKAGE_BAD },
 };
 
+static struct plugin_names plugins_gtk = { "gtkglsink", OV_PACKAGE_BAD };
+static struct plugin_names plugins_gtk_alt = { "gtksink", OV_PACKAGE_BAD };
+
 GHashTable *
-ov_get_missing_gstreamer_plugins (void)
+ov_get_missing_gstreamer_plugins (const gchar * toolkit)
 {
   int ii;
   GstRegistry *reg;
@@ -213,6 +217,20 @@ ov_get_missing_gstreamer_plugins (void)
       continue;
     g_hash_table_insert (missing, g_strdup (plugins_req[ii].feature_name),
         g_strdup (plugins_req[ii].package_name));
+  }
+
+  /* If neither gtlgksink nor gtksink are found,
+   * then return both as missing plugins */
+  if (toolkit != NULL &&
+      g_strcmp0 (toolkit, "gtk") == 0 &&
+      !gst_registry_check_feature_version (reg, plugins_gtk.feature_name,
+        1, 6, 0) &&
+      !gst_registry_check_feature_version (reg, plugins_gtk_alt.feature_name,
+        1, 6, 0)) {
+    g_hash_table_insert (missing, g_strdup (plugins_gtk.feature_name),
+        g_strdup (plugins_gtk.package_name));
+    g_hash_table_insert (missing, g_strdup (plugins_gtk_alt.feature_name),
+        g_strdup (plugins_gtk_alt.package_name));
   }
 
   if (g_hash_table_size (missing) > 0)

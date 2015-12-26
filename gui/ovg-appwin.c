@@ -495,7 +495,7 @@ ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
     remote = g_ptr_array_index (remotes, ii);
 
     child = gtk_flow_box_child_new ();
-    area = ov_remote_peer_add_gtkglsink (remote);
+    area = ov_remote_peer_add_gtksink (remote);
     gtk_container_add (GTK_CONTAINER (child), area);
 
     overlay = gtk_overlay_new ();

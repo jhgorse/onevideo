@@ -62,7 +62,7 @@ gboolean            ov_local_peer_set_video_device  (OvLocalPeer *local,
                                                      GstDevice *device);
 
 /* Remote peers */
-gpointer            ov_remote_peer_add_gtkglsink      (OvRemotePeer *remote);
+gpointer            ov_remote_peer_add_gtksink        (OvRemotePeer *remote);
 void                ov_remote_peer_set_muted          (OvRemotePeer *remote,
                                                        gboolean muted);
 gboolean            ov_remote_peer_get_muted          (OvRemotePeer *remote);

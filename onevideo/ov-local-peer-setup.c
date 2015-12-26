@@ -609,8 +609,6 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
   /* Setup pipeline (priv->playback) to render video from each local to the
    * provided video sink */
   if (remote->priv->video_proxysink) {
-    GstElement *sinkbin;
-
     remote->priv->video_proxysrc = 
       gst_element_factory_make ("proxysrc", "video-proxysrc-%u");
     g_assert (remote->priv->video_proxysrc != NULL);
@@ -621,18 +619,14 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
 
     /* If a remote_peer_add_sink wasn't used, use a fallback glimagesink */
     if (remote->priv->video_sink == NULL)
-      remote->priv->video_sink =
-        gst_element_factory_make ("glimagesinkelement", NULL);
-    g_assert (remote->priv->video_sink);
-    sinkbin = gst_element_factory_make ("glsinkbin", NULL);
-    g_assert (sinkbin);
-    g_object_set (sinkbin, "sink", remote->priv->video_sink, NULL);
+      remote->priv->video_sink = gst_element_factory_make ("glimagesink", NULL);
 
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
-        remote->priv->video_proxysrc, sinkbin, NULL);
+        remote->priv->video_proxysrc, remote->priv->video_sink, NULL);
     res = gst_bin_add (GST_BIN (priv->playback), remote->priv->vplayback);
     g_assert (res);
-    res = gst_element_link (remote->priv->video_proxysrc, sinkbin);
+    res = gst_element_link (remote->priv->video_proxysrc,
+        remote->priv->video_sink);
     g_assert (res);
   }
 

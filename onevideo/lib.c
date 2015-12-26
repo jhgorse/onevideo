@@ -172,19 +172,85 @@ ov_remote_peer_new_from_string (OvLocalPeer * local, const gchar * addr_s)
   return remote;
 }
 
+static gboolean
+ov_get_gtkglsink (GstElement ** out_sink, gpointer * out_widget)
+{
+  GstElement *sink, *bin;
+
+  g_return_val_if_fail (out_sink != NULL, FALSE);
+  g_return_val_if_fail (out_widget != NULL, FALSE);
+
+  /* Default failure return */
+  *out_sink = NULL; *out_widget = NULL;
+
+  if (!(sink = gst_element_factory_make ("gtkglsink", NULL)))
+    return FALSE;
+
+  if (!(bin = gst_element_factory_make ("glsinkbin", NULL)))
+    return FALSE;
+
+  g_object_set (bin, "sink", sink, NULL);
+
+  g_object_get (sink, "widget", out_widget, NULL);
+  *out_sink = bin;
+  return TRUE;
+}
+
+static gboolean
+ov_get_gtksink (GstElement ** out_sink, gpointer * out_widget)
+{
+  GstElement *sink, *bin, *convert;
+  GstPad *ghostpad, *sinkpad;
+
+  g_return_val_if_fail (out_sink != NULL, FALSE);
+  g_return_val_if_fail (out_widget != NULL, FALSE);
+
+  /* Default failure return */
+  *out_sink = NULL; *out_widget = NULL;
+
+  if (!(sink = gst_element_factory_make ("gtksink", NULL)))
+    return FALSE;
+
+  bin = gst_bin_new (NULL);
+  if (!gst_bin_add (GST_BIN (bin), sink))
+    return FALSE;
+
+  convert = gst_element_factory_make ("videoconvert", NULL);
+  if (!gst_bin_add (GST_BIN (bin), convert))
+    return FALSE;
+
+  if (!gst_element_link (convert, sink))
+    return FALSE;
+
+  sinkpad = gst_element_get_static_pad (convert, "sink");
+  ghostpad = gst_ghost_pad_new ("sink", sinkpad);
+  g_object_unref (sinkpad);
+
+  if (!gst_pad_set_active (ghostpad, TRUE))
+    return FALSE;
+  if (!gst_element_add_pad (bin, ghostpad))
+    return FALSE;
+
+  g_object_get (sink, "widget", out_widget, NULL);
+  *out_sink = bin;
+  return TRUE;
+}
+
 gpointer
-ov_remote_peer_add_gtkglsink (OvRemotePeer * remote)
+ov_remote_peer_add_gtksink (OvRemotePeer * remote)
 {
   gpointer widget;
 
-  remote->priv->video_sink = gst_element_factory_make ("gtkglsink", NULL);
-  if (!remote->priv->video_sink) {
-    GST_ERROR ("Unable to create gtkglsink; falling back to glimagesink");
-    return NULL;
-  }
+  if (ov_get_gtkglsink (&remote->priv->video_sink, &widget))
+    return widget;
 
-  g_object_get (remote->priv->video_sink, "widget", &widget, NULL);
-  return widget;
+  GST_WARNING ("Unable to create gtkglsink bin; falling back to gtksink");
+
+  if (ov_get_gtksink (&remote->priv->video_sink, &widget))
+    return widget;
+
+  GST_ERROR ("Unable to create gtksink bin; falling back to glimagesink");
+  return NULL;
 }
 
 void

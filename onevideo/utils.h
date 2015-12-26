@@ -55,7 +55,7 @@ GstDevice*          ov_get_device_from_device_path      (GList *devices,
                                                          const gchar *path);
 #endif
 
-GHashTable*         ov_get_missing_gstreamer_plugins    (void);
+GHashTable*         ov_get_missing_gstreamer_plugins    (const gchar * toolkit);
 
 G_END_DECLS
 
