@@ -707,7 +707,7 @@ on_incoming_discovery_reply (GSocket * socket, GIOCondition condition,
   ret = ov_udp_msg_read_message_from (&msg, &from, socket,
       NULL, &error);
   if (!ret) {
-    GST_WARNING ("Error reading discovery reply: %s", error->message);
+    GST_DEBUG ("Error reading discovery reply: %s", error->message);
     g_clear_error (&error);
     return G_SOURCE_CONTINUE;
   }
@@ -721,7 +721,7 @@ on_incoming_discovery_reply (GSocket * socket, GIOCondition condition,
     g_free (msg.data);
 
   if (msg.type != OV_UDP_MSG_TYPE_UNICAST_HI_THERE) {
-    GST_WARNING ("Invalid discovery reply: %u", msg.type);
+    GST_TRACE ("Invalid discovery reply: %u", msg.type);
     ret = G_SOURCE_CONTINUE;
     goto out;
   }
