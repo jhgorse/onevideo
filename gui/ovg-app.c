@@ -186,12 +186,9 @@ ovg_app_startup (GApplication * app)
 
   devices = ov_local_peer_get_video_devices (priv->ov_local);
   device = devices ? GST_DEVICE (devices->data) : NULL;
-  if (device_path != NULL)
 #ifdef __linux__
+  if (device_path != NULL)
     device = ov_get_device_from_device_path (devices, device_path);
-#else
-    GST_WARNING ("The -d/--device option is not supported on this platform;"
-        " selecting the first available video device");
 #endif
 
   /* This currently always returns TRUE (aborts on error) */
