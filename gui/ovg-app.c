@@ -271,7 +271,7 @@ ovg_app_get_ov_local_peer (OvgApp * app)
 
   g_return_val_if_fail (OVG_IS_APP (app), NULL);
   priv = ovg_app_get_instance_private (app);
-  return priv->ov_local;
+  return g_object_ref (priv->ov_local);
 }
 
 gchar *

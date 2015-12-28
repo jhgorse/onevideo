@@ -65,6 +65,8 @@ struct _OvgAppWindowPrivate
   GtkWidget *start_call;
 
   GtkWidget *peers_video;
+
+  OvLocalPeer *ovg_local;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (OvgAppWindow, ovg_app_window,
@@ -555,19 +557,18 @@ ovg_app_window_show_peers_video (OvgAppWindow * win)
 static gboolean
 wrapper_setup_peers_video (OvgAppWindow * win)
 {
-  OvLocalPeer *local;
   GPtrArray *remotes;
-  GtkApplication *app;
+  OvgAppWindowPrivate *priv;
 
-  app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
-  remotes = ov_local_peer_get_remotes (local);
+  priv = ovg_app_window_get_instance_private (win);
+
+  remotes = ov_local_peer_get_remotes (priv->ovg_local);
   g_assert (remotes->len != 0);
 
   /* Populate the peers_video widget with gtk widget sinks */
-  ovg_app_window_populate_peers_video (win, local, remotes);
+  ovg_app_window_populate_peers_video (win, priv->ovg_local, remotes);
 
-  ov_local_peer_call_start (local);
+  ov_local_peer_call_start (priv->ovg_local);
   ovg_app_window_show_peers_video (win);
 
   return G_SOURCE_REMOVE;
@@ -657,14 +658,10 @@ setup_default_handlers (OvLocalPeer * local, OvgAppWindow * win)
 static gboolean
 ovg_app_window_reset_state (OvgAppWindow * win)
 {
-  OvLocalPeer *local;
   GList *children, *l;
-  GtkApplication *app;
   OvgAppWindowPrivate *priv;
 
   priv = ovg_app_window_get_instance_private (win);
-  app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
 
   /* Hide */
   gtk_widget_hide (priv->end_call);
@@ -689,9 +686,9 @@ ovg_app_window_reset_state (OvgAppWindow * win)
   gtk_window_set_resizable (GTK_WINDOW (win), FALSE);
 
   /* Disconnect all handlers */
-  g_signal_handlers_disconnect_by_data (local, win);
+  g_signal_handlers_disconnect_by_data (priv->ovg_local, win);
   /* Connect default handlers again */
-  setup_default_handlers (local, win);
+  setup_default_handlers (priv->ovg_local, win);
 
   /* Only call once if dispatched from a main context */
   return G_SOURCE_REMOVE;
@@ -721,18 +718,20 @@ ovg_app_window_show_scheduled_error (OvgAppWindow * win)
 static gboolean
 setup_window (OvgAppWindow * win)
 {
-  OvLocalPeer *local;
   GtkApplication *app;
+  OvgAppWindowPrivate *priv;
 
+  priv = ovg_app_window_get_instance_private (win);
   app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+  priv->ovg_local = ovg_app_get_ov_local_peer (OVG_APP (app));
 
   if (ovg_app_window_show_scheduled_error (win))
     return G_SOURCE_REMOVE;
 
-  setup_default_handlers (local, win);
+  setup_default_handlers (priv->ovg_local, win);
 
-  if (!ov_local_peer_discovery_start (local, PEER_DISCOVER_INTERVAL, NULL))
+  if (!ov_local_peer_discovery_start (priv->ovg_local, PEER_DISCOVER_INTERVAL,
+        NULL))
     g_application_quit (G_APPLICATION (app));
 
   return G_SOURCE_REMOVE;
@@ -742,12 +741,10 @@ static void
 on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
 {
   GPtrArray *remotes;
-  GtkApplication *app;
-  OvLocalPeer *local;
+  OvgAppWindowPrivate *priv;
   guint ii;
 
-  app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+  priv = ovg_app_window_get_instance_private (win);
 
   /* Make it so it can't be clicked twice */
   gtk_widget_set_sensitive (GTK_WIDGET (b), FALSE);
@@ -760,25 +757,25 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
     GInetSocketAddress *addr;
 
     addr = g_ptr_array_index (remotes, ii);
-    remote = ov_remote_peer_new (local, addr);
-    ov_local_peer_add_remote (local, remote);
+    remote = ov_remote_peer_new (priv->ovg_local, addr);
+    ov_local_peer_add_remote (priv->ovg_local, remote);
   }
 
   g_ptr_array_free (remotes, TRUE);
 
-  remotes = ov_local_peer_get_remotes (local);
-  ovg_app_window_populate_peers_video (win, local, remotes);
+  remotes = ov_local_peer_get_remotes (priv->ovg_local);
+  ovg_app_window_populate_peers_video (win, priv->ovg_local, remotes);
 
-  g_signal_connect (local, "negotiate-started",
+  g_signal_connect (priv->ovg_local, "negotiate-started",
       G_CALLBACK (on_outgoing_negotiate_started), win);
-  g_signal_connect (local, "negotiate-skipped-remote",
+  g_signal_connect (priv->ovg_local, "negotiate-skipped-remote",
       G_CALLBACK (on_outgoing_negotiate_skipped), win);
-  g_signal_connect (local, "negotiate-finished",
+  g_signal_connect (priv->ovg_local, "negotiate-finished",
       G_CALLBACK (on_outgoing_negotiate_finished), win);
-  g_signal_connect (local, "negotiate-aborted",
+  g_signal_connect (priv->ovg_local, "negotiate-aborted",
       G_CALLBACK (on_negotiate_aborted), win);
 
-  ov_local_peer_negotiate_start (local);
+  ov_local_peer_negotiate_start (priv->ovg_local);
   g_print ("Waiting for remote peers\n");
 }
 
@@ -786,16 +783,12 @@ static void
 on_volume_changed (OvgAppWindow * win, GtkRange * scale)
 {
   gdouble volume;
-  OvLocalPeer *local;
-  GtkApplication *app;
   OvgAppWindowPrivate *priv;
 
   priv = ovg_app_window_get_instance_private (win);
-  app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
 
   volume = gtk_range_get_value (scale);
-  ov_local_peer_set_volume (local, volume);
+  ov_local_peer_set_volume (priv->ovg_local, volume);
 
   if (volume > 1.5)
     gtk_image_set_from_icon_name (GTK_IMAGE (priv->volume_image),
@@ -811,13 +804,11 @@ on_volume_changed (OvgAppWindow * win, GtkRange * scale)
 static void
 on_end_call_button_clicked (OvgAppWindow * win, GtkButton * b)
 {
-  GtkApplication *app;
-  OvLocalPeer *local;
+  OvgAppWindowPrivate *priv;
 
-  app = gtk_window_get_application (GTK_WINDOW (win));
-  local = ovg_app_get_ov_local_peer (OVG_APP (app));
+  priv = ovg_app_window_get_instance_private (win);
 
-  ov_local_peer_call_hangup (local);
+  ov_local_peer_call_hangup (priv->ovg_local);
   ovg_app_window_reset_state (win);
 }
 
@@ -844,13 +835,36 @@ ovg_app_window_init (OvgAppWindow * win)
   g_idle_add ((GSourceFunc) setup_window, win);
 }
 
+static void
+ovg_app_window_dispose (GObject * object)
+{
+  OvgAppWindowPrivate *priv;
+  OvgAppWindow *win = OVG_APP_WINDOW (object);
+
+  priv = ovg_app_window_get_instance_private (win);
+
+  if (priv == NULL || priv->ovg_local == NULL)
+    goto chain;
+
+  /* Disconnect handlers on dispose so they're not called during the dispose
+   * chain up */
+  g_signal_handlers_disconnect_by_data (priv->ovg_local, win);
+  g_clear_object (&priv->ovg_local);
+
+chain:
+  G_OBJECT_CLASS (ovg_app_window_parent_class)->dispose (object);
+}
+
 #define ovg_bind_private gtk_widget_class_bind_template_child_private
 #define ovg_bind_callback gtk_widget_class_bind_template_callback
 
 static void
 ovg_app_window_class_init (OvgAppWindowClass *class)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (class);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (class);
+
+  object_class->dispose = ovg_app_window_dispose;
 
   gtk_widget_class_set_template_from_resource (widget_class,
       "/org/gtk/OneVideoGui/ovg-window.ui");
