@@ -2,7 +2,7 @@ Items marked with a ★ are high priority
 
 * Network communication
  ★ Timeout quickly on unimportant messages
- ★ Handle timeouts during calls due to disappearing peers
+ ★ One-way messages (such as END_CALL) should be sent asynchronously
  ★ Pause/resume calls correctly
  - Retry sending of important messages
 
@@ -20,12 +20,6 @@ Items marked with a ★ are high priority
  - Need ERROR types in the network protocol itself so the negotiator and/or
    peers can take appropriate corrective action instead of just aborting the
    negotiation process or the call.
-
-* Logging
- - Right now, we log very verbosely to GST_DEBUG for convenience in debugging.
-   Change this so we do relatively expensive logging (such as logging that needs
-   variant printing) conditional on the log level and do it at the GST_TRACE log
-   level (or similar).
 
 * Video format negotiation
  - We pass-through whatever highest-quality format the Webcam outputs to the
@@ -46,14 +40,16 @@ Items marked with a ★ are high priority
 
 * General
  - Add the ability for any peer to add other peers to an existing call
+ - Test and bugfix removal/timeout of individual remote peers in a multi-party
+   call
  - Allow peers to gracefully degrade a call; reducing video res or removing it
    altogether
    + New msg type: CHANGE_CALL_DETAILS
-   + Some types of format changes don't even need an out of band renegotiation;
-     such as changing the resolution of the outputted JPEG
-   + TODO: Only set generic caps without resolution for video and let the
-     depayloader detect it at runtime. This works for JPEG, not sure about H.264
    
 * Device probing/monitoring
  - GstDeviceMonitor API does not have a way to query whether a device is under
    use. Currently, we try to use the device and fail, but we should fix the API.
+ - OS X support (avfvideosrc)
+
+* GUI:
+ - Add a full-screen mode
