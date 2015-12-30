@@ -585,9 +585,12 @@ ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output
   gchar *peer_id;
   guint64 call_id;
   OvTcpMsg *reply;
+  OvPeer *removed;
   OvRemotePeer *remote;
   const gchar *variant_type;
+  GPtrArray *remote_peers;
   OvLocalPeerState state;
+  gboolean all_remotes_gone = FALSE;
   gboolean ret = FALSE;
 
   variant_type = ov_tcp_msg_type_to_variant_type (
@@ -615,19 +618,15 @@ ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output
 
   GST_DEBUG ("Removing remote peer %s from the call", remote->id);
 
+  removed = ov_peer_new (remote->addr);
   /* Remove the specified peer from the call */
   ov_local_peer_remove_remote (local, remote);
 
-  /* TODO: Implement partial call continuation */
-#if 0
-  if (priv->remote_peers->len == 0) {
-    GST_DEBUG ("No peers left in call, ending call...");
-    ov_local_peer_call_hangup (local);
+  remote_peers = ov_local_peer_get_remotes (local);
+  if (remote_peers->len == 0) {
+    GST_DEBUG ("No peers left in call");
+    all_remotes_gone = TRUE;
   }
-#else
-  GST_DEBUG ("A remote peer ended the call, hanging up...");
-  ov_local_peer_call_hangup (local);
-#endif
 
   reply = ov_tcp_msg_new_ack (msg->id);
 
@@ -640,7 +639,9 @@ send_reply:
 
   /* Emit signal after unlocking and after writing the reply */
   if (ret)
-    g_signal_emit_by_name (local, "call-remotes-hungup");
+    g_signal_emit_by_name (local, "call-remote-gone", removed, FALSE);
+  if (all_remotes_gone)
+    g_signal_emit_by_name (local, "call-all-remotes-gone");
 
   ov_tcp_msg_free (reply);
   g_free (peer_id);

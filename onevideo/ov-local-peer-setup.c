@@ -431,6 +431,15 @@ rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
   gst_object_unref (sinkpad);
 }
 
+static void
+on_receiver_ssrc_active (GstElement * rtpbin, guint session, guint ssrc,
+    OvRemotePeer * remote)
+{
+  GST_DEBUG ("ssrc %u, session %u, remote %s active", ssrc, session,
+      remote->addr_s);
+  remote->last_seen = g_get_monotonic_time ();
+}
+
 void
 ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
 {
@@ -563,6 +572,10 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
    * sinkpads are added when the pipeline pre-rolls, 'pad-added' will be called
    * and we'll finish linking the pipeline */
   g_signal_connect (rtpbin, "pad-added", G_CALLBACK (rtpbin_pad_added), remote);
+
+  /* The remote is timed out if this isn't invoked for the timeout duration */
+  g_signal_connect (rtpbin, "on-ssrc-active",
+      G_CALLBACK (on_receiver_ssrc_active), remote);
 
   /* This is what exposes video/audio data from this remote peer */
   remote->priv->audio_proxysink = asink;

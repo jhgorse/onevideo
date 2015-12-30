@@ -50,7 +50,8 @@ enum
   NEGOTIATE_SKIPPED_REMOTE,
   NEGOTIATE_FINISHED,
   NEGOTIATE_ABORTED,
-  CALL_REMOTES_HUNGUP,
+  CALL_REMOTE_GONE,
+  CALL_ALL_REMOTES_GONE,
   OV_LOCAL_PEER_N_SIGNALS
 };
 
@@ -246,21 +247,40 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
         G_TYPE_ERROR);
 
   /**
-   * OvLocalPeer::call-remote-hangup:
+   * OvLocalPeer::call-remote-gone:
+   * @local: the local peer
+   * @remote: the #OVPeer peer that has disconnected
+   * @timedout: whether the disconnection was due to a timeout
+   * 
+   * Emitted when a remote peers leaves a call due to a timeout or because of
+   * a call hangup.
+   *
+   * This signal is not emitted when either ov_local_peer_call_hangup() or
+   * ov_local_peer_remove_remote() is invoked.
+   **/
+  signals[CALL_REMOTE_GONE] =
+    g_signal_new ("call-remote-gone", G_OBJECT_CLASS_TYPE (object_class),
+        G_SIGNAL_RUN_LAST,
+        G_STRUCT_OFFSET (OvLocalPeerClass, call_remote_gone),
+        NULL, NULL,
+        NULL,
+        G_TYPE_NONE, 2,
+        OV_TYPE_PEER,
+        G_TYPE_BOOLEAN);
+
+  /**
+   * OvLocalPeer::call-all-remotes-gone:
    * @local: the local peer
    * 
-   * Emitted when the call is ended because of all remote peers hanging up.
-   * This signal is not emitted when a call is ended because we called
-   * ov_local_peer_call_hangup()
-   *
-   * TODO: This is the intended behaviour of this signal, but currently it's
-   * emitted as soon as any remote hangs up because implementing partial call
-   * continuation is on the TODO list.
+   * Emitted when the call is ended because of all remote peers left either due
+   * to a timeout or because of a call hangup. Typically in response to this
+   * signal, the application will call ov_local_peer_call_hangup() and then do
+   * whatever clean-up it needs to do.
    **/
-  signals[CALL_REMOTES_HUNGUP] =
-    g_signal_new ("call-remotes-hungup", G_OBJECT_CLASS_TYPE (object_class),
+  signals[CALL_ALL_REMOTES_GONE] =
+    g_signal_new ("call-all-remotes-gone", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
-        G_STRUCT_OFFSET (OvLocalPeerClass, call_remotes_hungup),
+        G_STRUCT_OFFSET (OvLocalPeerClass, call_all_remotes_gone),
         NULL, NULL,
         NULL,
         G_TYPE_NONE, 0);

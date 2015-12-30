@@ -502,6 +502,8 @@ ovg_app_window_populate_peers_video (OvgAppWindow * win, OvLocalPeer * local,
 
     overlay = gtk_overlay_new ();
     gtk_container_add (GTK_CONTAINER (overlay), child);
+    g_object_set_data_full (G_OBJECT (overlay), "peer-name",
+        g_strdup (remote->addr_s), g_free);
 
     mute = gtk_toggle_button_new ();
     gtk_widget_set_opacity (mute, MUTE_BUTTON_DEFAULT_OPACITY);
@@ -635,9 +637,53 @@ on_negotiate_incoming (OvLocalPeer * local, OvPeer * incoming,
 }
 
 static void
-on_call_remotes_hangup (OvLocalPeer * local, OvgAppWindow * win)
+ovg_app_window_remove_peer (OvPeer * peer)
 {
-  g_print ("A remote peer has hung up. Resetting state...\n");
+  gchar *addr_s;
+  GList *children, *l;
+  OvgAppWindowPrivate *priv;
+  OvgAppWindow *win = g_object_get_data (G_OBJECT (peer), "app-window");
+
+  priv = ovg_app_window_get_instance_private (win);
+
+  g_object_get (peer, "addr_s", &addr_s, NULL);
+  children = gtk_container_get_children (GTK_CONTAINER (priv->peers_video));
+
+  for (l = children; l != NULL; l = l->next) {
+    gchar *peer_name = g_object_get_data (G_OBJECT (l->data), "peer-name");
+    if (g_strcmp0 (peer_name, addr_s) != 0)
+      continue;
+    g_print ("Removing remote peer %s\n", peer_name);
+    gtk_container_remove (GTK_CONTAINER (priv->peers_video),
+        GTK_WIDGET (l->data));
+  }
+
+  g_list_free (children);
+  g_free (addr_s);
+}
+
+static void
+on_call_remote_gone (OvLocalPeer * local, OvPeer * peer, gboolean timedout,
+    OvgAppWindow * win)
+{
+  gchar *addr_s;
+  g_object_get (peer, "addr_s", &addr_s, NULL);
+  g_print ("Remote peer %s is gone\n", addr_s);
+  g_free (addr_s);
+
+  /* Set data on the peer object to avoid having to create a wrapper struct */
+  g_object_set_data (G_OBJECT (peer), "app-window", win);
+  /* Ensure gtk+ widget manipulation is only done from the main thread */
+  g_main_context_invoke_full (NULL, G_PRIORITY_DEFAULT,
+      (GSourceFunc) ovg_app_window_remove_peer, g_object_ref (peer),
+      g_object_unref);
+}
+
+static void
+on_call_all_remotes_gone (OvLocalPeer * local, OvgAppWindow * win)
+{
+  g_print ("All remote peers are gone. Ending call and resetting state...\n");
+  ov_local_peer_call_hangup (local);
   /* Ensure gtk+ widget manipulation is only done from the main thread */
   g_main_context_invoke (NULL, (GSourceFunc) ovg_app_window_reset_state, win);
 }
@@ -651,8 +697,10 @@ setup_default_handlers (OvLocalPeer * local, OvgAppWindow * win)
       G_CALLBACK (add_peer_to_discovered), win);
   g_signal_connect (local, "discovery-sent",
       G_CALLBACK (ovg_app_window_peers_d_rows_clean_timed_out), win);
-  g_signal_connect (local, "call-remotes-hungup",
-      G_CALLBACK (on_call_remotes_hangup), win);
+  g_signal_connect (local, "call-remote-gone",
+      G_CALLBACK (on_call_remote_gone), win);
+  g_signal_connect (local, "call-all-remotes-gone",
+      G_CALLBACK (on_call_all_remotes_gone), win);
 }
 
 static gboolean

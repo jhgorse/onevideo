@@ -72,11 +72,18 @@ kill_remote_peer (OvRemotePeer * remote)
 }
 
 static void
-on_call_ended (OvLocalPeer * local)
+on_call_ended_exit (OvLocalPeer * local)
 {
   g_print ("Local peer call ended, exiting...\n");
   ov_local_peer_stop (local);
   g_main_loop_quit (loop);
+}
+
+static void
+on_call_ended_continue (OvLocalPeer * local)
+{
+  g_print ("Local peer call ended, continuing...\n");
+  ov_local_peer_call_hangup (local);
 }
 
 static gboolean
@@ -425,8 +432,11 @@ main (int   argc,
 remotes_done:
   /* If in passive mode, auto exit only when requested */
   if (remotes != NULL || discover_peers || auto_exit)
-    g_signal_connect (local, "call-remotes-hungup", G_CALLBACK (on_call_ended),
-        NULL);
+    g_signal_connect (local, "call-all-remotes-gone",
+        G_CALLBACK (on_call_ended_exit), NULL);
+  else
+    g_signal_connect (local, "call-all-remotes-gone",
+        G_CALLBACK (on_call_ended_continue), NULL);
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);

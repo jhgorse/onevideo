@@ -44,6 +44,9 @@ static gboolean ov_local_peer_begin_transmit (OvLocalPeer *local);
 
 #define on_remote_receive_error ov_on_gst_bus_error
 
+/* Default timeout for remote peers */
+#define OV_REMOTE_PEER_TIMEOUT_SECONDS 10
+
 static void
 ov_local_peer_stop_transmit (OvLocalPeer * local)
 {
@@ -1021,11 +1024,60 @@ err:
   goto out;
 }
 
+static void
+ov_local_peer_check_timeouts (OvLocalPeer * local)
+{
+  guint ii;
+  gint64 current_time;
+  GPtrArray *remotes;
+  GPtrArray *timedout = g_ptr_array_new ();
+  GPtrArray *removed = g_ptr_array_new ();
+  gboolean all_remotes_gone = FALSE;
+
+  ov_local_peer_lock (local);
+
+  current_time = g_get_monotonic_time ();
+  remotes = ov_local_peer_get_remotes (local);
+  for (ii = 0; ii < remotes->len; ii++) {
+    OvRemotePeer *remote = g_ptr_array_index (remotes, ii);
+    if ((current_time - remote->last_seen) >
+        OV_REMOTE_PEER_TIMEOUT_SECONDS * G_USEC_PER_SEC)
+      g_ptr_array_add (timedout, remote);
+  }
+
+  if (timedout->len == remotes->len)
+    all_remotes_gone = TRUE;
+
+  for (ii = 0; ii < timedout->len; ii++) {
+    OvRemotePeer *remote = g_ptr_array_index (timedout, ii);
+    OvPeer *peer = ov_peer_new (remote->addr);
+    GST_DEBUG ("Remote peer %s timed out, removing...", remote->addr_s);
+    ov_local_peer_remove_remote (local, remote);
+    g_ptr_array_add (removed, peer);
+  }
+
+  ov_local_peer_unlock (local);
+  g_ptr_array_free (timedout, TRUE);
+
+  for (ii = 0; ii < removed->len; ii++) {
+    OvPeer *peer = g_ptr_array_index (removed, ii);
+    g_signal_emit_by_name (local, "call-remote-gone", peer, TRUE);
+    g_object_unref (peer);
+  }
+  g_ptr_array_free (removed, TRUE);
+
+  if (!all_remotes_gone)
+    return;
+
+  g_signal_emit_by_name (local, "call-all-remotes-gone");
+}
+
 gboolean
 ov_local_peer_call_start (OvLocalPeer * local)
 {
   guint index;
   gboolean res;
+  gint current_time;
   GstStateChangeReturn ret;
   OvRemotePeer *remote;
   OvLocalPeerPrivate *priv;
@@ -1049,8 +1101,10 @@ ov_local_peer_call_start (OvLocalPeer * local)
   res = ov_local_peer_begin_transmit (local);
   g_assert (res);
 
+  current_time = g_get_monotonic_time ();
   for (index = 0; index < priv->remote_peers->len; index++) {
     remote = g_ptr_array_index (priv->remote_peers, index);
+    remote->last_seen = current_time;
     
     /* Call details have all been set, so we can do the setup */
     res = ov_local_peer_setup_remote (local, remote);
@@ -1076,6 +1130,13 @@ ov_local_peer_call_start (OvLocalPeer * local)
   /* The difference between negotiator and negotiatee ends with playback */
   ov_local_peer_set_state (local, OV_LOCAL_STATE_PLAYING);
   ov_local_peer_unlock (local);
+
+  priv->remotes_timeout_source =
+    g_timeout_source_new_seconds (OV_REMOTE_PEER_TIMEOUT_SECONDS);
+  g_source_set_callback (priv->remotes_timeout_source,
+      (GSourceFunc) ov_local_peer_check_timeouts, local, NULL);
+  g_source_attach (priv->remotes_timeout_source, NULL);
+
   return TRUE;
 
   play_fail: {

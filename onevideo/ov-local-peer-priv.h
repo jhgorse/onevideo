@@ -110,8 +110,10 @@ struct _OvLocalPeerPrivate {
 
   /* Array of UDP ports that are either reserved or in use for receiving */
   GArray *used_ports;
-  /* Array of OvRemotePeers: peers we want to connect to */
+  /* Array of OvRemotePeers: peers we are connecting to or are connected to */
   GPtrArray *remote_peers;
+  /* A timed source that checks if any of the remote peers have timed out */
+  GSource *remotes_timeout_source;
 
   /* Lock to access non-thread-safe structures like GPtrArray */
   GRecMutex lock;

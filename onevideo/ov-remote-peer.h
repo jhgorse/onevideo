@@ -64,6 +64,9 @@ struct _OvRemotePeer {
    * Retrieved from the peer during negotiation */
   gchar *id;
 
+  /* The system monotonic time when we last saw this remote peer */
+  gint64 last_seen;
+
   OvRemotePeerState state;
 
   /* < private > */

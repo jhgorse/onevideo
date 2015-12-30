@@ -63,7 +63,10 @@ struct _OvLocalPeerClass {
   void (*negotiate_finished)        (OvLocalPeer *local);
   void (*negotiate_aborted)         (OvLocalPeer *local,
                                      GError *error);
-  void (*call_remotes_hungup)       (OvLocalPeer *local);
+  void (*call_remote_gone)          (OvLocalPeer *local,
+                                     OvPeer *remote,
+                                     gboolean timedout);
+  void (*call_all_remotes_gone)     (OvLocalPeer *local);
 
   /* Padding to allow up to 12 new virtual functions without breaking ABI */
   gpointer padding[12];
