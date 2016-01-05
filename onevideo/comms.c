@@ -275,10 +275,10 @@ ov_tcp_msg_write_to_stream (GOutputStream * output, OvTcpMsg * msg,
     GCancellable * cancellable, GError ** error)
 {
   gchar *tmp;
-  gboolean ret;
   guint32 tmp1;
   guint64 tmp2;
   GVariant *variant;
+  gboolean ret = FALSE;
 
   tmp = ov_tcp_msg_print (msg);
   GST_DEBUG ("Writing msg type %s to the network; contents: %s",
@@ -323,6 +323,8 @@ ov_tcp_msg_write_to_stream (GOutputStream * output, OvTcpMsg * msg,
     ret = g_output_stream_write_all (output, g_variant_get_data (variant),
         size, NULL, cancellable, error);
     g_variant_unref (variant);
+  } else {
+    ret = TRUE;
   }
 
 out:

@@ -37,7 +37,7 @@ GInetSocketAddress *
 ov_inet_socket_address_from_string (const gchar * addr_s)
 {
   guint port;
-  gchar **split;
+  gchar **split = NULL;
   GSocketAddress *addr = NULL;
 
   g_return_val_if_fail (addr_s != NULL, NULL);

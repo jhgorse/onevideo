@@ -582,7 +582,6 @@ static gboolean
 ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output,
     OvTcpMsg * msg)
 {
-  gchar *peer_id;
   guint64 call_id;
   OvTcpMsg *reply;
   OvPeer *removed;
@@ -590,6 +589,7 @@ ov_local_peer_remove_peer_from_call (OvLocalPeer * local, GOutputStream * output
   const gchar *variant_type;
   GPtrArray *remote_peers;
   OvLocalPeerState state;
+  gchar *peer_id = NULL;
   gboolean all_remotes_gone = FALSE;
   gboolean ret = FALSE;
 
