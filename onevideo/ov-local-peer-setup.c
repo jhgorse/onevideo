@@ -410,11 +410,11 @@ ov_local_peer_setup_comms (OvLocalPeer * local)
     }
   }
 
+  if (!ret)
+    g_source_destroy (mc_source);
 out:
   g_object_unref (mc_addr);
   g_object_unref (mc_socket);
-  if (!ret)
-    g_object_unref (mc_source);
 out_early:
   g_object_unref (addr);
   g_free (addr_s);
