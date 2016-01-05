@@ -8,6 +8,26 @@ else
   export GST_PLUGIN_PATH="${GST_PLUGIN_PATH}:${extra_plugin_path}"
 fi
 
+case "$(uname -s)" in
+  Darwin)
+    DEBUGGER="lldb";;
+  Linux)
+    DEBUGGER="gdb --args";;
+  *)
+    # Fall back to gdb on other platforms too...
+    DEBUGGER="gdb --args";;
+esac
+
+# Most of the time, the default libtool is what we want
+if [[ -x "$(type -P libtool)" ]]; then
+  export LIBTOOL=$(type -P libtool)
+fi
+
+# On OS X, if Homebrew is used, libtool is installed as glibtool
+if [[ "$(uname -s)" = "Darwin" && -x "$(type -P glibtool)" ]]; then
+  export LIBTOOL=$(type -P glibtool)
+fi
+
 progname=$(basename $0)
 if [[ ${progname} =~ cli\.sh ]]; then
   progtype="cli"
