@@ -251,7 +251,7 @@ get_device_choice (GList * devices)
 again:
   line = g_string_new ("");
   switch (g_io_channel_read_line_string (channel, line, NULL, &error)) {
-    guint index;
+    gint index;
     case G_IO_STATUS_NORMAL:
       index = g_ascii_digit_value (line->str[0]);
       if (index < 0 || index >= num) {
