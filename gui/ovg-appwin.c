@@ -769,12 +769,12 @@ setup_window (OvgAppWindow * win)
   GtkApplication *app;
   OvgAppWindowPrivate *priv;
 
+  if (ovg_app_window_show_scheduled_error (win))
+    return G_SOURCE_REMOVE;
+
   priv = ovg_app_window_get_instance_private (win);
   app = gtk_window_get_application (GTK_WINDOW (win));
   priv->ovg_local = ovg_app_get_ov_local_peer (OVG_APP (app));
-
-  if (ovg_app_window_show_scheduled_error (win))
-    return G_SOURCE_REMOVE;
 
   setup_default_handlers (priv->ovg_local, win);
 
