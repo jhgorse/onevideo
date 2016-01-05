@@ -179,8 +179,15 @@ struct plugin_names {
 static struct plugin_names plugins_req[] = {
   { "jpegenc",            OV_PACKAGE_GOOD },
   { "jpegdec",            OV_PACKAGE_GOOD },
+#ifdef __linux__
   { "pulsesrc",           OV_PACKAGE_GOOD },
   { "pulsesink",          OV_PACKAGE_GOOD },
+#elif defined(__APPLE__) && defined(TARGET_OS_MAC)
+  { "osxaudiosrc",           OV_PACKAGE_GOOD },
+  { "osxaudiosink",          OV_PACKAGE_GOOD },
+#else
+#error "Unsupported operating system"
+#endif
   { "rtpjpegpay",         OV_PACKAGE_GOOD },
   { "rtpjpegdepay",       OV_PACKAGE_GOOD },
   { "rtpbin",             OV_PACKAGE_GOOD },

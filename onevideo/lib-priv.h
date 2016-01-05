@@ -31,6 +31,11 @@
 #include <glib.h>
 #include <gst/gst.h>
 
+#ifdef __APPLE__
+/* Gives us access to TARGET_OS_* */
+#include <TargetConditionals.h>
+#endif
+
 G_BEGIN_DECLS
 
 #define STR_HELPER(x) #x

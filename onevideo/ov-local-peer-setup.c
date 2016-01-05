@@ -108,10 +108,22 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
   priv->playback = gst_object_ref_sink (gst_pipeline_new ("playback-%u"));
   gst_pipeline_set_auto_flush_bus (GST_PIPELINE (priv->playback), FALSE);
   priv->audiomixer = gst_element_factory_make ("audiomixer", NULL);
+
+#ifdef __linux__
   priv->audiosink = gst_element_factory_make ("pulsesink", NULL);
   /* These values give the lowest audio latency with the least chance of audio
-   * artefacting. Setting buffer-time less than 50ms gives audio artefacts. */
+   * artefacting with Pulseaudio on my machine. Setting buffer-time less than
+   * 50ms gives audio artefacts. */
   g_object_set (priv->audiosink, "buffer-time", 50000, NULL);
+#elif defined(__APPLE__) && defined(TARGET_OS_MAC)
+  priv->audiosink = gst_element_factory_make ("osxaudiosink", NULL);
+  /* These values give the lowest audio latency with the least chance of audio
+   * artefacting with Pulseaudio on my machine. Setting buffer-time less than
+   * 30ms gives audio artefacts. */
+  g_object_set (priv->audiosink, "buffer-time", 30000, NULL);
+#else
+#error "Unsupported operating system"
+#endif
     
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
@@ -170,9 +182,16 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
   g_object_set (priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
 
+#ifdef __linux__
   asrc = gst_element_factory_make ("pulsesrc", NULL);
+#elif defined(__APPLE__) && defined(TARGET_OS_MAC)
+  asrc = gst_element_factory_make ("osxaudiosrc", NULL);
+#else
+#error "Unsupported operating system"
+#endif
   /* latency-time to 5 ms, we use the system clock */
   g_object_set (asrc, "latency-time", 5000, "provide-clock", FALSE, NULL);
+
   afilter = gst_element_factory_make ("capsfilter", "audio-transmit-caps");
   raw_audio_caps = gst_caps_from_string ("audio/x-raw, " AUDIO_CAPS_STR);
   g_object_set (afilter, "caps", raw_audio_caps, NULL);
