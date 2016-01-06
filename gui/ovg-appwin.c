@@ -646,7 +646,7 @@ ovg_app_window_remove_peer (OvPeer * peer)
 
   priv = ovg_app_window_get_instance_private (win);
 
-  g_object_get (peer, "addr_s", &addr_s, NULL);
+  g_object_get (peer, "address-string", &addr_s, NULL);
   children = gtk_container_get_children (GTK_CONTAINER (priv->peers_video));
 
   for (l = children; l != NULL; l = l->next) {
@@ -667,7 +667,7 @@ on_call_remote_gone (OvLocalPeer * local, OvPeer * peer, gboolean timedout,
     OvgAppWindow * win)
 {
   gchar *addr_s;
-  g_object_get (peer, "addr_s", &addr_s, NULL);
+  g_object_get (peer, "address-string", &addr_s, NULL);
   g_print ("Remote peer %s is gone\n", addr_s);
   g_free (addr_s);
 
