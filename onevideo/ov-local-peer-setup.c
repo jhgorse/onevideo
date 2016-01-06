@@ -152,6 +152,32 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
   return TRUE;
 }
 
+#if defined(__APPLE__) && defined(TARGET_OS_MAC)
+static GstElement *
+ov_pipeline_get_osxaudiosrcbin (const gchar * name)
+{
+  GstElement *src, *conv, *bin;
+  GstPad *ghostpad, *srcpad;
+
+  src = gst_element_factory_make ("osxaudiosrc", NULL);
+  conv = gst_element_factory_make ("audioresample", NULL);
+
+  bin = gst_bin_new (name);
+  gst_bin_add_many (GST_BIN (bin), src, conv, NULL);
+
+  gst_element_link (src, conv);
+  
+  srcpad = gst_element_get_static_pad (conv, "src");
+  ghostpad = gst_ghost_pad_new ("src", srcpad);
+  g_object_unref (srcpad);
+
+  gst_pad_set_active (ghostpad, TRUE);
+  gst_element_add_pad (bin, ghostpad);
+
+  return bin;
+}
+#endif
+
 gboolean
 ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
@@ -185,7 +211,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 #ifdef __linux__
   asrc = gst_element_factory_make ("pulsesrc", NULL);
 #elif defined(__APPLE__) && defined(TARGET_OS_MAC)
-  asrc = gst_element_factory_make ("osxaudiosrc", NULL);
+  asrc = ov_pipeline_get_osxaudiosrcbin (NULL);
 #else
 #error "Unsupported operating system"
 #endif
