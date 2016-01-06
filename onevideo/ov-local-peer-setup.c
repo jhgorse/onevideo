@@ -160,6 +160,9 @@ ov_pipeline_get_osxaudiosrcbin (const gchar * name)
   GstPad *ghostpad, *srcpad;
 
   src = gst_element_factory_make ("osxaudiosrc", NULL);
+  /* latency-time to 5 ms, we use the system clock */
+  g_object_set (src, "latency-time", 5000, "provide-clock", FALSE, NULL);
+
   conv = gst_element_factory_make ("audioresample", NULL);
 
   bin = gst_bin_new (name);
@@ -210,13 +213,14 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 
 #ifdef __linux__
   asrc = gst_element_factory_make ("pulsesrc", NULL);
+  /* latency-time to 5 ms, we use the system clock */
+  g_object_set (asrc, "latency-time", 5000, "provide-clock", FALSE, NULL);
 #elif defined(__APPLE__) && defined(TARGET_OS_MAC)
   asrc = ov_pipeline_get_osxaudiosrcbin (NULL);
+  /* same properties as above already set on the source element */
 #else
 #error "Unsupported operating system"
 #endif
-  /* latency-time to 5 ms, we use the system clock */
-  g_object_set (asrc, "latency-time", 5000, "provide-clock", FALSE, NULL);
 
   afilter = gst_element_factory_make ("capsfilter", "audio-transmit-caps");
   raw_audio_caps = gst_caps_from_string ("audio/x-raw, " AUDIO_CAPS_STR);
