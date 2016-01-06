@@ -239,24 +239,32 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   /* Recv RTCP RR for audio (same port for all peers) */
   artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src");
 
-  /* FIXME: We want to support JPEG, keyframe-only H264, and video/x-raw.
-   * FIXME: Select the best format based on formats available on the camera */
   if (priv->video_device == NULL) {
     vsrc = gst_element_factory_make ("videotestsrc", NULL);
     g_object_set (vsrc, "is-live", TRUE, NULL);
-    vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
-    video_caps = gst_caps_from_string ("video/x-raw, " VIDEO_CAPS_STR);
-    g_object_set (vfilter, "caps", video_caps, NULL);
-    gst_caps_unref (video_caps);
-    vqueue = gst_element_factory_make ("jpegenc", "video-encoder");
-    g_object_set (vqueue, "quality", 30, NULL);
   } else {
     vsrc = gst_device_create_element (priv->video_device, NULL);
-    vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
-    /* These have already been fixated */
-    g_object_set (vfilter, "caps", priv->send_vcaps, NULL);
-    vqueue = gst_element_factory_make ("queue", "video-queue");
   }
+
+  vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
+  /* For now we set the "best" caps available. Later we will set more specific
+   * caps (height/width/framerate) based on what we want to send. */
+  video_caps = ov_media_type_to_caps (priv->best_video_type);
+  g_object_set (vfilter, "caps", video_caps, NULL);
+  gst_caps_unref (video_caps);
+
+  if (priv->best_video_type == OV_MEDIA_TYPE_JPEG) {
+    vqueue = gst_element_factory_make ("queue", "video-queue");
+  } else if (priv->best_video_type == OV_MEDIA_TYPE_YUY2 ||
+      priv->best_video_type == OV_MEDIA_TYPE_TEST) {
+    /* We encode YUY2 to JPEG before sending */
+    vqueue = gst_element_factory_make ("jpegenc", NULL);
+    g_object_set (vqueue, "quality", 30, NULL);
+  } else {
+    /* It is a programmer error for this to be reached */
+    g_assert_not_reached ();
+  }
+
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);

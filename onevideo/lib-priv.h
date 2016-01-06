@@ -68,6 +68,7 @@ enum _OvMediaType {
   OV_MEDIA_TYPE_JPEG,
   OV_MEDIA_TYPE_H264, /* Not supported yet */
   OV_MEDIA_TYPE_YUY2, /* Fallback if JPEG/H264 are not supported */
+  OV_MEDIA_TYPE_TEST, /* videotestsrc if no hardware sources are found */
 };
 
 struct _OvRemotePeerPrivate {
@@ -101,6 +102,9 @@ struct _OvRemotePeerPrivate {
   /* Video sink */
   GstElement *video_sink;
 };
+
+/* OvMediaType is not a public symbol */
+GstCaps* ov_media_type_to_caps (OvMediaType type);
 
 G_END_DECLS
 

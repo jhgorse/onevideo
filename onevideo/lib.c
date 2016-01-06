@@ -508,13 +508,14 @@ ov_remote_peer_free (OvRemotePeer * remote)
   g_free (remote);
 }
 
-static GstCaps *
+GstCaps *
 ov_media_type_to_caps (OvMediaType type)
 {
   switch (type) {
     case OV_MEDIA_TYPE_JPEG:
       return gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
     case OV_MEDIA_TYPE_YUY2:
+    case OV_MEDIA_TYPE_TEST:
       return gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING,
           "YUY2", NULL);
     case OV_MEDIA_TYPE_H264:
@@ -555,8 +556,6 @@ extract_caps:
        * We don't try other RAW formats because those are all emulated by libv4l2
        * by converting/decoding from JPEG or YUY2 */
       case OV_MEDIA_TYPE_JPEG:
-        /* TODO: Not supported yet (needs support in the transmit pipeline) */
-        g_assert_not_reached ();
         /* With YUY2, we will encode to JPEG before transmitting */
         *type = OV_MEDIA_TYPE_YUY2;
         goto extract_caps; /* try again */
@@ -583,15 +582,9 @@ extract_caps:
 
     s = gst_caps_get_structure (retcaps, ii);
 
-    /* Skip caps structures that aren't 16:9 */
-    gst_structure_get_int (s, "width", &n1);
-    gst_structure_get_int (s, "height", &n2);
-    if ((n1 * 9 - n2 * 16) != 0)
-      goto remove;
-
     /* Fixate device caps and remove extraneous fields */
     gst_structure_remove_fields (s, "pixel-aspect-ratio", "colorimetry",
-        "interlace-mode", NULL);
+        "interlace-mode", "format", NULL);
     gst_structure_fixate (s);
 
     /* Remove framerates less than 15; those look too choppy */
@@ -600,6 +593,11 @@ extract_caps:
     if ((*type == OV_MEDIA_TYPE_JPEG && dest < 30) ||
         (*type == OV_MEDIA_TYPE_YUY2 && dest < 15))
       goto remove;
+
+    /* The YUY2 video will be encoded to JPEG, so in reality our supported video
+     * caps are JPEG, not YUY2 */
+    if (*type == OV_MEDIA_TYPE_YUY2)
+      gst_structure_set_name (s, "image/jpeg");
 
     continue;
 remove:
@@ -632,7 +630,7 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
     GstDevice * device)
 {
   gchar *caps;
-  OvMediaType video_media_type;
+  OvMediaType video_type;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
   
@@ -649,10 +647,12 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
    * H.264, we need to fix all this code too. */
   if (device) {
     priv->supported_send_vcaps =
-      ov_device_get_usable_caps (device, &video_media_type);
+      ov_device_get_usable_caps (device, &video_type);
+    priv->best_video_type = video_type;
   } else {
     priv->supported_send_vcaps =
       gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_SEP VIDEO_CAPS_STR);
+    priv->best_video_type = OV_MEDIA_TYPE_TEST;
   }
 
   caps = gst_caps_to_string (priv->supported_send_vcaps);
