@@ -10,7 +10,7 @@ fi
 
 case "$(uname -s)" in
   Darwin)
-    DEBUGGER="lldb";;
+    DEBUGGER="lldb --";;
   Linux)
     DEBUGGER="gdb --args";;
   *)
