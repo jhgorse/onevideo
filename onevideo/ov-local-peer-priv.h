@@ -49,6 +49,7 @@ struct _OvNegotiate {
 struct _OvLocalPeerPrivate {
   /*~ Transmit pipeline ~*/
   GstElement *transmit;
+  GstElement *transmit_vcapsfilter;
   /* Transmit A/V data, rtcp send/recv RTP bin */
   GstElement *rtpbin;
   /* udpsinks transmitting RTP and RTCP and udpsrcs receiving rtcp */

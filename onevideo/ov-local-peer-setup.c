@@ -185,7 +185,7 @@ gboolean
 ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
-  GstCaps *video_caps, *raw_audio_caps;
+  GstCaps *raw_audio_caps;
   GstElement *asrc, *afilter, *aencode, *apay;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vpay;
@@ -246,14 +246,9 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     vsrc = gst_device_create_element (priv->video_device, NULL);
   }
 
-  vfilter = gst_element_factory_make ("capsfilter", "video-transmit-caps");
-  /* For now we set the "best" caps available. Later we will set more specific
-   * caps (height/width/framerate) based on what we want to send. */
-  video_caps = ov_media_type_to_caps (priv->best_video_type);
-  g_object_set (vfilter, "caps", video_caps, NULL);
-  gst_caps_unref (video_caps);
-
-  if (priv->best_video_type == OV_MEDIA_TYPE_JPEG) {
+  if (priv->best_video_type == OV_MEDIA_TYPE_JPEG ||
+      priv->best_video_type == OV_MEDIA_TYPE_H264) {
+    /* Passthrough JPEG and H.264 */
     vqueue = gst_element_factory_make ("queue", "video-queue");
   } else if (priv->best_video_type == OV_MEDIA_TYPE_YUY2 ||
       priv->best_video_type == OV_MEDIA_TYPE_TEST) {
@@ -264,6 +259,10 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     /* It is a programmer error for this to be reached */
     g_assert_not_reached ();
   }
+
+  /* empty capsfilter; we'll set the caps on this when we begin_transmit */
+  priv->transmit_vcapsfilter = vfilter =
+    gst_element_factory_make ("capsfilter", "video-transmit-caps");
 
   vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   /* Send RTP video data */
@@ -279,8 +278,8 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 
   gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc,
       afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
-      vsrc, vfilter, vqueue, vpay, vrtpqueue, vsink, vrtcpqueue,
-      vrtcpsink, vrtcpsrc, NULL);
+      vsrc, vqueue, vfilter, vpay, vrtpqueue, vsink, vrtcpqueue, vrtcpsink,
+      vrtcpsrc, NULL);
 
   /* Link audio branch */
   ret = gst_element_link_many (asrc, afilter, aencode, apay, NULL);
@@ -312,7 +311,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   g_assert (ret);
 
   /* Link video branch */
-  ret = gst_element_link_many (vsrc, vfilter, vqueue, vpay, NULL);
+  ret = gst_element_link_many (vsrc, vqueue, vfilter, vpay, NULL);
   g_assert (ret);
   ret = gst_element_link (vrtcpqueue, vrtcpsink);
   g_assert (ret);

@@ -881,7 +881,7 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
 {
   GSocket *socket;
   GString **clients;
-  gchar *local_addr_s;
+  gchar *local_addr_s, *caps_str;
   GInetSocketAddress *addr;
   GstStateChangeReturn ret;
   OvLocalPeerPrivate *priv;
@@ -920,6 +920,12 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   /* Recv video RTCP RRs from all remote peers (same socket as above) */
   g_object_set (priv->vrecv_rtcp_src, "socket", socket, NULL);
   g_object_unref (socket);
+
+  /* Video transmit caps that we either decided to or were told to transmit */
+  g_object_set (priv->transmit_vcapsfilter, "caps", priv->send_vcaps, NULL);
+  caps_str = gst_caps_to_string (priv->send_vcaps);
+  GST_DEBUG ("Transmitting send vcaps: %s", caps_str);
+  g_free (caps_str);
 
   ret = gst_element_set_state (priv->transmit, GST_STATE_PLAYING);
   GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
