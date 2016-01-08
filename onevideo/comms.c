@@ -49,7 +49,7 @@ static const struct {
    * (call_id, arecv_rtcprr_port, vrecv_rtcprr_port,
    *  send_acaps, send_vcaps, recv_acaps, recv_vcaps,
    *  [(peer1_id, arecv_port1, arecv_rtcpsr_port1, vrecv_port1, vrecv_rtcpsr_port1),
-   *   (peer1_id, arecv_port2, arecv_rtcpsr_port2, vrecv_port2, vrecv_rtcpsr_port2),
+   *   (peer2_id, arecv_port2, arecv_rtcpsr_port2, vrecv_port2, vrecv_rtcpsr_port2),
    *   ...])
    *
    *   Note that the rtcprr ports are shared between all peers */

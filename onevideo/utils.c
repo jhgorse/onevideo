@@ -146,7 +146,7 @@ ov_get_device_from_device_path (GList * devices, const gchar * device_path)
     path = gst_structure_get_string (props, "device.path");
 
     if (g_strcmp0 (path, device_path) == 0) {
-      GST_DEBUG ("Found device for path '%s'\n", device_path);
+      GST_DEBUG ("Found device for path '%s'", device_path);
       gst_structure_free (props);
       return GST_DEVICE (device->data);
     }

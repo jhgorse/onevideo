@@ -558,6 +558,8 @@ extract_caps:
       case OV_MEDIA_TYPE_JPEG:
         /* With YUY2, we will encode to JPEG before transmitting */
         *type = OV_MEDIA_TYPE_YUY2;
+        GST_WARNING ("Device does not support JPEG! Trying YUY2 "
+            "(lower quality, higher CPU usage)");
         goto extract_caps; /* try again */
       default:
         tmp = gst_caps_to_string (retcaps);
