@@ -244,15 +244,19 @@ ov_remote_peer_add_gtksink (OvRemotePeer * remote)
 {
   gpointer widget;
 
+#ifndef __linux__
+  /* On Linux (Mesa), using multiple GL output windows leads to a
+   * crash due to a bug in Mesa related to multiple GLX contexts */
   if (ov_get_gtkglsink (&remote->priv->video_sink, &widget))
     return widget;
 
   GST_WARNING ("Unable to create gtkglsink bin; falling back to gtksink");
+#endif
 
   if (ov_get_gtksink (&remote->priv->video_sink, &widget))
     return widget;
 
-  GST_ERROR ("Unable to create gtksink bin; falling back to glimagesink");
+  GST_ERROR ("Unable to use gtksink; falling back to non-embedded video sink");
   return NULL;
 }
 

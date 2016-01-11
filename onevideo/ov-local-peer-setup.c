@@ -695,9 +695,17 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
     g_object_set (remote->priv->video_proxysrc, "proxysink",
         remote->priv->video_proxysink, NULL);
 
-    /* If a remote_peer_add_sink wasn't used, use a fallback glimagesink */
+    /* If a remote_peer_add_sink wasn't used, use a fallback (xv|gl)imagesink */
     if (remote->priv->video_sink == NULL)
+#ifdef __linux__
+      /* On Linux (Mesa), using multiple GL output windows leads to a
+       * crash due to a bug in Mesa related to multiple GLX contexts */
+      remote->priv->video_sink =
+        gst_parse_bin_from_description ("videoconvert ! xvimagesink", TRUE,
+            NULL);
+#else
       remote->priv->video_sink = gst_element_factory_make ("glimagesink", NULL);
+#endif
 
     gst_bin_add_many (GST_BIN (remote->priv->vplayback),
         remote->priv->video_proxysrc, remote->priv->video_sink, NULL);

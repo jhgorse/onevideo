@@ -195,7 +195,13 @@ static struct plugin_names plugins_req[] = {
   { "udpsrc",             OV_PACKAGE_GOOD },
 
   { "audiomixer",         OV_PACKAGE_BAD },
+#ifdef __linux__
+  /* On Linux (Mesa), using multiple GL output windows leads to a
+   * crash due to a bug in Mesa related to multiple GLX contexts */
+  { "xvimagesink",        OV_PACKAGE_BASE },
+#else
   { "glimagesink",        OV_PACKAGE_BAD },
+#endif
   { "opusenc",            OV_PACKAGE_BAD },
   { "opusdec",            OV_PACKAGE_BAD },
 };
