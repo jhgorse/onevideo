@@ -637,9 +637,11 @@ send_reply_unlock:
 send_reply:
   ov_tcp_msg_write_to_stream (output, reply, NULL, NULL);
 
-  /* Emit signal after unlocking and after writing the reply */
-  if (ret)
+  /* Emit signals after unlocking and after writing the reply */
+  if (ret) {
     g_signal_emit_by_name (local, "call-remote-gone", removed, FALSE);
+    g_object_unref (removed);
+  }
   if (all_remotes_gone)
     g_signal_emit_by_name (local, "call-all-remotes-gone");
 
