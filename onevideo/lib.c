@@ -1032,7 +1032,7 @@ err:
   goto out;
 }
 
-static void
+static gboolean
 ov_local_peer_check_timeouts (OvLocalPeer * local)
 {
   guint ii;
@@ -1041,6 +1041,8 @@ ov_local_peer_check_timeouts (OvLocalPeer * local)
   GPtrArray *timedout = g_ptr_array_new ();
   GPtrArray *removed = g_ptr_array_new ();
   gboolean all_remotes_gone = FALSE;
+
+  GST_DEBUG ("Checking for remote timeouts...");
 
   ov_local_peer_lock (local);
 
@@ -1075,9 +1077,10 @@ ov_local_peer_check_timeouts (OvLocalPeer * local)
   g_ptr_array_free (removed, TRUE);
 
   if (!all_remotes_gone)
-    return;
+    return G_SOURCE_CONTINUE;
 
   g_signal_emit_by_name (local, "call-all-remotes-gone");
+  return G_SOURCE_REMOVE;
 }
 
 gboolean
