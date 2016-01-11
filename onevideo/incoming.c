@@ -294,10 +294,10 @@ ov_local_peer_handle_query_reply_caps (OvLocalPeer * local,
   setup_negotiate_remote_peers (local, msg);
 
   /* Build the 'reply-caps' msg */
-  peers = g_variant_builder_new (G_VARIANT_TYPE ("a(suuuu)"));
+  peers = g_variant_builder_new (G_VARIANT_TYPE ("a(sqqqq)"));
   g_hash_table_iter_init (&iter, priv->negotiate->remotes);
   while (g_hash_table_iter_next (&iter, NULL, (gpointer) &remote))
-    g_variant_builder_add (peers, "(suuuu)", remote->id,
+    g_variant_builder_add (peers, "(sqqqq)", remote->id,
         remote->priv->recv_ports[0], remote->priv->recv_ports[1],
         remote->priv->recv_ports[2], remote->priv->recv_ports[3]);
 
@@ -366,7 +366,7 @@ set_call_details (OvLocalPeer * local, OvTcpMsg * msg)
   priv->send_vcaps = gst_caps_from_string (vcaps);
   g_free (acaps); g_free (vcaps);
 
-  while (g_variant_iter_loop (iter, "(sssuuuuuu)", &peer_id, &acaps, &vcaps,
+  while (g_variant_iter_loop (iter, "(sssqqqqqq)", &peer_id, &acaps, &vcaps,
         &ports[0], &ports[1], &ports[2], &ports[3], &ports[4], &ports[5])) {
     OvRemotePeer *remote;
 

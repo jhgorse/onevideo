@@ -72,17 +72,17 @@ enum _OvMediaType {
 };
 
 struct _OvRemotePeerPrivate {
-  /* The remote ports we transmit data to using udpsink, in order:
+  /* The destination ports we transmit data to using udpsink, in order:
    * {audio_rtp, audio_send_rtcp SRs, audio_send_rtcp RRs,
    *  video_rtp, video_send_rtcp SRs, video_send_rtcp RRs} */
-  guint send_ports[6];
+  guint16 send_ports[6];
   /* The local ports we receive data on using udpsrc, in order:
    * {audio_rtp, audio_recv_rtcp SRs,
    *  video_rtp, video_recv_rtcp SRs} */
-  guint recv_ports[4];
+  guint16 recv_ports[4];
 
   /*-- Receive pipeline --*/
-  /* The caps that we will receive */
+  /* The format that we will receive data in from this peer */
   GstCaps *recv_acaps;
   GstCaps *recv_vcaps;
   /* Depayloaders */

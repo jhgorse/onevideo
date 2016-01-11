@@ -309,7 +309,7 @@ ov_local_peer_init (OvLocalPeer * self)
 
   /* NOTE: GArray and GPtrArray are not thread-safe; we must lock accesses */
   g_rec_mutex_init (&priv->lock);
-  priv->used_ports = g_array_sized_new (FALSE, TRUE, sizeof (guint), 4);
+  priv->used_ports = g_array_sized_new (FALSE, TRUE, sizeof (guint16), 4);
   priv->remote_peers = g_ptr_array_new ();
 
   /*-- Initialize (non-RTP) caps supported by us --*/

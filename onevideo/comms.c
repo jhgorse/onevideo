@@ -45,15 +45,25 @@ static const struct {
   /* Format: (call_id, error string) */
   {OV_TCP_MSG_TYPE_ERROR_CALL,       "error during call",  "(xs)"},
 
-  /* Format:
+  /* Each peer replies with this structure which contains the ports that it will
+   * receive RTP/RTCP on (RR ports are common for all other peers, but SR and
+   * data ports are peer-specific), the a/v caps that it supports sending, and
+   * the a/v caps that it supports receiving
+   *
+   * Format:
    * (call_id, arecv_rtcprr_port, vrecv_rtcprr_port,
-   *  send_acaps, send_vcaps, recv_acaps, recv_vcaps,
+   *  supported_send_acaps, supported_send_vcaps,
+   *  supported_recv_acaps, supported_recv_vcaps,
+   *   # This peer has allocated destination ports *_port1 to receive RTP data
+   *   # and RTCP SRs from peer1
    *  [(peer1_id, arecv_port1, arecv_rtcpsr_port1, vrecv_port1, vrecv_rtcpsr_port1),
+   *   # This peer has allocated destination ports *_port2 to receive RTP data
+   *   # and RTCP SRs from peer2
    *   (peer2_id, arecv_port2, arecv_rtcpsr_port2, vrecv_port2, vrecv_rtcpsr_port2),
    *   ...])
    *
    *   Note that the rtcprr ports are shared between all peers */
-  {OV_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xuussssa(suuuu))"},
+  {OV_TCP_MSG_TYPE_REPLY_CAPS,       "reply media caps",   "(xqqssssa(sqqqq))"},
 
   /* Format: (call_id, peer_id_str, peer_port)
    * peer_id_str is of the form "$hostname:$port-$guid" */
@@ -74,16 +84,23 @@ static const struct {
    * The peer_addresses here are as resolved by the negotiator */
   {OV_TCP_MSG_TYPE_QUERY_CAPS,       "query media caps",   "(xa(ss))"},
 
-  /* Format:
+  /* Distribute to each peer the details of which format to send audio/video
+   * data in, what format each remote will send data in to this peer, and what
+   * destination ports to use for each remote while sending RTP and RTCP
+   * (these are the ports that each remote will receive RTP/RTCP on)
+   *
+   * Format:
    * (call_id, send_acaps, send_vcaps,
-   *  [(peer1_id, recv_acaps1, recv_vcaps1,
+   *   # peer1_id will send (a|v)caps1, and will recv on *_port1 ports
+   *  [(peer1_id, send_acaps1, send_vcaps1,
    *    arecv_port1, arecv_rtcpsr_port1, arecv_rtcprr_port1,
    *    vrecv_port1, vrecv_rtcpsr_port1, vrecv_rtcprr_port1),
-   *   (peer2_id, recv_acaps2, recv_vcaps2,
-   *    arecv_port2, arecv_rtcpsr_port2, arecv_rtcprr_port1,
-   *    vrecv_port2, vrecv_rtcpsr_port2),
+   *   # peer2_id will send (a|v)caps2, and will recv on *_port2 ports
+   *   (peer2_id, send_acaps2, send_vcaps2,
+   *    arecv_port2, arecv_rtcpsr_port2, arecv_rtcprr_port2,
+   *    vrecv_port2, vrecv_rtcpsr_port2, vrecv_rtcprr_port2),
    *   ...]) */
-  {OV_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssuuuuuu))"},
+  {OV_TCP_MSG_TYPE_CALL_DETAILS,     "call details",       "(xssa(sssqqqqqq))"},
 
   /* Format: (call_id, [peer1_id, peer2_id, ...]) */
   {OV_TCP_MSG_TYPE_START_CALL,       "start call",         "(xas)"},

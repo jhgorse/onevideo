@@ -77,14 +77,14 @@ ov_local_peer_stop_playback (OvLocalPeer * local)
 }
 
 static gint
-compare_ints (const void * a, const void * b)
+compare_uint16s (const void * a, const void * b)
 {
-  return (*(const unsigned int*)a - *(const unsigned int*)b);
+  return (*(const guint16*)a - *(const guint16*)b);
 }
 
 /* Called with the lock TAKEN */
 static gboolean
-set_free_recv_ports (OvLocalPeer * local, guint (*recv_ports)[4])
+set_free_recv_ports (OvLocalPeer * local, guint16 (*recv_ports)[4])
 {
   guint ii, start;
   OvLocalPeerPrivate *priv;
@@ -94,12 +94,12 @@ set_free_recv_ports (OvLocalPeer * local, guint (*recv_ports)[4])
   /* Start from the port right after the video RTCP recv port */
   start = 1 + priv->recv_rtcp_ports[1];
 
-  g_array_sort (priv->used_ports, compare_ints);
+  g_array_sort (priv->used_ports, compare_uint16s);
 
   /* Recv ports are always in contiguous sets of 4, so if we
    * find a hole in the sorted list of used ports, it has 4 unused ports */
   for (ii = 0; ii < priv->used_ports->len; ii++)
-    if (g_array_index (priv->used_ports, guint, ii) == start)
+    if (g_array_index (priv->used_ports, guint16, ii) == start)
       start++;
     else
       break;

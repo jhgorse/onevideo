@@ -30,6 +30,8 @@
 #include "outgoing.h"
 #include "ov-local-peer-priv.h"
 
+#include <string.h>
+
 static void
 handle_tcp_msg_ack (OvTcpMsg * msg)
 {
@@ -364,6 +366,9 @@ clear_reply:
   goto no_reply;
 }
 
+/* FIXME: The caps that this peer will send are set in
+ * ov_aggregate_call_details_for_remotes(). That must either be done in this
+ * function or the contents of this function should be in that one. */
 static void
 ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
 {
@@ -402,7 +407,7 @@ ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
     remote->priv->recv_vcaps = gst_caps_from_string (send_vcaps);
     g_free (send_acaps); g_free (send_vcaps);
 
-    while (g_variant_iter_loop (iter, "(suuuu)", &peer_id, &ports[0],
+    while (g_variant_iter_loop (iter, "(sqqqq)", &peer_id, &ports[0],
           &ports[1], &ports[3], &ports[4])) {
       if (g_strcmp0 (local_id, peer_id) != 0)
         continue;
@@ -420,6 +425,70 @@ ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
   g_free (local_id);
 }
 
+static void
+_ov_free_negcaps_value (gpointer data)
+{
+  guint ii;
+  GstCaps **caps = data;
+
+  for (ii = 0; ii < 4; ii++)
+    gst_caps_unref (caps[ii]);
+  g_free (caps);
+}
+
+static GPtrArray *
+_ov_get_all_peers (OvLocalPeer * local)
+{
+  guint ii;
+  GPtrArray *remotes, *peers;
+  OvLocalPeerPrivate *local_priv;
+
+  local_priv = ov_local_peer_get_private (local);
+  remotes = local_priv->remote_peers;
+
+  peers = g_ptr_array_sized_new (remotes->len + 1);
+  for (ii = 0; ii < remotes->len; ii++) {
+    g_ptr_array_insert (peers, ii, g_ptr_array_index (remotes, ii));
+  }
+  g_ptr_array_insert (peers, remotes->len, local);
+
+  return peers;
+}
+
+static gchar *
+_ov_strdup_print_aggports (GHashTable * table)
+{
+  gchar *ret_s;
+  GString *ret;
+  GHashTableIter iter;
+  gpointer key, value;
+
+  ret = g_string_new ("");
+
+  g_hash_table_iter_init (&iter, table);
+  while (g_hash_table_iter_next (&iter, &key, &value)) {
+    gpointer k, v;
+    GHashTableIter viter;
+    gchar *key_s = key;
+    GHashTable *value_t = value;
+
+    g_string_append_printf (ret, "From: %s\n", key_s);
+    g_hash_table_iter_init (&viter, value_t);
+    while (g_hash_table_iter_next (&viter, &k, &v)) {
+      gchar *k_s = k;
+      guint16 *ports = v;
+
+      g_string_append_printf (ret, "\tTo: %s\n"
+          "\tPorts: [%hu, %hu, %hu, %hu, %hu, %hu]\n", k_s,
+          ports[0], ports[1], ports[2], ports[3], ports[4], ports[5]);
+    }
+  }
+
+  ret_s = ret->str;
+  g_string_free (ret, FALSE);
+  return ret_s;
+}
+
 /* Format of GHashTable *in is: {OvRemotePeer*: GVariant*}
  * GVariant is of type OV_TCP_MSG_TYPE_REPLY_CAPS */
 static GHashTable *
@@ -427,108 +496,253 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
     guint64 call_id)
 {
   guint ii, jj;
-  GHashTable *out;
-  GPtrArray *remotes;
-  /* The caps of the data that we will send to everyone */
-  gchar *send_acaps, *send_vcaps, *local_id;
+  GstCaps **caps;
+  gchar *local_id;
+  GPtrArray *peers, *remotes;
+  GHashTable *out, *negcaps, *aggports;
   const gchar *in_vtype, *out_vtype;
   OvLocalPeerPrivate *local_priv;
 
   local_priv = ov_local_peer_get_private (local);
-  g_object_get (OV_PEER (local), "id", &local_id, NULL);
+  g_object_get (local, "id", &local_id, NULL);
   remotes = local_priv->remote_peers;
+  peers = _ov_get_all_peers (local);
 
   in_vtype = ov_tcp_msg_type_to_variant_type (
       OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION);
   out_vtype = ov_tcp_msg_type_to_variant_type (
       OV_TCP_MSG_TYPE_CALL_DETAILS, OV_TCP_MAX_VERSION);
 
-  /* Format: {OvRemotePeer*: GVariant*}
-   * GVariant is of type OV_TCP_MSG_TYPE_CALL_DETAILS */
+  /* A hash table that contains negotiated send_caps information for each peer
+   * (including us; the local peer).
+   *
+   * This table is first built up from the *in hash table that contains
+   * REPLY_CAPS GVariants, and then it's edited in place to intersect send and
+   * recv caps which basically does the negotiation.
+   *
+   * Format:
+   * {gpointer peer: [GstCaps *send_acaps, GstCaps *send_vcaps,
+   *                  GstCaps *recv_acaps, GstCaps *recv_vcaps]} */
+  negcaps = g_hash_table_new_full (NULL, NULL, NULL, _ov_free_negcaps_value);
+  /* A hash table that contains aggregated destination port information for each
+   * set of from → to peer pairs.
+   *
+   * This table is built from the *in hash table that contains REPLY_CAPS
+   * GVariants.
+   *
+   * Format:
+   * {gchar *from_id: {gchar *to_id: guint16 to_recv_ports[6]}} */
+  aggports = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+      (GDestroyNotify) g_hash_table_unref);
+  /* This hash table is the output of this entire function
+   *
+   * Format: {OvRemotePeer*: GVariant*}
+   * GVariant is of type OV_TCP_MSG_TYPE_CALL_DETAILS and only contains remote
+   * peers; not the local peer */
   out = g_hash_table_new_full (NULL, NULL, NULL,
       (GDestroyNotify) g_variant_unref);
 
-  local_priv->send_acaps = gst_caps_fixate (
-      gst_caps_copy (local_priv->supported_send_acaps));
-  send_acaps = gst_caps_to_string (local_priv->send_acaps);
-  /* TODO: Right now, we just select the best video caps available. Instead, we
-   * should decide send_vcaps based on our upload bandwidth limit and based on
-   * the recv_caps of other peers. This is ok right now because other peers
-   * just accept any JPEG video anyway. */
-  local_priv->send_vcaps = gst_caps_fixate (
-      gst_caps_copy (local_priv->supported_send_vcaps));
-  send_vcaps = gst_caps_to_string (local_priv->send_vcaps);
-
-  /* For each remote peer, iterate over the reply-caps messages received from
-   * all *other* peers and find the udpsink send_ports and recv caps that each
-   * remote peer should be using for all other peers. */
-  /* FIXME: This is O(n³), but could be O(n²) if we iterate over all the
-   * reply-caps messages once. Difficult to do with GVariants unless we keep
-   * one GVariantBuilder for each peer or something. */
+  /* Aggregate caps for all remotes into a separate hash table */
   for (ii = 0; ii < remotes->len; ii++) {
-    GVariant *negotiated;
-    GVariantBuilder *thisb;
     OvRemotePeer *this;
-    
+    GVariant *thisv;
+    gchar *caps_s[4] = {0};
+
     this = g_ptr_array_index (remotes, ii);
-    thisb = g_variant_builder_new (G_VARIANT_TYPE ("a(sssuuuuuu)"));
+    thisv = g_hash_table_lookup (in, this);
+    g_variant_get (thisv, in_vtype, NULL, NULL, NULL,
+        /* senda_caps, sendv_caps, recva_caps, recvv_caps */
+        &caps_s[0], &caps_s[1], &caps_s[2], &caps_s[3], NULL);
 
-    for (jj = 0; jj < remotes->len; jj++) {
-      GVariant *otherv;
-      GVariantIter *iter;
-      OvRemotePeer *other;
-      /* The caps of the data that the remote 'other'
-       * will receive from the remote 'this'*/
-      gchar *recv_acaps, *recv_vcaps, *peer_id;
-      guint32 ports[6] = {};
+    caps = g_new0 (GstCaps*, 4);
+    for (jj = 0; jj < 4; jj++)
+      caps[jj] = gst_caps_from_string (caps_s[jj]), g_free (caps_s[jj]);
+    g_hash_table_insert (negcaps, this, caps);
+  }
+  /* Add ourselves because caps negotiation must include us */
+  caps = g_new0 (GstCaps*, 4);
+  caps[0] = gst_caps_ref (local_priv->supported_send_acaps);
+  caps[1] = gst_caps_ref (local_priv->supported_send_vcaps);
+  caps[2] = gst_caps_ref (local_priv->supported_recv_acaps);
+  caps[3] = gst_caps_ref (local_priv->supported_recv_vcaps);
+  g_hash_table_insert (negcaps, local, caps);
 
-      other = g_ptr_array_index (remotes, jj);
-      if (other == this)
+  /* Decide (negotiate) the send_(a|v)caps for each peer */
+  for (ii = 0; ii < peers->len; ii++) {
+    gpointer this;
+    GstCaps **thiscaps;
+
+    this = g_ptr_array_index (peers, ii);
+    thiscaps = g_hash_table_lookup (negcaps, this);
+    g_assert (thiscaps);
+    for (jj = 0; jj < peers->len; jj++) {
+      gpointer that;
+      GstCaps *tmp, **thatcaps;
+
+      that = g_ptr_array_index (peers, jj);
+      if (this == that)
         continue;
-      otherv = g_hash_table_lookup (in, other);
 
-      g_variant_get (otherv, in_vtype, NULL, &ports[2], &ports[5],
-          /* 'send_caps' of 'this' remote are 'recv_caps' of the 'other' remote */
-          &recv_acaps, &recv_vcaps, NULL, NULL, &iter);
-      g_assert (recv_acaps && recv_vcaps);
-      while (g_variant_iter_loop (iter, "(suuuu)", &peer_id, &ports[0],
-            &ports[1], &ports[3], &ports[4])) {
-        /* Skip this element if it's not about this 'other' remote */
-        if (g_strcmp0 (this->id, peer_id) != 0) {
-          GST_DEBUG ("Building details for %s, got %s, continuing",
-              this->id, peer_id);
-          continue;
-        }
-        GST_DEBUG ("Building details for %s, got %s, building",
-            this->id, peer_id);
-        /* Now we know what receiver-side ports 'this' should use while sending
-         * data to `peer_id` */
-        g_variant_builder_add (thisb, "(sssuuuuuu)", other->id, recv_acaps,
-            recv_vcaps, ports[0], ports[1], ports[2], ports[3], ports[4],
-            ports[5]);
-        GST_DEBUG ("%s will recv from %s on ports [%u, %u, %u, %u, %u, %u]",
-            other->id, peer_id, ports[0], ports[1], ports[2], ports[3],
-            ports[4], ports[5]);
-      }
-      g_free (recv_acaps);
-      g_free (recv_vcaps);
+      thatcaps = g_hash_table_lookup (negcaps, that);
+      g_assert (thatcaps);
+      /* this.send_acaps = this.send_acaps.intersect(that.recv_acaps) */
+      tmp = gst_caps_intersect (thiscaps[0], thatcaps[2]);
+      gst_caps_unref (thiscaps[0]), thiscaps[0] = tmp;
+      /* this.send_vcaps = this.send_vcaps.intersect(that.recv_vcaps) */
+      tmp = gst_caps_intersect (thiscaps[1], thatcaps[3]);
+      gst_caps_unref (thiscaps[1]), thiscaps[1] = tmp;
     }
-    /* Besides all the other (remote) peers, also add the recv ports that we
-     * have allocated for this remote peer and the recv rtcp ports that are
-     * common between all remote peers */
-    g_variant_builder_add (thisb, "(sssuuuuuu)", local_id, send_acaps,
-        send_vcaps, this->priv->recv_ports[0], this->priv->recv_ports[1],
-        local_priv->recv_rtcp_ports[0], this->priv->recv_ports[2],
-        this->priv->recv_ports[3], local_priv->recv_rtcp_ports[1]);
-    /* Create the aggregated CALL_DETAILS GVariant for this remote peer */
-    negotiated =
-      g_variant_new (out_vtype, call_id, send_acaps, send_vcaps, thisb);
-    g_hash_table_insert (out, this, g_variant_ref_sink (negotiated));
-    g_variant_builder_unref (thisb);
   }
 
-  g_free (send_acaps);
-  g_free (send_vcaps);
+  /* Aggregate remote_recv_ports for each peer pair into a hash table */
+  for (ii = 0; ii < remotes->len; ii++) {
+    OvRemotePeer *to;
+    GVariant *tov;
+    GVariantIter *iter;
+    guint16 to_recv_ports[6];
+    gchar *to_id, *from_id;
+
+    to = g_ptr_array_index (remotes, ii);
+    to_id = to->id;
+
+    tov = g_hash_table_lookup (in, to);
+    /* These two RR recv_ports have been allocated for all 'from' peers */
+    g_variant_get (tov, in_vtype, NULL, &to_recv_ports[2], &to_recv_ports[5],
+          NULL, NULL, NULL, NULL, &iter);
+    /* Store a copy of all peer-specific recv_ports that 'to' has allocated */
+    while (g_variant_iter_next (iter, "(sqqqq)", &from_id, &to_recv_ports[0],
+          &to_recv_ports[1], &to_recv_ports[3], &to_recv_ports[4])) {
+      GHashTable *to_ports;
+      guint16 *to_recv_portscopy;
+
+      if (!(to_ports = g_hash_table_lookup (aggports, from_id))) {
+        to_ports =
+          g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+        /* from_id is already newly-allocated, so we don't need a g_strdup */
+        g_hash_table_insert (aggports, from_id, to_ports);
+      } else {
+        g_free (from_id);
+      }
+
+      to_recv_portscopy = g_malloc0 (sizeof (to_recv_ports));
+      memcpy (to_recv_portscopy, to_recv_ports, sizeof(to_recv_ports));
+      g_hash_table_insert (to_ports, g_strdup (to_id), to_recv_portscopy);
+    }
+    g_variant_iter_free (iter);
+  }
+  /* Add ourselves because remote peers need to know what ports we've allocated
+   * to receive from them */
+  {
+    gchar *to_id;
+    guint16 to_recv_ports[6];
+
+    to_id = local_id;
+    /* RR ports */
+    to_recv_ports[2] = local_priv->recv_rtcp_ports[0];
+    to_recv_ports[5] = local_priv->recv_rtcp_ports[1];
+    for (ii = 0; ii < remotes->len; ii++) {
+      gchar *from_id;
+      OvRemotePeer *from;
+      GHashTable *to_ports;
+      guint16 *to_recv_portscopy;
+
+      from = g_ptr_array_index (remotes, ii);
+      from_id = from->id;
+      /* Audio data port */
+      to_recv_ports[0] = from->priv->recv_ports[0];
+      /* Audio RTCP port */
+      to_recv_ports[1] = from->priv->recv_ports[1];
+      /* Video data port */
+      to_recv_ports[3] = from->priv->recv_ports[2];
+      /* Video RTCP port */
+      to_recv_ports[4] = from->priv->recv_ports[3];
+
+      if (!(to_ports = g_hash_table_lookup (aggports, from_id))) {
+        to_ports =
+          g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+        g_hash_table_insert (aggports, g_strdup (from_id), to_ports);
+      }
+
+      to_recv_portscopy = g_malloc0 (sizeof (to_recv_ports));
+      memcpy (to_recv_portscopy, to_recv_ports, sizeof(to_recv_ports));
+      g_hash_table_insert (to_ports, g_strdup (to_id), to_recv_portscopy);
+    }
+  }
+
+  if (gst_debug_category_get_threshold (onevideo_debug) >= GST_LEVEL_DEBUG) {
+    gchar *str = _ov_strdup_print_aggports (aggports);
+    GST_DEBUG ("aggports table is:\n%s", str);
+    g_free (str);
+  }
+
+  /* For each remote peer, iterate over the negcaps and aggports hash tables
+   * which contain information for all peers and create the *out hash table
+   * containing CALL_DETAILS GVariants */
+  for (ii = 0; ii < remotes->len; ii++) {
+    OvRemotePeer *from;
+    GHashTable *to_ports;
+    GVariantBuilder *fromb;
+    GVariant *call_details;
+    gchar *from_id, *from_send_acaps, *from_send_vcaps;
+    GstCaps **caps;
+
+    from = g_ptr_array_index (remotes, ii);
+    from_id = from->id;
+
+    to_ports = g_hash_table_lookup (aggports, from_id);
+    g_assert (to_ports);
+
+    fromb = g_variant_builder_new (G_VARIANT_TYPE ("a(sssqqqqqq)"));
+
+    for (jj = 0; jj < peers->len; jj++) {
+      gpointer to;
+      guint16 *to_recv_ports;
+      gchar *to_id, *to_send_acaps, *to_send_vcaps;
+
+      to = g_ptr_array_index (peers, jj);
+
+      if (to == (gpointer) from)
+        continue;
+
+      to_id = (to == local ? local_id : ((OvRemotePeer*)to)->id);
+
+      caps = g_hash_table_lookup (negcaps, to);
+      g_assert (caps);
+      to_send_acaps = gst_caps_to_string (caps[0]);
+      to_send_vcaps = gst_caps_to_string (caps[1]);
+
+      to_recv_ports = g_hash_table_lookup (to_ports, to_id);
+      g_assert (to_recv_ports);
+
+      g_variant_builder_add (fromb, "(sssqqqqqq)", to_id, to_send_acaps,
+          to_send_vcaps, to_recv_ports[0], to_recv_ports[1], to_recv_ports[2],
+          to_recv_ports[3], to_recv_ports[4], to_recv_ports[5]);
+      g_free (to_send_acaps);
+      g_free (to_send_vcaps);
+    }
+
+    caps = g_hash_table_lookup (negcaps, from);
+    from_send_acaps = gst_caps_to_string (caps[0]);
+    from_send_vcaps = gst_caps_to_string (caps[1]);
+    /* Create the CALL_DETAILS GVariant for this remote peer */
+    call_details = g_variant_new (out_vtype, call_id, from_send_acaps,
+        from_send_vcaps, fromb);
+    g_hash_table_insert (out, from, g_variant_ref_sink (call_details));
+    g_variant_builder_unref (fromb);
+    g_free (from_send_acaps);
+    g_free (from_send_vcaps);
+  }
+
+  /* Set the caps we will send */
+  {
+    GstCaps **caps = g_hash_table_lookup (negcaps, local);
+    local_priv->send_acaps = gst_caps_fixate (gst_caps_copy (caps[0]));
+    local_priv->send_vcaps = gst_caps_fixate (gst_caps_copy (caps[1]));
+  }
+
+  g_ptr_array_free (peers, TRUE);
+  g_hash_table_unref (aggports);
+  g_hash_table_unref (negcaps);
   g_free (local_id);
   return out;
 }
@@ -632,6 +846,10 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
   gint ii;
   guint64 call_id;
   GPtrArray *remotes;
+  /* Hash table of incoming negotiation messages (REPLY_CAPS)
+   * and outgoing messages (CALL_DETAILS) for each remote peer
+   * The local peer is not included in this hash table as a key,
+   * but it is referenced in the values (obviously) */
   GHashTable *in, *out;
   OvLocalPeerPrivate *local_priv;
   GError *error = NULL;
