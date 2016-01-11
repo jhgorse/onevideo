@@ -125,7 +125,14 @@ on_negotiate_skipped (OvLocalPeer * local, OvPeer * skipped,
 }
 
 static void
-on_negotiate_aborted (OvLocalPeer * local, GError * error, gpointer user_data)
+on_incoming_negotiate_aborted (OvLocalPeer * local, GError * error, gpointer user_data)
+{
+  g_printerr ("Error while negotiating: %s\n",
+      error ? error->message : "Unknown error");
+}
+
+static void
+on_outgoing_negotiate_aborted (OvLocalPeer * local, GError * error, gpointer user_data)
 {
   g_printerr ("Error while negotiating: %s\n",
       error ? error->message : "Unknown error");
@@ -389,18 +396,24 @@ main (int   argc,
         get_device (devices, device_path) : get_device_choice (devices));
   g_list_free_full (devices, g_object_unref);
 
-  /* Signals common for incoming and outgoing calls */
+  /* Common for incoming and outgoing calls */
   g_signal_connect (local, "negotiate-finished",
       G_CALLBACK (on_negotiate_finished), NULL);
-  g_signal_connect (local, "negotiate-aborted",
-      G_CALLBACK (on_negotiate_aborted), NULL);
 
   if (remotes == NULL && !discover_peers) {
       g_print ("No remotes specified; listening for incoming connections\n");
       g_signal_connect (local, "negotiate-incoming",
           G_CALLBACK (on_negotiate_incoming), NULL);
+      /* When an incoming negotation is aborted, we just carry on like nothing
+       * happened */
+      g_signal_connect (local, "negotiate-aborted",
+          G_CALLBACK (on_incoming_negotiate_aborted), NULL);
       goto remotes_done;
   }
+
+  /* When an outgoing negotation is aborted, we exit */
+  g_signal_connect (local, "negotiate-aborted",
+      G_CALLBACK (on_outgoing_negotiate_aborted), NULL);
 
   if (remotes == NULL) {
     FindRemotesData *data;
