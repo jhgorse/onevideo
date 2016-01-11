@@ -285,7 +285,8 @@ ov_get_network_interfaces (void)
       continue;
 
     if (ifa->ifa_addr->sa_family == AF_INET) {
-      if (g_strcmp0 (ifa->ifa_name, "lo") == 0)
+      /* Skip loopback ifaces. Linux is 'lo'. OS X is 'lo[0-9]'. */
+      if (g_regex_match_simple ("lo[0-9]?", ifa->ifa_name, 0, 0))
         continue;
       GST_DEBUG ("Found interface : %s", ifa->ifa_name);
       interfaces = g_list_prepend (interfaces, g_strdup (ifa->ifa_name));
