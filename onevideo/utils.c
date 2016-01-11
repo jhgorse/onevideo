@@ -242,7 +242,7 @@ ov_get_missing_gstreamer_plugins (const gchar * toolkit)
 
   if (g_hash_table_size (missing) > 0)
     return missing;
-  
+
   g_hash_table_unref (missing);
   return NULL;
 }

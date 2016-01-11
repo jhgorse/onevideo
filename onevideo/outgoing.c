@@ -90,7 +90,7 @@ ov_remote_peer_send_tcp_msg (OvRemotePeer * remote, OvTcpMsg * msg,
   OvTcpMsg *reply = NULL;
 
   client = g_socket_client_new ();
-  
+
   /* Set local address with random port to ensure that we connect from the same
    * interface that we're listening on */
   g_object_get (OV_PEER (remote->local), "address", &local_addr, NULL);
@@ -99,7 +99,7 @@ ov_remote_peer_send_tcp_msg (OvRemotePeer * remote, OvTcpMsg * msg,
   g_socket_client_set_local_address (client, addr);
   g_object_unref (local_addr);
   g_object_unref (addr);
-  
+
   /* Set timeout */
   g_socket_client_set_timeout (client, OV_TCP_TIMEOUT);
 
@@ -147,7 +147,7 @@ ov_remote_peer_send_tcp_msg_quick_noreply (OvRemotePeer * remote,
   GInetSocketAddress *local_addr;
 
   client = g_socket_client_new ();
-  
+
   /* Set local address with random port to ensure that we connect from the same
    * interface that we're listening on */
   g_object_get (OV_PEER (remote->local), "address", &local_addr, NULL);
@@ -156,7 +156,7 @@ ov_remote_peer_send_tcp_msg_quick_noreply (OvRemotePeer * remote,
   g_socket_client_set_local_address (client, addr);
   g_object_unref (local_addr);
   g_object_unref (addr);
-  
+
   /* Wait at most 1 second per client */
   g_socket_client_set_timeout (client, 1);
 
@@ -244,7 +244,7 @@ ov_remote_peer_tcp_client_cancel_negotiate (OvRemotePeer * remote,
   g_free (local_id);
 
   ov_remote_peer_send_tcp_msg_quick_noreply (remote, msg);
-    
+
   ov_tcp_msg_free (msg);
 }
 
@@ -274,7 +274,7 @@ get_all_peers_list_except_this (OvRemotePeer * remote, guint64 call_id)
 
   peers = g_variant_new ("(xas)", call_id, builder);
   g_variant_builder_unref (builder);
-  
+
   tmp = g_variant_print (peers, FALSE);
   GST_DEBUG ("Peers remote to peer %s: %s", remote->id, tmp);
   g_free (tmp);
@@ -308,7 +308,7 @@ get_all_remotes_addr_list_except_this (OvRemotePeer * remote,
 
   peers = g_variant_new ("(xa(ss))", call_id, builder);
   g_variant_builder_unref (builder);
-  
+
   tmp = g_variant_print (peers, FALSE);
   GST_DEBUG ("Peers (other than us) remote to peer %s: %s", remote->id, tmp);
   g_free (tmp);
@@ -877,7 +877,8 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
   ov_local_peer_set_state (local, OV_LOCAL_STATE_NEGOTIATING);
   ov_local_peer_set_state_negotiator (local);
   /* Begin negotiation with all peers first (which returns a peer id) */
-  /* TODO: Synchronous for now, make this async to speed up negotiation */
+  /* TODO: Synchronous for now, make this async and then wait in this thread for
+   * all the replies to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
     OvRemotePeer *remote;
@@ -895,7 +896,7 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
 
       skipped = ov_peer_new (remote->addr);
       g_ptr_array_remove_index (remotes, ii);
-      
+
       /* Unlock local and emit signal */
       ov_local_peer_unlock (local);
       g_signal_emit_by_name (local, "negotiate-skipped-remote", skipped, error);
@@ -926,7 +927,8 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
   /* Continue negotiation now that we have the peer id for all peers */
-  /* TODO: Synchronous for now, make this async to speed up negotiation */
+  /* TODO: Synchronous for now, make this async and then wait in this thread for
+   * all the replies to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     OvTcpMsg *reply;
     OvRemotePeer *remote;
@@ -943,7 +945,7 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
     ov_tcp_msg_free (reply);
   }
   ov_local_peer_unlock (local);
-  
+
   ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
@@ -984,7 +986,8 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
     g_hash_table_unref (out);
     goto cancelled;
   }
-  /* TODO: Synchronous for now, make this async to speed up negotiation */
+  /* TODO: Synchronous for now, make this async and then wait in this thread for
+   * all the replies to speed up negotiation */
   for (ii = 0; ii < remotes->len; ii++) {
     gboolean ret;
     GVariant *peers;

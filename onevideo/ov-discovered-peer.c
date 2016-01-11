@@ -48,7 +48,7 @@ ov_discovered_peer_set_property (GObject * object, guint prop_id, const GValue *
     GParamSpec * pspec)
 {
   OvDiscoveredPeerPrivate *priv;
-  
+
   priv = ov_discovered_peer_get_instance_private (OV_DISCOVERED_PEER (object));
 
   switch (prop_id) {
@@ -65,7 +65,7 @@ ov_discovered_peer_get_property (GObject * object, guint prop_id, GValue * value
     GParamSpec * pspec)
 {
   OvDiscoveredPeerPrivate *priv;
-  
+
   priv = ov_discovered_peer_get_instance_private (OV_DISCOVERED_PEER (object));
 
   switch (prop_id) {

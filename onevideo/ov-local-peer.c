@@ -97,7 +97,7 @@ static void
 ov_local_peer_class_init (OvLocalPeerClass * klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
-   
+
   GST_DEBUG_CATEGORY_INIT (onevideo_debug, "onevideo", 0,
       "OneVideo VoIP library");
 
@@ -111,7 +111,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
   /**
    * OvLocalPeer::discovery-sent:
    * @local: the local peer
-   * 
+   *
    * Emitted when a discovery multicast message has just been sent.
    *
    * Emissions of this signal are guaranteed to happen from the main thread.
@@ -128,7 +128,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * OvLocalPeer::peer-discovered:
    * @local: the local peer
    * @peer: an #OvDiscoveredPeer
-   * 
+   *
    * Emitted when a peer is discovered in response to a multicast discover being
    * sent after calling ov_local_peer_discovery_start().
    *
@@ -147,7 +147,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * OvLocalPeer::negotiate-incoming:
    * @local: the local peer
    * @peer: the #OvPeer remote peer
-   * 
+   *
    * Emitted when we receive an incoming negotiation (VoIP call) request from
    * a remote peer and we are currently not already busy (either negotiating or
    * in a call). If no callbacks are connected to this signal, all calls will be
@@ -196,7 +196,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * @local: the local peer
    * @skipped: the skipped #OvPeer
    * @error: the #GError describing the error
-   * 
+   *
    * While negotiating an outgoing call, this is emitted for each remote peer
    * that the local peer skips because it did not respond at the start of
    * negotiation. If all remote peers fail to respond,
@@ -215,7 +215,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
   /**
    * OvLocalPeer::negotiate-finished:
    * @local: the local peer
-   * 
+   *
    * Emitted when the local peer finishes negotiation successfully and the call
    * can be started by invoking ov_local_peer_call_start()
    **/
@@ -231,7 +231,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * OvLocalPeer::negotiate-aborted:
    * @local: the local peer
    * @error: a #GError describing the error
-   * 
+   *
    * Emitted when negotiation was aborted by the local peer. This can happen
    * either due to a network error, or an error returned by a remote peer, or
    * because negotiation was cancelled by calling
@@ -251,7 +251,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * @local: the local peer
    * @remote: the #OVPeer peer that has disconnected
    * @timedout: whether the disconnection was due to a timeout
-   * 
+   *
    * Emitted when a remote peers leaves a call due to a timeout or because of
    * a call hangup.
    *
@@ -271,7 +271,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
   /**
    * OvLocalPeer::call-all-remotes-gone:
    * @local: the local peer
-   * 
+   *
    * Emitted when the call is ended because of all remote peers left either due
    * to a timeout or because of a call hangup. Typically in response to this
    * signal, the application will call ov_local_peer_call_hangup() and then do
@@ -336,7 +336,7 @@ ov_local_peer_constructed (GObject * object)
   guint16 tcp_port;
   GInetSocketAddress *addr;
   OvLocalPeerPrivate *priv = ov_local_peer_get_private (OV_LOCAL_PEER (object));
-  
+
   /* Allocate ports for recv RTCP RRs from all remotes */
   g_object_get (OV_PEER (object), "address", &addr, NULL);
   tcp_port = g_inet_socket_address_get_port (addr);
@@ -349,7 +349,7 @@ static void
 ov_local_peer_dispose (GObject * object)
 {
   OvLocalPeerPrivate *priv = ov_local_peer_get_private (OV_LOCAL_PEER (object));
-  
+
   g_clear_object (&priv->dm);
 
   g_clear_object (&priv->tcp_server);
@@ -377,7 +377,7 @@ ov_local_peer_finalize (GObject * object)
   g_list_free_full (priv->mc_ifaces, g_free);
   g_array_free (priv->used_ports, TRUE);
   g_free (priv->iface);
-  
+
   G_OBJECT_CLASS (ov_local_peer_parent_class)->finalize (object);
 }
 
@@ -404,7 +404,7 @@ ov_local_peer_new (const gchar * iface, guint16 port)
   id = g_strdup_printf ("%s:%u-%s", g_get_host_name (),
       g_inet_socket_address_get_port (G_INET_SOCKET_ADDRESS (saddr)), tmp);
   g_free (tmp);
-  
+
   peer = g_object_new (OV_TYPE_LOCAL_PEER, "address", saddr, "iface", iface,
       "id", id, NULL);
   g_object_unref (saddr);
@@ -495,8 +495,8 @@ negotiate_async_ready_cb (OvLocalPeer * local, GAsyncResult * result,
 /* Will send each remote peer the list of all other remote peers, and each
  * remote peer replies with the recv/send caps it supports. Once all the peers
  * have replied, we'll decide caps for everyone and send them to everyone. All
- * this will happen asynchronously. The caller should just call 
- * ov_local_peer_call_start() when it wants to start the call, and it will 
+ * this will happen asynchronously. The caller should just call
+ * ov_local_peer_call_start() when it wants to start the call, and it will
  * start when everyone is ready. */
 gboolean
 ov_local_peer_negotiate_start (OvLocalPeer * local)
@@ -505,7 +505,7 @@ ov_local_peer_negotiate_start (OvLocalPeer * local)
   GCancellable *cancellable;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
 
@@ -538,7 +538,7 @@ ov_local_peer_negotiate_abort (OvLocalPeer * local)
 {
   OvLocalPeerState state;
   OvLocalPeerPrivate *priv;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
 

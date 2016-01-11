@@ -124,7 +124,7 @@ ov_local_peer_handle_start_negotiate (OvLocalPeer * local,
 
   /* Set a rough timer for timing out the negotiation */
   timeout_value = 0;
-  priv->negotiate->check_timeout_id = 
+  priv->negotiate->check_timeout_id =
     g_timeout_add_seconds_full (G_PRIORITY_DEFAULT_IDLE, 1,
         (GSourceFunc) check_negotiate_timeout, local, NULL);
 
@@ -165,7 +165,7 @@ ov_local_peer_handle_cancel_negotiate (OvLocalPeer * local,
     goto send_reply;
   }
   g_variant_get (msg->variant, variant_type, &call_id, NULL);
-  
+
   if (call_id != priv->negotiate->call_id) {
     reply = ov_tcp_msg_new_error (msg->id, "Invalid call id");
     goto send_reply;

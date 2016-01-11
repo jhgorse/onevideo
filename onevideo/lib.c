@@ -52,7 +52,7 @@ ov_local_peer_stop_transmit (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
   OvLocalPeerPrivate *priv;
-  
+
   priv = ov_local_peer_get_private (local);
 
   if (priv->transmit != NULL) {
@@ -69,7 +69,7 @@ ov_local_peer_stop_playback (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
   OvLocalPeerPrivate *priv;
-  
+
   priv = ov_local_peer_get_private (local);
   ret = gst_element_set_state (priv->playback, GST_STATE_NULL);
   g_assert (ret == GST_STATE_CHANGE_SUCCESS);
@@ -88,7 +88,7 @@ set_free_recv_ports (OvLocalPeer * local, guint16 (*recv_ports)[4])
 {
   guint ii, start;
   OvLocalPeerPrivate *priv;
-  
+
   priv = ov_local_peer_get_private (local);
 
   /* Start from the port right after the video RTCP recv port */
@@ -119,7 +119,7 @@ ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
   GstBus *bus;
   gboolean ret;
   OvRemotePeer *remote;
-  
+
   remote = g_new0 (OvRemotePeer, 1);
   remote->state = OV_REMOTE_STATE_NULL;
   remote->local = local;
@@ -167,7 +167,7 @@ ov_remote_peer_new_from_string (OvLocalPeer * local, const gchar * addr_s)
 {
   GInetSocketAddress *addr;
   OvRemotePeer *remote;
-  
+
   addr = ov_inet_socket_address_from_string (addr_s);
   remote = ov_remote_peer_new (local, addr);
   g_object_unref (addr);
@@ -262,7 +262,7 @@ ov_remote_peer_pause (OvRemotePeer * remote)
   GstStateChangeReturn ret;
   gchar *addr_only;
   OvLocalPeerPrivate *local_priv;
-  
+
   local_priv = ov_local_peer_get_private (remote->local);
 
   g_assert (remote->state == OV_REMOTE_STATE_PLAYING);
@@ -320,7 +320,7 @@ ov_remote_peer_resume (OvRemotePeer * remote)
   GstStateChangeReturn ret;
   gchar *addr_only;
   OvLocalPeerPrivate *local_priv;
-  
+
   local_priv = ov_local_peer_get_private (remote->local);
 
   g_assert (remote->state == OV_REMOTE_STATE_PAUSED);
@@ -397,7 +397,7 @@ ov_remote_peer_get_muted (OvRemotePeer * remote)
 }
 
 /* Does not do any operations that involve taking the OvLocalPeer lock.
- * See: ov_local_peer_remove_remote() 
+ * See: ov_local_peer_remove_remote()
  *
  * NOT a public symbol */
 static void
@@ -407,7 +407,7 @@ ov_remote_peer_remove_not_array (OvRemotePeer * remote)
   GstStateChangeReturn ret;
   gchar *tmp, *addr_only;
   OvLocalPeerPrivate *local_priv;
-  
+
   local_priv = ov_local_peer_get_private (remote->local);
 
   /* Stop transmitting */
@@ -477,7 +477,7 @@ ov_remote_peer_free (OvRemotePeer * remote)
 {
   guint ii;
   OvLocalPeerPrivate *local_priv;
-  
+
   ov_local_peer_lock (remote->local);
   local_priv = ov_local_peer_get_private (remote->local);
 
@@ -615,7 +615,7 @@ ov_local_peer_get_video_devices (OvLocalPeer * local)
 {
   OvLocalPeerState state;
   OvLocalPeerPrivate *priv;
-  
+
   priv = ov_local_peer_get_private (local);
 
   state = ov_local_peer_get_state (local);
@@ -635,7 +635,7 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
   OvMediaType video_type;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
-  
+
   priv = ov_local_peer_get_private (local);
 
   state = ov_local_peer_get_state (local);
@@ -685,7 +685,7 @@ static gboolean
 discovery_send_cb (OvLocalPeer * local)
 {
   OvLocalPeerPrivate *priv;
-  
+
   priv = ov_local_peer_get_private (local);
 
   if (priv->discover_socket_source == NULL ||
@@ -773,7 +773,7 @@ ov_local_peer_discovery_start (OvLocalPeer * local, guint interval,
       G_SOCKET_PROTOCOL_UDP, error);
   if (!recv_socket)
     return FALSE;
-  
+
   g_object_get (OV_PEER (local), "address", &addr, NULL);
   ret = g_socket_bind (recv_socket, G_SOCKET_ADDRESS (addr), TRUE, error);
   g_object_unref (addr);
@@ -839,7 +839,7 @@ ov_local_peer_get_remote_by_id (OvLocalPeer * local,
   guint ii;
   OvRemotePeer *remote;
   OvLocalPeerPrivate *priv;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
 
@@ -885,7 +885,7 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   GInetSocketAddress *addr;
   GstStateChangeReturn ret;
   OvLocalPeerPrivate *priv;
-  
+
   priv = ov_local_peer_get_private (local);
 
   /* {audio RTP, audio RTCP SR, video RTP, video RTCP SR} */
@@ -945,7 +945,7 @@ void
 ov_local_peer_add_remote (OvLocalPeer * local, OvRemotePeer * remote)
 {
   OvLocalPeerPrivate *priv;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
   /* Add to our list of remote peers */
@@ -958,7 +958,7 @@ ov_local_peer_setup_remote (OvLocalPeer * local, OvRemotePeer * remote)
 {
   ov_local_peer_setup_remote_receive (local, remote);
   ov_local_peer_setup_remote_playback (local, remote);
-  
+
   remote->state = OV_REMOTE_STATE_READY;
 
   return TRUE;
@@ -968,7 +968,7 @@ void
 ov_local_peer_remove_remote (OvLocalPeer * local, OvRemotePeer * remote)
 {
   OvLocalPeerPrivate *local_priv;
-  
+
   ov_local_peer_lock (local);
   local_priv = ov_local_peer_get_private (local);
   /* Remove from the peers list first so nothing else tries to use it */
@@ -984,7 +984,7 @@ ov_local_peer_start (OvLocalPeer * local)
   gboolean ret;
   OvLocalPeerState state;
   OvLocalPeerPrivate *priv;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
   state = ov_local_peer_get_state (local);
@@ -1090,7 +1090,7 @@ ov_local_peer_call_start (OvLocalPeer * local)
   OvRemotePeer *remote;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
   state = ov_local_peer_get_state (local);
@@ -1113,7 +1113,7 @@ ov_local_peer_call_start (OvLocalPeer * local)
   for (index = 0; index < priv->remote_peers->len; index++) {
     remote = g_ptr_array_index (priv->remote_peers, index);
     remote->last_seen = current_time;
-    
+
     /* Call details have all been set, so we can do the setup */
     res = ov_local_peer_setup_remote (local, remote);
     g_assert (res);
@@ -1167,7 +1167,7 @@ ov_local_peer_call_hangup (OvLocalPeer * local)
 {
   OvLocalPeerState state;
   OvLocalPeerPrivate *priv;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
   state = ov_local_peer_get_state (local);
@@ -1203,7 +1203,7 @@ ov_local_peer_stop (OvLocalPeer * local)
 {
   OvLocalPeerState state;
   OvLocalPeerPrivate *priv;
-  
+
   ov_local_peer_lock (local);
   priv = ov_local_peer_get_private (local);
   state = ov_local_peer_get_state (local);

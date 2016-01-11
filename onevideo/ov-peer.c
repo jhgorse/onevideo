@@ -69,7 +69,7 @@ ov_peer_set_property (GObject * object, guint prop_id, const GValue * value,
       g_free (priv->addr_s);
       priv->addr = g_value_dup_object (value);
       priv->addr_s = ov_inet_socket_address_to_string (priv->addr);
-      break;     
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
   }
@@ -121,7 +121,7 @@ ov_peer_class_init (OvPeerClass * klass)
     g_param_spec_string ("address-string", "Address string",
         "Address of the peer as a string", NULL, G_PARAM_READABLE |
         G_PARAM_STATIC_STRINGS);
-  
+
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
@@ -136,7 +136,7 @@ ov_peer_dispose (GObject * object)
   OvPeerPrivate *priv = ov_peer_get_instance_private (OV_PEER (object));
 
   g_clear_object (&priv->addr);
-  
+
   G_OBJECT_CLASS (ov_peer_parent_class)->dispose (object);
 }
 
@@ -147,7 +147,7 @@ ov_peer_finalize (GObject * object)
 
   g_free (priv->id);
   g_free (priv->addr_s);
-  
+
   G_OBJECT_CLASS (ov_peer_parent_class)->finalize (object);
 }
 

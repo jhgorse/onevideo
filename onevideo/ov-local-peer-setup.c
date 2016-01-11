@@ -124,7 +124,7 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 #else
 #error "Unsupported operating system"
 #endif
-    
+
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
    * basesink. Fix this by only plugging a sink if audio is present. */
@@ -169,7 +169,7 @@ ov_pipeline_get_osxaudiosrcbin (const gchar * name)
   gst_bin_add_many (GST_BIN (bin), src, conv, NULL);
 
   gst_element_link (src, conv);
-  
+
   srcpad = gst_element_get_static_pad (conv, "src");
   ghostpad = gst_ghost_pad_new ("src", srcpad);
   g_object_unref (srcpad);
@@ -471,7 +471,7 @@ rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
 
   /* Match the session number to the correct branch (audio or video)
    * The session number is the first %u in the pad name of the form
-   * 'recv_rtp_src_%u_%u_%u' */ 
+   * 'recv_rtp_src_%u_%u_%u' */
   if (name[len-1] == '0')
     depay = remote->priv->adepay;
   else if (name[len-1] == '1')
@@ -687,7 +687,7 @@ ov_local_peer_setup_remote_playback (OvLocalPeer * local, OvRemotePeer * remote)
   /* Setup pipeline (priv->playback) to render video from each local to the
    * provided video sink */
   if (remote->priv->video_proxysink) {
-    remote->priv->video_proxysrc = 
+    remote->priv->video_proxysrc =
       gst_element_factory_make ("proxysrc", "video-proxysrc-%u");
     g_assert (remote->priv->video_proxysrc != NULL);
 

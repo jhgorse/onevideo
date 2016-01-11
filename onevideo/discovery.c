@@ -73,7 +73,7 @@ ov_udp_msg_to_buffer (OvUdpMsg * msg, gsize * size)
   *size = msg->size + OV_UDP_MSG_HEADER_SIZE;
 
   buffer = g_malloc0 (*size);
-  
+
   GST_WRITE_UINT32_BE (buffer,      msg->version);
   GST_WRITE_UINT64_BE (buffer + 4,  msg->id);
   GST_WRITE_UINT32_BE (buffer + 12, msg->type);
@@ -224,7 +224,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 
   sfrom = G_INET_SOCKET_ADDRESS (from);
   tmp = ov_inet_socket_address_to_string (sfrom);
-  
+
   if (ov_inet_socket_address_is_iface (sfrom, priv->mc_ifaces,
         g_inet_socket_address_get_port (local_addr))) {
     GST_TRACE ("Ignoring incoming UDP msg sent by us of type: %u, id: %lu",
