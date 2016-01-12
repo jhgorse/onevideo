@@ -585,11 +585,13 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
 
       thatcaps = g_hash_table_lookup (negcaps, that);
       g_assert (thatcaps);
-      /* this.send_acaps = this.send_acaps.intersect(that.recv_acaps) */
-      tmp = gst_caps_intersect (thiscaps[0], thatcaps[2]);
+      /* this.send_acaps = this.send_acaps.intersect(that.recv_acaps)
+       * Also fixate, which will select the best of these caps */
+      tmp = gst_caps_fixate (gst_caps_intersect (thiscaps[0], thatcaps[2]));
       gst_caps_unref (thiscaps[0]), thiscaps[0] = tmp;
-      /* this.send_vcaps = this.send_vcaps.intersect(that.recv_vcaps) */
-      tmp = gst_caps_intersect (thiscaps[1], thatcaps[3]);
+      /* this.send_vcaps = this.send_vcaps.intersect(that.recv_vcaps)
+       * Also fixate, which will select the best of these caps */
+      tmp = gst_caps_fixate (gst_caps_intersect (thiscaps[1], thatcaps[3]));
       gst_caps_unref (thiscaps[1]), thiscaps[1] = tmp;
     }
   }
