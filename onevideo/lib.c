@@ -530,6 +530,32 @@ ov_media_type_to_caps (OvMediaType type)
   return NULL;
 }
 
+OvMediaType
+ov_caps_to_media_type (const GstCaps * caps)
+{
+  const gchar *name;
+  GstStructure *s = gst_caps_get_structure (caps, 0);
+
+  name = gst_structure_get_name (s);
+
+  if (g_strcmp0 (name, "image/jpeg") == 0)
+    return OV_MEDIA_TYPE_JPEG;
+  
+  if (g_strcmp0 (name, "video/x-h264") == 0)
+    return OV_MEDIA_TYPE_H264;
+
+  if (g_strcmp0 (name, "video/x-raw") == 0) {
+    gboolean ret;
+    s = gst_structure_new ("video/x-raw", "format", G_TYPE_STRING, "YUY2", NULL);
+    ret = gst_caps_is_subset_structure (caps, s);
+    gst_structure_free (s);
+    if (ret)
+      return OV_MEDIA_TYPE_YUY2;
+  }
+
+  return OV_MEDIA_TYPE_UNKNOWN;
+}
+
 /* Get the caps from the device and extract the useful caps from it
  * Useful caps are those that are high-def and high framerate, or if none such
  * are found, high-def and low-framerate, then low-def and high-framerate, then

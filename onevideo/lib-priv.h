@@ -113,7 +113,8 @@ struct _OvRemotePeerPrivate {
 };
 
 /* OvMediaType is not a public symbol */
-GstCaps* ov_media_type_to_caps (OvMediaType type);
+GstCaps*      ov_media_type_to_caps (OvMediaType type);
+OvMediaType   ov_caps_to_media_type (const GstCaps *caps);
 
 G_END_DECLS
 

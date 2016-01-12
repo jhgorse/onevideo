@@ -509,6 +509,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   GstElement *vsrc, *vrtcpsrc, *vdecode, *vsink, *vrtcpsink;
   GInetSocketAddress *local_addr;
   gchar *local_addr_s, *remote_addr_s;
+  OvMediaType video_type;
   GstCaps *rtpcaps;
 
   g_assert (remote->priv->recv_acaps != NULL &&
@@ -525,6 +526,8 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote peer */
 
+  video_type = ov_caps_to_media_type (remote->priv->recv_vcaps);
+
   rtpbin = gst_element_factory_make ("rtpbin", "recv-rtpbin-%u");
   g_object_set (rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, "drop-on-latency",
       TRUE, NULL);
@@ -532,8 +535,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   /* TODO: Both audio and video should be optional */
 
   /* Recv RTP audio data */
-  socket = ov_get_socket_for_addr (local_addr_s,
-      remote->priv->recv_ports[0]);
+  socket = ov_get_socket_for_addr (local_addr_s, remote->priv->recv_ports[0]);
   asrc = gst_element_factory_make ("udpsrc", "arecv_rtp_src-%u");
   /* We always use the same caps for sending audio */
   rtpcaps = gst_caps_from_string (RTP_ALL_AUDIO_CAPS_STR);
@@ -545,8 +547,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   asink = gst_element_factory_make ("proxysink", "audio-proxysink-%u");
   g_assert (asink != NULL);
   /* Recv RTCP SR for audio */
-  socket = ov_get_socket_for_addr (local_addr_s,
-      remote->priv->recv_ports[1]);
+  socket = ov_get_socket_for_addr (local_addr_s, remote->priv->recv_ports[1]);
   artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src-%u");
   g_object_set (artcpsrc, "socket", socket, NULL);
   /* Send RTCP RR for audio using the same port as recv RTCP SR for audio
@@ -560,24 +561,32 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_object_unref (socket);
 
   /* Recv RTP video data */
-  socket = ov_get_socket_for_addr (local_addr_s,
-      remote->priv->recv_ports[2]);
   vsrc = gst_element_factory_make ("udpsrc", "vrecv_rtp_src-%u");
-  g_object_set (vsrc, "buffer-size", OV_VIDEO_RECV_BUFSIZE, NULL);
   /* The depayloader will detect the height/width/framerate on the fly
    * This allows us to change that without communicating new caps
-   * TODO: This hard-codes JPEG right now. Choose based on priv->recv_vcaps. */
-  rtpcaps = gst_caps_from_string (RTP_JPEG_VIDEO_CAPS_STR);
-  g_object_set (vsrc, "socket", socket, "caps", rtpcaps, NULL);
+   * TODO: Use decodebin instead of hard-coding elements */
+  if (video_type == OV_MEDIA_TYPE_JPEG) {
+    rtpcaps = gst_caps_from_string (RTP_JPEG_VIDEO_CAPS_STR);
+    remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
+    vdecode = gst_element_factory_make ("jpegdec", NULL);
+  } else if (video_type == OV_MEDIA_TYPE_H264) {
+    rtpcaps = gst_caps_from_string (RTP_H264_VIDEO_CAPS_STR);
+    remote->priv->vdepay = gst_element_factory_make ("rtph264depay", NULL);
+    vdecode = gst_parse_bin_from_description ("h264parse ! avdec_h264", TRUE,
+        NULL);
+  } else {
+    g_assert_not_reached ();
+  }
+  socket = ov_get_socket_for_addr (local_addr_s, remote->priv->recv_ports[2]);
+  g_object_set (vsrc, "buffer-size", OV_VIDEO_RECV_BUFSIZE, "socket", socket,
+      "caps", rtpcaps, NULL);
   gst_caps_unref (rtpcaps);
   g_object_unref (socket);
-  remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
-  vdecode = gst_element_factory_make ("jpegdec", NULL);
+
   vsink = gst_element_factory_make ("proxysink", "video-proxysink-%u");
   g_assert (vsink != NULL);
   /* Recv RTCP SR for video */
-  socket = ov_get_socket_for_addr (local_addr_s,
-      remote->priv->recv_ports[3]);
+  socket = ov_get_socket_for_addr (local_addr_s, remote->priv->recv_ports[3]);
   vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src-%u");
   g_object_set (vrtcpsrc, "socket", socket, NULL);
   /* Send RTCP RR for video using the same port as recv RTCP SR for video
