@@ -318,11 +318,12 @@ int
 main (int   argc,
       char *argv[])
 {
+  gboolean ret;
   OvLocalPeer *local;
   GOptionContext *optctx;
   GHashTable *missing;
-  GError *error = NULL;
   GList *devices;
+  GError *error = NULL;
 
   guint exit_after = 0;
   gboolean auto_exit = FALSE;
@@ -392,9 +393,11 @@ main (int   argc,
   ov_local_peer_start (local);
   devices = ov_local_peer_get_video_devices (local);
   g_print ("Probing finished\n");
-  ov_local_peer_set_video_device (local, device_path ?
+  ret = ov_local_peer_set_video_device (local, device_path ?
         get_device (devices, device_path) : get_device_choice (devices));
   g_list_free_full (devices, g_object_unref);
+  if (!ret)
+    goto out;
 
   /* Common for incoming and outgoing calls */
   g_signal_connect (local, "negotiate-finished",
