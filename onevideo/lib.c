@@ -239,24 +239,46 @@ ov_get_gtksink (GstElement ** out_sink, gpointer * out_widget)
   return TRUE;
 }
 
+static gboolean
+_ov_opengl_is_mesa (void)
+{
+#ifndef __linux__
+  return FALSE;
+#else
+  gboolean ret;
+  gchar *output = NULL;
+  g_spawn_command_line_sync ("glxinfo", &output, NULL, NULL, NULL);
+  if (output == NULL)
+    return FALSE;
+  ret = g_regex_match_simple ("OpenGL version.*Mesa", output, 0, 0);
+  g_free (output);
+  return ret;
+#endif
+}
+
 gpointer
 ov_remote_peer_add_gtksink (OvRemotePeer * remote)
 {
   gpointer widget;
 
-#ifndef __linux__
+  if (_ov_opengl_is_mesa ()) {
+    g_printerr ("Running under Mesa OpenGL which is buggy when using multiple"
+        " GL contexts. Falling back to software rendering.\n");
+    goto software_only;
+  }
+
   /* On Linux (Mesa), using multiple GL output windows leads to a
    * crash due to a bug in Mesa related to multiple GLX contexts */
   if (ov_get_gtkglsink (&remote->priv->video_sink, &widget))
     return widget;
 
-  GST_WARNING ("Unable to create gtkglsink bin; falling back to gtksink");
-#endif
+  g_printerr ("Unable to create gtkglsink bin; falling back to gtksink\n");
 
+software_only:
   if (ov_get_gtksink (&remote->priv->video_sink, &widget))
     return widget;
 
-  GST_ERROR ("Unable to use gtksink; falling back to non-embedded video sink");
+  g_printerr ("Unable to use gtksink; falling back to non-embedded video sink\n");
   return NULL;
 }
 
