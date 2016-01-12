@@ -44,14 +44,17 @@ G_BEGIN_DECLS
 GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define GST_CAT_DEFAULT onevideo_debug
 
-#define CAPS_SEP ", "
+#define CAPS_FIELD_SEP ", "
+#define CAPS_STRUC_SEP "; "
 
 #define RTP_DEFAULT_LATENCY_MS 10
 
 /* We force the same raw audio format everywhere */
 #define AUDIO_CAPS_STR "format=S16LE, channels=2, rate=48000, layout=interleaved"
 /* This is only used for the test video source */
-#define VIDEO_CAPS_STR "width=1280, height=720, framerate=30/1"
+#define VIDEO_CAPS_HIGH_STR "width=1280, height=720, framerate=30/1"
+#define VIDEO_CAPS_LOW_STR "width=640, height=360, framerate=15/1"
+#define VIDEO_CAPS_CRAP_STR "width=320, height=240, framerate=10/1"
 
 #define AUDIO_FORMAT_OPUS "audio/x-opus"
 #define VIDEO_FORMAT_JPEG "image/jpeg"
@@ -64,11 +67,17 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 typedef enum _OvMediaType OvMediaType;
 
 enum _OvMediaType {
-  OV_MEDIA_TYPE_UNKNOWN    = 0,
-  OV_MEDIA_TYPE_JPEG,
-  OV_MEDIA_TYPE_H264, /* Not supported yet */
-  OV_MEDIA_TYPE_YUY2, /* Fallback if JPEG/H264 are not supported */
-  OV_MEDIA_TYPE_TEST, /* videotestsrc if no hardware sources are found */
+  OV_MEDIA_TYPE_UNKNOWN     = 0,
+  OV_MEDIA_TYPE_TEST        = 1,      /* videotestsrc if no hardware sources are found */
+
+  /* This is where the list of media formats ends */
+  OV_MEDIA_TYPE_SENTINEL    = 1 << 1,
+
+  /* These formats are listed in increasing order of desirability
+   * Video sources will usually support combinations of these */
+  OV_MEDIA_TYPE_YUY2        = 1 << 2, /* Fallback if JPEG/H264 are not supported */
+  OV_MEDIA_TYPE_JPEG        = 1 << 3, /* Almost every webcam should support this */
+  OV_MEDIA_TYPE_H264        = 1 << 4, /* Not supported yet */
 };
 
 struct _OvRemotePeerPrivate {

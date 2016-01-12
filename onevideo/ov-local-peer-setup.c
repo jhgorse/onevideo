@@ -246,12 +246,12 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     vsrc = gst_device_create_element (priv->video_device, NULL);
   }
 
-  if (priv->best_video_type == OV_MEDIA_TYPE_JPEG ||
-      priv->best_video_type == OV_MEDIA_TYPE_H264) {
+  if (priv->send_video_type & OV_MEDIA_TYPE_JPEG ||
+      priv->send_video_type & OV_MEDIA_TYPE_H264) {
     /* Passthrough JPEG and H.264 */
     vqueue = gst_element_factory_make ("queue", "video-queue");
-  } else if (priv->best_video_type == OV_MEDIA_TYPE_YUY2 ||
-      priv->best_video_type == OV_MEDIA_TYPE_TEST) {
+  } else if (priv->send_video_type == OV_MEDIA_TYPE_YUY2 ||
+      priv->send_video_type == OV_MEDIA_TYPE_TEST) {
     /* We encode YUY2 to JPEG before sending */
     vqueue = gst_element_factory_make ("jpegenc", NULL);
     g_object_set (vqueue, "quality", 30, NULL);
@@ -264,7 +264,10 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   priv->transmit_vcapsfilter = vfilter =
     gst_element_factory_make ("capsfilter", "video-transmit-caps");
 
-  vpay = gst_element_factory_make ("rtpjpegpay", NULL);
+  if (priv->send_video_type >= OV_MEDIA_TYPE_H264)
+    vpay = gst_element_factory_make ("rtph264pay", NULL);
+  else
+    vpay = gst_element_factory_make ("rtpjpegpay", NULL);
   /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);
   vsink = gst_element_factory_make ("udpsink", "vsend_rtp_sink");

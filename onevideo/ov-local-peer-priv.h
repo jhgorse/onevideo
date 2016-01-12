@@ -78,8 +78,10 @@ struct _OvLocalPeerPrivate {
   GstDeviceMonitor *dm;
   /* Video device being used */
   GstDevice *video_device;
-  /* "Best" video media type that the device can provide */
-  OvMediaType best_video_type;
+  /* Video media types that the device can provide */
+  OvMediaType video_types;
+  /* Video media type that we will send */
+  OvMediaType send_video_type;
 
   /* The caps that we support sending */
   GstCaps *supported_send_acaps;

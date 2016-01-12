@@ -533,51 +533,60 @@ ov_media_type_to_caps (OvMediaType type)
 /* Get the caps from the device and extract the useful caps from it
  * Useful caps are those that are high-def and high framerate, or if none such
  * are found, high-def and low-framerate, then low-def and high-framerate, then
- * low-def and low-framerate.
- *
- * Currently only returns image/jpeg caps */
+ * low-def and low-framerate */
 static GstCaps *
-ov_device_get_usable_caps (GstDevice * device, OvMediaType * type)
+ov_device_get_usable_caps (GstDevice * device, OvMediaType * types)
 {
   gchar *tmp;
   gint ii, len;
-  GstCaps *retcaps, *caps1, *caps2;
+  OvMediaType next_type;
+  GstCaps *tmpcaps, *devcaps, *retcaps, *mediacaps = NULL;
 
-  retcaps = gst_device_get_caps (device);
+  devcaps = gst_device_get_caps (device);
+  retcaps = gst_caps_new_empty ();
 
-  /* Try extracting jpeg-only structures first */
-  *type = OV_MEDIA_TYPE_JPEG;
+  /* Check for the best quality (H264) first, then JPEG, then YUY2, then fail */
+  next_type = OV_MEDIA_TYPE_H264;
 
-extract_caps:
-  caps2 = ov_media_type_to_caps (*type);
-  caps1 = gst_caps_intersect (retcaps, caps2);
-  g_clear_pointer (&caps2, gst_caps_unref);
+retry:
+  g_clear_pointer (&mediacaps, gst_caps_unref);
 
-  if (gst_caps_is_empty (caps1)) {
-    gst_caps_unref (caps1);
-    switch (*type) {
-      /* Device does not support JPEG, try YUY2
-       * We don't try other RAW formats because those are all emulated by libv4l2
-       * by converting/decoding from JPEG or YUY2 */
-      case OV_MEDIA_TYPE_JPEG:
-        /* With YUY2, we will encode to JPEG before transmitting */
-        *type = OV_MEDIA_TYPE_YUY2;
-        GST_WARNING ("Device does not support JPEG! Trying YUY2 "
-            "(lower quality, higher CPU usage)");
-        goto extract_caps; /* try again */
-      default:
-        tmp = gst_caps_to_string (retcaps);
-        GST_ERROR ("Device doesn't support JPEG or YUY2! Supported caps: %s",
-            tmp);
-        g_free (tmp);
-        g_clear_pointer (&retcaps, gst_caps_unref);
-        return NULL; /* fail */
-    }
+  switch (next_type) {
+    case OV_MEDIA_TYPE_H264:
+    case OV_MEDIA_TYPE_JPEG:
+    /* If the device does not support JPEG; try YUY2. We don't try other RAW
+     * formats because those are all emulated by libv4l2 by converting/decoding
+     * one of these. We will encode YUY2 to JPEG before transmitting. */
+    case OV_MEDIA_TYPE_YUY2:
+      /* Check if the device supports this format. If so, add it to the list of
+       * supported media types and merge the caps in our list of caps. Else, try
+       * the next-best video format. */
+      mediacaps = ov_media_type_to_caps (next_type);
+      tmpcaps = gst_caps_intersect (devcaps, mediacaps);
+      if (!gst_caps_is_empty (tmpcaps)) {
+        gst_caps_append (retcaps, tmpcaps);
+        *types |= next_type;
+      } else {
+        gst_caps_unref (tmpcaps);
+      }
+      next_type >>= 1;
+      goto retry;
+    case OV_MEDIA_TYPE_SENTINEL:
+      if (*types >= OV_MEDIA_TYPE_YUY2)
+        break; /* done */
+      tmp = gst_caps_to_string (devcaps);
+      GST_ERROR ("Unsupported video output formats! %s", tmp);
+      g_free (tmp);
+      g_clear_pointer (&retcaps, gst_caps_unref);
+      return NULL; /* fail */
+    default:
+      g_assert_not_reached ();
   }
 
+  if (*types == OV_MEDIA_TYPE_YUY2)
+    GST_WARNING ("Device does not provide compressed output! Trying YUY2 "
+        "(lower quality, higher CPU usage)");
   /* We now have a useful subset of the original device caps */
-  gst_caps_replace (&retcaps, caps1);
-  g_clear_pointer (&caps1, gst_caps_unref);
 
   /* Transform device caps to rtp caps */
   len = gst_caps_get_size (retcaps);
@@ -596,13 +605,13 @@ extract_caps:
     /* Remove framerates less than 15; those look too choppy */
     gst_structure_get_fraction (s, "framerate", &n1, &n2);
     gst_util_fraction_to_double (n1, n2, &dest);
-    if ((*type == OV_MEDIA_TYPE_JPEG && dest < 30) ||
-        (*type == OV_MEDIA_TYPE_YUY2 && dest < 15))
+    if ((*types >= OV_MEDIA_TYPE_JPEG && dest < 30) ||
+        (*types & OV_MEDIA_TYPE_YUY2 && dest < 15))
       goto remove;
 
-    /* The YUY2 video will be encoded to JPEG, so in reality our supported video
-     * caps are JPEG, not YUY2 */
-    if (*type == OV_MEDIA_TYPE_YUY2)
+    /* The raw video will be encoded to JPEG, so in reality our supported video
+     * caps are JPEG, not raw */
+    if (g_strcmp0 (gst_structure_get_name (s), "video/x-raw") == 0)
       gst_structure_set_name (s, "image/jpeg");
 
     continue;
@@ -636,7 +645,6 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
     GstDevice * device)
 {
   gchar *caps;
-  OvMediaType video_type;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
 
@@ -653,13 +661,17 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
    * H.264, we need to fix all this code too. */
   if (device) {
     priv->supported_send_vcaps =
-      ov_device_get_usable_caps (device, &video_type);
-    priv->best_video_type = video_type;
+      ov_device_get_usable_caps (device, &priv->video_types);
   } else {
     priv->supported_send_vcaps =
-      gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_SEP VIDEO_CAPS_STR);
-    priv->best_video_type = OV_MEDIA_TYPE_TEST;
+      gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_FIELD_SEP VIDEO_CAPS_HIGH_STR
+          CAPS_STRUC_SEP VIDEO_FORMAT_JPEG CAPS_FIELD_SEP VIDEO_CAPS_LOW_STR
+          CAPS_STRUC_SEP VIDEO_FORMAT_JPEG CAPS_FIELD_SEP VIDEO_CAPS_CRAP_STR);
+    priv->video_types = OV_MEDIA_TYPE_TEST;
   }
+
+  /* Send the best possible video type */
+  priv->send_video_type = priv->video_types;
 
   caps = gst_caps_to_string (priv->supported_send_vcaps);
   GST_DEBUG ("Supported send vcaps: %s", caps);

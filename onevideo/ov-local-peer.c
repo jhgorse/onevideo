@@ -316,7 +316,7 @@ ov_local_peer_init (OvLocalPeer * self)
   /* NOTE: Caps negotiated/exchanged between peers are always non-RTP caps */
   /* We will only ever use 48KHz Opus */
   priv->supported_send_acaps =
-    gst_caps_from_string (AUDIO_FORMAT_OPUS CAPS_SEP AUDIO_CAPS_STR);
+    gst_caps_from_string (AUDIO_FORMAT_OPUS CAPS_FIELD_SEP AUDIO_CAPS_STR);
   /* supported_send_vcaps is set in set_video_device() */
 
   /* We will only ever use 48KHz Opus */
