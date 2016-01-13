@@ -291,6 +291,19 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
+static gboolean
+_ov_gst_can_decode_h264 (void)
+{
+  GstElement *decoder;
+
+  decoder = g_object_ref_sink (gst_element_factory_make ("avdec_h264", NULL));
+  if (!decoder)
+    return FALSE;
+
+  g_object_unref (decoder);
+  return TRUE;
+}
+
 static void
 ov_local_peer_init (OvLocalPeer * self)
 {
@@ -321,9 +334,13 @@ ov_local_peer_init (OvLocalPeer * self)
 
   /* We will only ever use 48KHz Opus */
   priv->supported_recv_acaps = gst_caps_new_empty_simple (AUDIO_FORMAT_OPUS);
+  /* We require JPEG, and conditionally enable H264 support */
   priv->supported_recv_vcaps = gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
-  gst_caps_append (priv->supported_recv_vcaps,
-      gst_caps_new_empty_simple (VIDEO_FORMAT_H264));
+  /* FIXME: All h264 code currently hard-codes avdec_h264. We should be able to
+   * choose between that and openh264 and perhaps hardware decoders. */
+  if (_ov_gst_can_decode_h264 ())
+    gst_caps_append (priv->supported_recv_vcaps,
+        gst_caps_new_empty_simple (VIDEO_FORMAT_H264));
 
   priv->state = OV_LOCAL_STATE_NULL;
 }
