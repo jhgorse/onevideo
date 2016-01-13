@@ -296,7 +296,7 @@ _ov_gst_can_decode_h264 (void)
 {
   GstElement *decoder;
 
-  decoder = g_object_ref_sink (gst_element_factory_make ("avdec_h264", NULL));
+  decoder = gst_element_factory_make ("avdec_h264", NULL);
   if (!decoder)
     return FALSE;
 
