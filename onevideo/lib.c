@@ -602,7 +602,7 @@ ov_device_get_usable_caps (GstDevice * device, OvVideoFormat *device_format)
 {
   gchar *tmp;
   gint ii, len;
-  OvVideoFormat next_format, formats;
+  OvVideoFormat next_format, formats = 0;
   GstCaps *tmpcaps, *devcaps, *retcaps, *mediacaps = NULL;
 
   devcaps = gst_device_get_caps (device);
