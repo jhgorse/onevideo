@@ -117,14 +117,10 @@ set_free_recv_ports (OvLocalPeer * local, guint16 (*recv_ports)[4])
 static void
 ov_local_peer_transmit_set_vcaps (OvLocalPeerPrivate * priv, GstCaps * vcaps)
 {
-  gchar *caps_str;
-
   /* Fixated video caps that we're going to transmit or are transmitting */
   g_object_set (priv->transmit_vcapsfilter, "caps", vcaps, NULL);
 
-  caps_str = gst_caps_to_string (vcaps);
-  GST_DEBUG ("Transmitting video caps: %s", caps_str);
-  g_free (caps_str);
+  GST_DEBUG ("Transmitting video caps: %" GST_PTR_FORMAT, vcaps);
 }
 
 OvRemotePeer *
@@ -600,7 +596,6 @@ ov_caps_to_video_format (const GstCaps * caps)
 static GstCaps *
 ov_device_get_usable_caps (GstDevice * device, OvVideoFormat *device_format)
 {
-  gchar *tmp;
   gint ii, len;
   OvVideoFormat next_format, formats = 0;
   GstCaps *tmpcaps, *devcaps, *retcaps, *mediacaps = NULL;
@@ -645,9 +640,7 @@ retry:
       if (formats >= OV_VIDEO_FORMAT_YUY2)
         break; /* done */
 
-      tmp = gst_caps_to_string (devcaps);
-      GST_ERROR ("Unsupported video output formats! %s", tmp);
-      g_free (tmp);
+      GST_ERROR ("Unsupported video output formats! %" GST_PTR_FORMAT, devcaps);
       gst_caps_unref (devcaps);
       gst_caps_unref (retcaps);
       return NULL; /* fail */
@@ -727,7 +720,6 @@ gboolean
 ov_local_peer_set_video_device (OvLocalPeer * local,
     GstDevice * device)
 {
-  gchar *caps;
   OvLocalPeerPrivate *priv;
   OvLocalPeerState state;
 
@@ -751,9 +743,8 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
   }
 
 
-  caps = gst_caps_to_string (priv->supported_send_vcaps);
-  GST_DEBUG ("Supported send vcaps: %s", caps);
-  g_free (caps);
+  GST_DEBUG ("Supported send vcaps: %" GST_PTR_FORMAT,
+      priv->supported_send_vcaps);
 
   /* Setup transmit pipeline */
   priv->video_device = device;
@@ -1180,7 +1171,7 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   GSocket *socket;
   GstCaps *fixated;
   GString **clients;
-  gchar *local_addr_s, *caps_str;
+  gchar *local_addr_s;
   GInetSocketAddress *addr;
   GstStateChangeReturn ret;
   OvLocalPeerPrivate *priv;
@@ -1220,9 +1211,8 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   g_object_set (priv->vrecv_rtcp_src, "socket", socket, NULL);
   g_object_unref (socket);
 
-  caps_str = gst_caps_to_string (priv->send_vcaps);
-  GST_DEBUG ("Negotiated video caps that can be transmitted: %s", caps_str);
-  g_free (caps_str);
+  GST_DEBUG ("Negotiated video caps that can be transmitted: %" GST_PTR_FORMAT,
+      priv->send_vcaps);
 
   /* If the application hasn't set the caps itself to some arbitrary supported
    * value, we will set them to the best possible quality */
