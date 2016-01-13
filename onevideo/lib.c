@@ -536,7 +536,7 @@ ov_remote_peer_free (OvRemotePeer * remote)
   g_clear_object (&remote->priv->vplayback);
   /* Valgrind tells me this results in a double-unref (invalid write)
    * but I'm not sure how that works. Just commenting it out for now. */
-  //g_clear_object (&remote->receive);
+  g_clear_object (&remote->receive);
 
   if (remote->priv->recv_acaps)
     gst_caps_unref (remote->priv->recv_acaps);
@@ -634,9 +634,11 @@ retry:
        * formats because those are all faked by libv4l2 by converting/decoding
        * one of these. We will encode YUY2 to JPEG before transmitting. */
       if (next_format == OV_VIDEO_FORMAT_YUY2 &&
-          formats != OV_VIDEO_FORMAT_UNKNOWN)
-        /* Ignore YUY2 formats if we got JPEG or H264 */
+          formats != OV_VIDEO_FORMAT_UNKNOWN) {
+        /* Ignore YUY2 formats if we got JPEG and/or H264 */
+        gst_caps_unref (mediacaps);
         break; /* done */
+      }
       goto retry;
 
     case OV_VIDEO_FORMAT_SENTINEL:
@@ -646,11 +648,14 @@ retry:
       tmp = gst_caps_to_string (devcaps);
       GST_ERROR ("Unsupported video output formats! %s", tmp);
       g_free (tmp);
-      g_clear_pointer (&retcaps, gst_caps_unref);
+      gst_caps_unref (devcaps);
+      gst_caps_unref (retcaps);
       return NULL; /* fail */
     default:
       g_assert_not_reached ();
   }
+
+  gst_caps_unref (devcaps);
 
   if (formats == OV_VIDEO_FORMAT_YUY2) {
     *device_format = OV_VIDEO_FORMAT_YUY2;

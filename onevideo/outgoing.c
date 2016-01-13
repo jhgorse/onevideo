@@ -577,7 +577,7 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
     g_assert (thiscaps);
     for (jj = 0; jj < peers->len; jj++) {
       gpointer that;
-      GstCaps **thatcaps;
+      GstCaps **thatcaps, *tmp;
 
       that = g_ptr_array_index (peers, jj);
       if (this == that)
@@ -586,9 +586,11 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
       thatcaps = g_hash_table_lookup (negcaps, that);
       g_assert (thatcaps);
       /* this.send_acaps = this.send_acaps.intersect(that.recv_acaps) */
-      thiscaps[0] = gst_caps_intersect (thiscaps[0], thatcaps[2]);
+      tmp = gst_caps_intersect (thiscaps[0], thatcaps[2]);
+      gst_caps_unref (thiscaps[0]), thiscaps[0] = tmp;
       /* this.send_vcaps = this.send_vcaps.intersect(that.recv_vcaps) */
-      thiscaps[1] = gst_caps_intersect (thiscaps[1], thatcaps[3]);
+      tmp = gst_caps_intersect (thiscaps[1], thatcaps[3]);
+      gst_caps_unref (thiscaps[1]), thiscaps[1] = tmp;
     }
   }
 
@@ -734,8 +736,8 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
   /* Set the caps we will send */
   {
     GstCaps **caps = g_hash_table_lookup (negcaps, local);
-    local_priv->send_acaps = gst_caps_ref (caps[0]);
-    local_priv->send_vcaps = gst_caps_ref (caps[1]);
+    gst_caps_replace (&local_priv->send_acaps, caps[0]);
+    gst_caps_replace (&local_priv->send_vcaps, caps[1]);
     local_priv->send_video_format =
       ov_caps_to_video_format (local_priv->send_vcaps);
     /* If this wasn't already set, that means we're doing passthrough of video

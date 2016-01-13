@@ -374,7 +374,10 @@ ov_local_peer_dispose (GObject * object)
   g_clear_pointer (&priv->supported_send_vcaps, gst_caps_unref);
   g_clear_pointer (&priv->supported_recv_acaps, gst_caps_unref);
   g_clear_pointer (&priv->supported_recv_vcaps, gst_caps_unref);
+  g_clear_pointer (&priv->send_acaps, gst_caps_unref);
+  g_clear_pointer (&priv->send_vcaps, gst_caps_unref);
 
+  g_clear_object (&priv->transmit_vcapsfilter);
   g_clear_object (&priv->transmit);
   g_clear_object (&priv->playback);
 
