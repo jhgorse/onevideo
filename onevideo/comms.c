@@ -490,7 +490,8 @@ ov_tcp_msg_read_from_stream (GInputStream * input, GCancellable * cancellable,
   ret = ov_tcp_msg_read_body_from_stream (input, msg, cancellable,
       error);
   if (ret != TRUE) {
-    GST_ERROR ("Unable to read message body: %s", (*error)->message);
+    GST_ERROR ("Unable to read message body: %s",
+        *error ? (*error)->message : "Unknown error");
     goto err_no_body;
   }
 
