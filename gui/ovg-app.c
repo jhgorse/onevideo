@@ -58,6 +58,7 @@ static gchar *device_path = NULL;
 #endif
 static gchar *iface_name = NULL;
 static guint16 iface_port = 0;
+static gboolean low_res = FALSE;
 
 static GOptionEntry app_options[] =
 {
@@ -69,6 +70,8 @@ static GOptionEntry app_options[] =
         " to listen on (default: all)", "NAME"},
   {"port", 'p', 0, G_OPTION_ARG_INT, &iface_port, "Override the TCP port to"
         " listen on for incoming connections", "PORT"},
+  {"low-res", 0, 0, G_OPTION_ARG_NONE, &low_res, "Send low-resolution video"
+        " for testing purposes (default: no)", NULL},
   {NULL}
 };
 
@@ -285,4 +288,10 @@ ovg_app_get_scheduled_error (OvgApp * app)
   g_return_val_if_fail (OVG_IS_APP (app), NULL);
   priv = ovg_app_get_instance_private (app);
   return priv->scheduled_error;
+}
+
+gboolean
+ovg_app_get_low_res (OvgApp * app)
+{
+  return low_res;
 }

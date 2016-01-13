@@ -577,33 +577,50 @@ wrapper_setup_peers_video (OvgAppWindow * win)
 }
 
 static void
-on_incoming_negotiate_started (OvLocalPeer * local, OvgAppWindow * win)
+on_negotiate_started (OvLocalPeer * local, OvgAppWindow * win)
 {
   g_print ("Remotes have replied; continuing negotiation...\n");
 }
 
 static void
-on_outgoing_negotiate_started (OvLocalPeer * local, OvgAppWindow * win)
+on_negotiate_finished (OvLocalPeer * local, OvgAppWindow * win)
 {
-  on_incoming_negotiate_started (local, win);
-}
+  guint ii;
+  GtkApplication *app;
+  OvVideoQuality *qualities, selected = 0;
 
-static void
-on_incoming_negotiate_finished (OvLocalPeer * local, OvgAppWindow * win)
-{
+  app = gtk_window_get_application (GTK_WINDOW (win));
+
+  if (!ovg_app_get_low_res (OVG_APP (app)))
+    goto start_call;
+
+  qualities = ov_local_peer_get_negotiated_video_qualities (local);
+
+  /* Try to select 360p */
+  for (ii = 0; qualities[ii] != 0; ii++)
+    if ((qualities[ii] & OV_VIDEO_QUALITY_RESO_RANGE) ==
+        OV_VIDEO_QUALITY_360P) {
+      selected = qualities[ii];
+      break;
+    }
+
+  /* Failing which, select the lowest one possible */
+  if (selected == 0)
+    selected = qualities[ii - 1];
+
+  if (selected == 0) {
+    g_printerr ("Unable to switch to low-res mode\n");
+  } else {
+    g_print ("Running in low-res mode\n");
+    ov_local_peer_set_video_quality (local, selected);
+  }
+
+  g_free (qualities);
+
+start_call:
   g_print ("Negotiation finished, starting call\n");
   /* Ensure gtk+ widget manipulation is only done from the main thread */
   g_main_context_invoke (NULL, (GSourceFunc) wrapper_setup_peers_video, win);
-}
-
-static void
-on_outgoing_negotiate_finished (OvLocalPeer * local, OvgAppWindow * win)
-{
-  g_print ("Negotiation finished, starting call\n");
-  ov_local_peer_call_start (local);
-  /* Ensure gtk+ widget manipulation is only done from the main thread */
-  g_main_context_invoke (NULL, (GSourceFunc) ovg_app_window_show_peers_video,
-      win);
 }
 
 static void
@@ -627,9 +644,9 @@ on_negotiate_incoming (OvLocalPeer * local, OvPeer * incoming,
     OvgAppWindow * win)
 {
   g_signal_connect (local, "negotiate-started",
-      G_CALLBACK (on_incoming_negotiate_started), win);
+      G_CALLBACK (on_negotiate_started), win);
   g_signal_connect (local, "negotiate-finished",
-      G_CALLBACK (on_incoming_negotiate_finished), win);
+      G_CALLBACK (on_negotiate_finished), win);
   g_signal_connect (local, "negotiate-aborted",
       G_CALLBACK (on_negotiate_aborted), win);
   /* Accept all incoming calls */
@@ -811,15 +828,12 @@ on_call_peers_button_clicked (OvgAppWindow * win, GtkButton * b)
 
   g_ptr_array_free (remotes, TRUE);
 
-  remotes = ov_local_peer_get_remotes (priv->ovg_local);
-  ovg_app_window_populate_peers_video (win, priv->ovg_local, remotes);
-
   g_signal_connect (priv->ovg_local, "negotiate-started",
-      G_CALLBACK (on_outgoing_negotiate_started), win);
+      G_CALLBACK (on_negotiate_started), win);
   g_signal_connect (priv->ovg_local, "negotiate-skipped-remote",
       G_CALLBACK (on_outgoing_negotiate_skipped), win);
   g_signal_connect (priv->ovg_local, "negotiate-finished",
-      G_CALLBACK (on_outgoing_negotiate_finished), win);
+      G_CALLBACK (on_negotiate_finished), win);
   g_signal_connect (priv->ovg_local, "negotiate-aborted",
       G_CALLBACK (on_negotiate_aborted), win);
 

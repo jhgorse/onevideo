@@ -51,10 +51,11 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 
 /* We force the same raw audio format everywhere */
 #define AUDIO_CAPS_STR "format=S16LE, channels=2, rate=48000, layout=interleaved"
-/* This is only used for the test video source */
-#define VIDEO_CAPS_HIGH_STR "width=1280, height=720, framerate=30/1"
-#define VIDEO_CAPS_LOW_STR "width=640, height=360, framerate=15/1"
-#define VIDEO_CAPS_CRAP_STR "width=320, height=240, framerate=10/1"
+/* This is only used for the test video source since we need both width and
+ * height in the capsfilter for it */
+#define TEST_VIDEO_CAPS_720P_STR "width=1280, height=720, framerate={ 30/1, 15/1, 5/1 }"
+#define TEST_VIDEO_CAPS_360P_STR "width=640, height=360, framerate={ 30/1, 15/1, 5/1 }"
+#define TEST_VIDEO_CAPS_240P_STR "width=320, height=240, framerate={ 10/1, 5/1 }"
 
 #define AUDIO_FORMAT_OPUS "audio/x-opus"
 #define VIDEO_FORMAT_JPEG "image/jpeg"
@@ -64,20 +65,20 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define RTP_JPEG_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG"
 #define RTP_H264_VIDEO_CAPS_STR "application/x-rtp, payload=96, media=video, clock-rate=90000, encoding-name=H264"
 
-typedef enum _OvMediaType OvMediaType;
+typedef enum _OvVideoFormat OvVideoFormat;
 
-enum _OvMediaType {
-  OV_MEDIA_TYPE_UNKNOWN     = 0,
-  OV_MEDIA_TYPE_TEST        = 1,      /* videotestsrc if no hardware sources are found */
+enum _OvVideoFormat {
+  OV_VIDEO_FORMAT_UNKNOWN     = 0,
+  OV_VIDEO_FORMAT_TEST        = 1,      /* videotestsrc if no hardware sources are found */
 
   /* This is where the list of media formats ends */
-  OV_MEDIA_TYPE_SENTINEL    = 1 << 1,
+  OV_VIDEO_FORMAT_SENTINEL    = 1 << 1,
 
   /* These formats are listed in increasing order of desirability
    * Video sources will usually support combinations of these */
-  OV_MEDIA_TYPE_YUY2        = 1 << 2, /* Fallback if JPEG/H264 are not supported */
-  OV_MEDIA_TYPE_JPEG        = 1 << 3, /* Almost every webcam should support this */
-  OV_MEDIA_TYPE_H264        = 1 << 4, /* Not supported yet */
+  OV_VIDEO_FORMAT_YUY2        = 1 << 2, /* Fallback if JPEG/H264 are not supported */
+  OV_VIDEO_FORMAT_JPEG        = 1 << 3, /* Almost every webcam should support this */
+  OV_VIDEO_FORMAT_H264        = 1 << 4, /* Not supported yet */
 };
 
 struct _OvRemotePeerPrivate {
@@ -112,9 +113,10 @@ struct _OvRemotePeerPrivate {
   GstElement *video_sink;
 };
 
-/* OvMediaType is not a public symbol */
-GstCaps*      ov_media_type_to_caps (OvMediaType type);
-OvMediaType   ov_caps_to_media_type (const GstCaps *caps);
+/* OvVideoFormat is not a public symbol */
+GstCaps*        ov_video_format_to_caps (OvVideoFormat format);
+OvVideoFormat   ov_caps_to_video_format (const GstCaps *caps);
+gboolean        _ov_opengl_is_mesa      (void);
 
 G_END_DECLS
 

@@ -366,7 +366,7 @@ clear_reply:
   goto no_reply;
 }
 
-/* FIXME: The caps that this peer will send are set in
+/* FIXME: The caps that we will send are set in
  * ov_aggregate_call_details_for_remotes(). That must either be done in this
  * function or the contents of this function should be in that one. */
 static void
@@ -577,7 +577,7 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
     g_assert (thiscaps);
     for (jj = 0; jj < peers->len; jj++) {
       gpointer that;
-      GstCaps *tmp, **thatcaps;
+      GstCaps **thatcaps;
 
       that = g_ptr_array_index (peers, jj);
       if (this == that)
@@ -585,14 +585,10 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
 
       thatcaps = g_hash_table_lookup (negcaps, that);
       g_assert (thatcaps);
-      /* this.send_acaps = this.send_acaps.intersect(that.recv_acaps)
-       * Also fixate, which will select the best of these caps */
-      tmp = gst_caps_fixate (gst_caps_intersect (thiscaps[0], thatcaps[2]));
-      gst_caps_unref (thiscaps[0]), thiscaps[0] = tmp;
-      /* this.send_vcaps = this.send_vcaps.intersect(that.recv_vcaps)
-       * Also fixate, which will select the best of these caps */
-      tmp = gst_caps_fixate (gst_caps_intersect (thiscaps[1], thatcaps[3]));
-      gst_caps_unref (thiscaps[1]), thiscaps[1] = tmp;
+      /* this.send_acaps = this.send_acaps.intersect(that.recv_acaps) */
+      thiscaps[0] = gst_caps_intersect (thiscaps[0], thatcaps[2]);
+      /* this.send_vcaps = this.send_vcaps.intersect(that.recv_vcaps) */
+      thiscaps[1] = gst_caps_intersect (thiscaps[1], thatcaps[3]);
     }
   }
 
@@ -738,8 +734,14 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
   /* Set the caps we will send */
   {
     GstCaps **caps = g_hash_table_lookup (negcaps, local);
-    local_priv->send_acaps = gst_caps_fixate (gst_caps_copy (caps[0]));
-    local_priv->send_vcaps = gst_caps_fixate (gst_caps_copy (caps[1]));
+    local_priv->send_acaps = gst_caps_ref (caps[0]);
+    local_priv->send_vcaps = gst_caps_ref (caps[1]);
+    local_priv->send_video_format =
+      ov_caps_to_video_format (local_priv->send_vcaps);
+    /* If this wasn't already set, that means we're doing passthrough of video
+     * data from the video source device to the payloader */
+    if (local_priv->device_video_format == OV_VIDEO_FORMAT_UNKNOWN)
+      local_priv->device_video_format = local_priv->send_video_format;
   }
 
   g_ptr_array_free (peers, TRUE);

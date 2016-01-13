@@ -320,12 +320,10 @@ ov_local_peer_init (OvLocalPeer * self)
   /* supported_send_vcaps is set in set_video_device() */
 
   /* We will only ever use 48KHz Opus */
-  priv->supported_recv_acaps =
-    gst_caps_new_empty_simple (AUDIO_FORMAT_OPUS);
-  /* For now, only support JPEG.
-   * TODO: Add other supported formats here */
-  priv->supported_recv_vcaps =
-    gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
+  priv->supported_recv_acaps = gst_caps_new_empty_simple (AUDIO_FORMAT_OPUS);
+  priv->supported_recv_vcaps = gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
+  gst_caps_append (priv->supported_recv_vcaps,
+      gst_caps_new_empty_simple (VIDEO_FORMAT_H264));
 
   priv->state = OV_LOCAL_STATE_NULL;
 }

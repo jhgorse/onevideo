@@ -51,6 +51,7 @@ OvgApp*             ovg_app_new               (void);
 
 OvLocalPeer*        ovg_app_get_ov_local_peer   (OvgApp *app);
 gchar*              ovg_app_get_scheduled_error (OvgApp *app);
+gboolean            ovg_app_get_low_res         (OvgApp *app);
 
 G_END_DECLS
 

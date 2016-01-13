@@ -246,12 +246,14 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     vsrc = gst_device_create_element (priv->video_device, NULL);
   }
 
-  if (priv->send_video_type & OV_MEDIA_TYPE_JPEG ||
-      priv->send_video_type & OV_MEDIA_TYPE_H264) {
+  /* XXX: Perhaps make a new element that encodes to JPEG/H264 if necessary
+   * or does passthrough if downstream supports the negotiated caps */
+  if (priv->device_video_format == OV_VIDEO_FORMAT_JPEG ||
+      priv->device_video_format == OV_VIDEO_FORMAT_H264) {
     /* Passthrough JPEG and H.264 */
     vqueue = gst_element_factory_make ("queue", "video-queue");
-  } else if (priv->send_video_type == OV_MEDIA_TYPE_YUY2 ||
-      priv->send_video_type == OV_MEDIA_TYPE_TEST) {
+  } else if (priv->device_video_format == OV_VIDEO_FORMAT_YUY2 ||
+      priv->device_video_format == OV_VIDEO_FORMAT_TEST) {
     /* We encode YUY2 to JPEG before sending */
     vqueue = gst_element_factory_make ("jpegenc", NULL);
     g_object_set (vqueue, "quality", 30, NULL);
@@ -260,14 +262,18 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     g_assert_not_reached ();
   }
 
-  /* empty capsfilter; we'll set the caps on this when we begin_transmit */
-  priv->transmit_vcapsfilter = vfilter =
-    gst_element_factory_make ("capsfilter", "video-transmit-caps");
+  /* This has already been created in ov_local_peer_init() */
+  vfilter = g_object_ref (priv->transmit_vcapsfilter);
 
-  if (priv->send_video_type >= OV_MEDIA_TYPE_H264)
+  if (priv->send_video_format == OV_VIDEO_FORMAT_H264) {
     vpay = gst_element_factory_make ("rtph264pay", NULL);
-  else
+    /* If the mtu is too small, the payloader splits the NAL Unit across
+     * multiple packets and that breaks depayloading for some reason. Let the
+     * network layer handle splitting up and re-joining of packets. */
+    g_object_set (vpay, "mtu", 20000, NULL);
+  } else {
     vpay = gst_element_factory_make ("rtpjpegpay", NULL);
+  }
   /* Send RTP video data */
   vrtpqueue = gst_element_factory_make ("queue", NULL);
   vsink = gst_element_factory_make ("udpsink", "vsend_rtp_sink");
@@ -509,7 +515,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   GstElement *vsrc, *vrtcpsrc, *vdecode, *vsink, *vrtcpsink;
   GInetSocketAddress *local_addr;
   gchar *local_addr_s, *remote_addr_s;
-  OvMediaType video_type;
+  OvVideoFormat video_format;
   GstCaps *rtpcaps;
 
   g_assert (remote->priv->recv_acaps != NULL &&
@@ -526,7 +532,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
 
   /* Setup pipeline (remote->receive) to recv & decode from a remote peer */
 
-  video_type = ov_caps_to_media_type (remote->priv->recv_vcaps);
+  video_format = ov_caps_to_video_format (remote->priv->recv_vcaps);
 
   rtpbin = gst_element_factory_make ("rtpbin", "recv-rtpbin-%u");
   g_object_set (rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, "drop-on-latency",
@@ -565,15 +571,14 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   /* The depayloader will detect the height/width/framerate on the fly
    * This allows us to change that without communicating new caps
    * TODO: Use decodebin instead of hard-coding elements */
-  if (video_type == OV_MEDIA_TYPE_JPEG) {
+  if (video_format == OV_VIDEO_FORMAT_JPEG) {
     rtpcaps = gst_caps_from_string (RTP_JPEG_VIDEO_CAPS_STR);
     remote->priv->vdepay = gst_element_factory_make ("rtpjpegdepay", NULL);
     vdecode = gst_element_factory_make ("jpegdec", NULL);
-  } else if (video_type == OV_MEDIA_TYPE_H264) {
+  } else if (video_format == OV_VIDEO_FORMAT_H264) {
     rtpcaps = gst_caps_from_string (RTP_H264_VIDEO_CAPS_STR);
     remote->priv->vdepay = gst_element_factory_make ("rtph264depay", NULL);
-    vdecode = gst_parse_bin_from_description ("h264parse ! avdec_h264", TRUE,
-        NULL);
+    vdecode = gst_element_factory_make ("avdec_h264", NULL);
   } else {
     g_assert_not_reached ();
   }

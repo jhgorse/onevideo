@@ -78,10 +78,12 @@ struct _OvLocalPeerPrivate {
   GstDeviceMonitor *dm;
   /* Video device being used */
   GstDevice *video_device;
-  /* Video media types that the device can provide */
-  OvMediaType video_types;
-  /* Video media type that we will send */
-  OvMediaType send_video_type;
+  /* Video media type that we are sending */
+  OvVideoFormat send_video_format;
+  /* The underlying device video format (H264/JPEG/YUY2/TEST)
+   * This is set either when the video device is set (TEST/YUY2 -> JPEG),
+   * or when the caps are negotiated (H264/JPEG passthrough) */
+  OvVideoFormat device_video_format;
 
   /* The caps that we support sending */
   GstCaps *supported_send_acaps;
@@ -89,7 +91,8 @@ struct _OvLocalPeerPrivate {
   /* The caps that we support receiving */
   GstCaps *supported_recv_acaps;
   GstCaps *supported_recv_vcaps;
-  /* The caps that we *will* send */
+  /* The set of caps that were negotiated + video quality restrictions
+   * requested by the application. These will be fixated before use. */
   GstCaps *send_acaps;
   GstCaps *send_vcaps;
   

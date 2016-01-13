@@ -110,6 +110,37 @@ on_negotiate_incoming (OvLocalPeer * local, OvPeer * peer, gpointer user_data)
 static void
 on_negotiate_finished (OvLocalPeer * local, gpointer user_data)
 {
+  guint ii;
+  OvVideoQuality *qualities, selected = 0;
+  gboolean low_res = GPOINTER_TO_INT (user_data);
+
+  if (!low_res)
+    goto start_call;
+
+  qualities = ov_local_peer_get_negotiated_video_qualities (local);
+
+  /* Try to select 360p */
+  for (ii = 0; qualities[ii] != 0; ii++)
+    if ((qualities[ii] & OV_VIDEO_QUALITY_RESO_RANGE) ==
+        OV_VIDEO_QUALITY_360P) {
+      selected = qualities[ii];
+      break;
+    }
+
+  /* Failing which, select the lowest one possible */
+  if (selected == 0)
+    selected = qualities[ii - 1];
+
+  if (selected == 0) {
+    g_printerr ("Unable to switch to low-res mode\n");
+  } else {
+    g_print ("Running in low-res mode\n");
+    ov_local_peer_set_video_quality (local, selected);
+  }
+
+  g_free (qualities);
+
+start_call:
   g_print ("Negotiation finished successfully; starting call\n");
   ov_local_peer_call_start (local);
 }
@@ -326,6 +357,7 @@ main (int   argc,
   GError *error = NULL;
 
   guint exit_after = 0;
+  gboolean low_res = FALSE;
   gboolean auto_exit = FALSE;
   gboolean discover_peers = FALSE;
   guint16 iface_port = 0;
@@ -350,6 +382,8 @@ main (int   argc,
           " we wait for incoming connections.", "PEER:PORT"},
     {"discover", 0, 0, G_OPTION_ARG_NONE, &discover_peers, "Automatically"
           " discover and connect to peers (default: no)", NULL},
+    {"low-res", 0, 0, G_OPTION_ARG_NONE, &low_res, "Send low-resolution video"
+          " for testing purposes (default: no)", NULL},
     {NULL}
   };
 
@@ -401,7 +435,7 @@ main (int   argc,
 
   /* Common for incoming and outgoing calls */
   g_signal_connect (local, "negotiate-finished",
-      G_CALLBACK (on_negotiate_finished), NULL);
+      G_CALLBACK (on_negotiate_finished), GINT_TO_POINTER (low_res));
 
   if (remotes == NULL && !discover_peers) {
       g_print ("No remotes specified; listening for incoming connections\n");

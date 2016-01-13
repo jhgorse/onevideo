@@ -59,8 +59,10 @@ ov_local_peer_stop_transmit (OvLocalPeer * local)
     ret = gst_element_set_state (priv->transmit, GST_STATE_NULL);
     g_assert (ret == GST_STATE_CHANGE_SUCCESS);
   }
-  /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
+  /* Each call has a new transmit pipeline */
   g_clear_object (&priv->transmit);
+  /* Clear capsfilter for new pipeline */
+  g_object_set (priv->transmit_vcapsfilter, "caps", NULL, NULL);
   GST_DEBUG ("Stopped transmitting");
 }
 
@@ -110,6 +112,19 @@ set_free_recv_ports (OvLocalPeer * local, guint16 (*recv_ports)[4])
     (*recv_ports)[ii] = start + ii;
   g_array_append_vals (priv->used_ports, recv_ports, 4);
   return TRUE;
+}
+
+static void
+ov_local_peer_transmit_set_vcaps (OvLocalPeerPrivate * priv, GstCaps * vcaps)
+{
+  gchar *caps_str;
+
+  /* Fixated video caps that we're going to transmit or are transmitting */
+  g_object_set (priv->transmit_vcapsfilter, "caps", vcaps, NULL);
+
+  caps_str = gst_caps_to_string (vcaps);
+  GST_DEBUG ("Transmitting video caps: %s", caps_str);
+  g_free (caps_str);
 }
 
 OvRemotePeer *
@@ -239,7 +254,7 @@ ov_get_gtksink (GstElement ** out_sink, gpointer * out_widget)
   return TRUE;
 }
 
-static gboolean
+gboolean
 _ov_opengl_is_mesa (void)
 {
 #ifndef __linux__
@@ -535,16 +550,16 @@ ov_remote_peer_free (OvRemotePeer * remote)
 }
 
 GstCaps *
-ov_media_type_to_caps (OvMediaType type)
+ov_video_format_to_caps (OvVideoFormat type)
 {
   switch (type) {
-    case OV_MEDIA_TYPE_JPEG:
+    case OV_VIDEO_FORMAT_JPEG:
       return gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
-    case OV_MEDIA_TYPE_YUY2:
-    case OV_MEDIA_TYPE_TEST:
+    case OV_VIDEO_FORMAT_YUY2:
+    case OV_VIDEO_FORMAT_TEST:
       return gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING,
           "YUY2", NULL);
-    case OV_MEDIA_TYPE_H264:
+    case OV_VIDEO_FORMAT_H264:
       return gst_caps_new_empty_simple (VIDEO_FORMAT_H264);
     default:
       g_assert_not_reached ();
@@ -552,8 +567,8 @@ ov_media_type_to_caps (OvMediaType type)
   return NULL;
 }
 
-OvMediaType
-ov_caps_to_media_type (const GstCaps * caps)
+OvVideoFormat
+ov_caps_to_video_format (const GstCaps * caps)
 {
   const gchar *name;
   GstStructure *s = gst_caps_get_structure (caps, 0);
@@ -561,10 +576,10 @@ ov_caps_to_media_type (const GstCaps * caps)
   name = gst_structure_get_name (s);
 
   if (g_strcmp0 (name, "image/jpeg") == 0)
-    return OV_MEDIA_TYPE_JPEG;
+    return OV_VIDEO_FORMAT_JPEG;
   
   if (g_strcmp0 (name, "video/x-h264") == 0)
-    return OV_MEDIA_TYPE_H264;
+    return OV_VIDEO_FORMAT_H264;
 
   if (g_strcmp0 (name, "video/x-raw") == 0) {
     gboolean ret;
@@ -572,10 +587,10 @@ ov_caps_to_media_type (const GstCaps * caps)
     ret = gst_caps_is_subset_structure (caps, s);
     gst_structure_free (s);
     if (ret)
-      return OV_MEDIA_TYPE_YUY2;
+      return OV_VIDEO_FORMAT_YUY2;
   }
 
-  return OV_MEDIA_TYPE_UNKNOWN;
+  return OV_VIDEO_FORMAT_UNKNOWN;
 }
 
 /* Get the caps from the device and extract the useful caps from it
@@ -583,45 +598,51 @@ ov_caps_to_media_type (const GstCaps * caps)
  * are found, high-def and low-framerate, then low-def and high-framerate, then
  * low-def and low-framerate */
 static GstCaps *
-ov_device_get_usable_caps (GstDevice * device, OvMediaType * types)
+ov_device_get_usable_caps (GstDevice * device, OvVideoFormat *device_format)
 {
   gchar *tmp;
   gint ii, len;
-  OvMediaType next_type;
+  OvVideoFormat next_format, formats;
   GstCaps *tmpcaps, *devcaps, *retcaps, *mediacaps = NULL;
 
   devcaps = gst_device_get_caps (device);
   retcaps = gst_caps_new_empty ();
 
   /* Check for the best quality (H264) first, then JPEG, then YUY2, then fail */
-  next_type = OV_MEDIA_TYPE_H264;
+  next_format = OV_VIDEO_FORMAT_H264;
 
 retry:
   g_clear_pointer (&mediacaps, gst_caps_unref);
 
-  switch (next_type) {
-    case OV_MEDIA_TYPE_H264:
-    case OV_MEDIA_TYPE_JPEG:
-    /* If the device does not support JPEG; try YUY2. We don't try other RAW
-     * formats because those are all emulated by libv4l2 by converting/decoding
-     * one of these. We will encode YUY2 to JPEG before transmitting. */
-    case OV_MEDIA_TYPE_YUY2:
+  switch (next_format) {
+    case OV_VIDEO_FORMAT_H264:
+    case OV_VIDEO_FORMAT_JPEG:
+    case OV_VIDEO_FORMAT_YUY2:
       /* Check if the device supports this format. If so, add it to the list of
        * supported media types and merge the caps in our list of caps. Else, try
        * the next-best video format. */
-      mediacaps = ov_media_type_to_caps (next_type);
+      mediacaps = ov_video_format_to_caps (next_format);
       tmpcaps = gst_caps_intersect (devcaps, mediacaps);
       if (!gst_caps_is_empty (tmpcaps)) {
         gst_caps_append (retcaps, tmpcaps);
-        *types |= next_type;
+        formats |= next_format;
       } else {
         gst_caps_unref (tmpcaps);
       }
-      next_type >>= 1;
-      goto retry;
-    case OV_MEDIA_TYPE_SENTINEL:
-      if (*types >= OV_MEDIA_TYPE_YUY2)
+      next_format >>= 1;
+      /* If the device does not support JPEG/H264; try YUY2. We ignore other RAW
+       * formats because those are all faked by libv4l2 by converting/decoding
+       * one of these. We will encode YUY2 to JPEG before transmitting. */
+      if (next_format == OV_VIDEO_FORMAT_YUY2 &&
+          formats != OV_VIDEO_FORMAT_UNKNOWN)
+        /* Ignore YUY2 formats if we got JPEG or H264 */
         break; /* done */
+      goto retry;
+
+    case OV_VIDEO_FORMAT_SENTINEL:
+      if (formats >= OV_VIDEO_FORMAT_YUY2)
+        break; /* done */
+
       tmp = gst_caps_to_string (devcaps);
       GST_ERROR ("Unsupported video output formats! %s", tmp);
       g_free (tmp);
@@ -631,15 +652,17 @@ retry:
       g_assert_not_reached ();
   }
 
-  if (*types == OV_MEDIA_TYPE_YUY2)
+  if (formats == OV_VIDEO_FORMAT_YUY2) {
+    *device_format = OV_VIDEO_FORMAT_YUY2;
     GST_WARNING ("Device does not provide compressed output! Trying YUY2 "
         "(lower quality, higher CPU usage)");
+  }
   /* We now have a useful subset of the original device caps */
 
   /* Transform device caps to rtp caps */
   len = gst_caps_get_size (retcaps);
   for (ii = 0; ii < len; ii++) {
-    GstStructure *s;
+    GstStructure *s, *tmp;
     gint n1, n2;
     gdouble dest;
 
@@ -648,13 +671,20 @@ retry:
     /* Fixate device caps and remove extraneous fields */
     gst_structure_remove_fields (s, "pixel-aspect-ratio", "colorimetry",
         "interlace-mode", "format", NULL);
-    gst_structure_fixate (s);
 
-    /* Remove framerates less than 15; those look too choppy */
-    gst_structure_get_fraction (s, "framerate", &n1, &n2);
+    /* Remove formats smaller than 240p */
+    gst_structure_get_int (s, "height", &n1);
+    if (n1 < 240)
+      goto remove;
+
+    /* Remove caps that *only* have framerates less than 15 */
+    tmp = gst_structure_copy (s);
+    gst_structure_fixate (tmp);
+    gst_structure_get_fraction (tmp, "framerate", &n1, &n2);
+    gst_structure_free (tmp);
     gst_util_fraction_to_double (n1, n2, &dest);
-    if ((*types >= OV_MEDIA_TYPE_JPEG && dest < 30) ||
-        (*types & OV_MEDIA_TYPE_YUY2 && dest < 15))
+    if ((formats >= OV_VIDEO_FORMAT_JPEG && dest < 30) ||
+        (formats == OV_VIDEO_FORMAT_YUY2 && dest < 15))
       goto remove;
 
     /* The raw video will be encoded to JPEG, so in reality our supported video
@@ -704,22 +734,17 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
     return FALSE;
   }
 
-  /* TODO: Currently, we can only get a device that outputs JPEG and our
-   * transmit code assumes that. When we fix that to also support YUY2 and
-   * H.264, we need to fix all this code too. */
   if (device) {
-    priv->supported_send_vcaps =
-      ov_device_get_usable_caps (device, &priv->video_types);
+    priv->supported_send_vcaps = ov_device_get_usable_caps (device,
+        &priv->device_video_format);
   } else {
-    priv->supported_send_vcaps =
-      gst_caps_from_string (VIDEO_FORMAT_JPEG CAPS_FIELD_SEP VIDEO_CAPS_HIGH_STR
-          CAPS_STRUC_SEP VIDEO_FORMAT_JPEG CAPS_FIELD_SEP VIDEO_CAPS_LOW_STR
-          CAPS_STRUC_SEP VIDEO_FORMAT_JPEG CAPS_FIELD_SEP VIDEO_CAPS_CRAP_STR);
-    priv->video_types = OV_MEDIA_TYPE_TEST;
+    priv->supported_send_vcaps = gst_caps_from_string (
+        VIDEO_FORMAT_JPEG CAPS_FIELD_SEP TEST_VIDEO_CAPS_720P_STR CAPS_STRUC_SEP
+        VIDEO_FORMAT_JPEG CAPS_FIELD_SEP TEST_VIDEO_CAPS_360P_STR CAPS_STRUC_SEP
+        VIDEO_FORMAT_JPEG CAPS_FIELD_SEP TEST_VIDEO_CAPS_240P_STR);
+    priv->device_video_format = OV_VIDEO_FORMAT_TEST;
   }
 
-  /* Send the best possible video type */
-  priv->send_video_type = priv->video_types;
 
   caps = gst_caps_to_string (priv->supported_send_vcaps);
   GST_DEBUG ("Supported send vcaps: %s", caps);
@@ -727,7 +752,211 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
 
   /* Setup transmit pipeline */
   priv->video_device = device;
-  return ov_local_peer_setup_transmit_pipeline (local);
+  return TRUE;
+}
+
+/* Expects a normalized/fixated structure with no lists of values */
+static OvVideoQuality
+ov_structure_to_video_quality (const GstStructure * s)
+{
+  gint height, fps_n, fps_d;
+  OvVideoQuality quality = 0;
+
+  if (gst_structure_has_field_typed (s, "height", G_TYPE_INT) &&
+      gst_structure_get_int (s, "height", &height)) {
+    if (height >= 1080)
+      quality |= OV_VIDEO_QUALITY_1080P;
+    else if (height >= 720)
+      quality |= OV_VIDEO_QUALITY_720P;
+    else if (height >= 480)
+      quality |= OV_VIDEO_QUALITY_480P;
+    else if (height >= 360)
+      quality |= OV_VIDEO_QUALITY_360P;
+    else if (height >= 240)
+      quality |= OV_VIDEO_QUALITY_240P;
+    /* Not having a height is not fatal */
+  }
+
+  if (gst_structure_has_field_typed (s, "framerate", GST_TYPE_FRACTION) &&
+      gst_structure_get_fraction (s, "framerate", &fps_n, &fps_d) &&
+      fps_d == 1) {
+    if (fps_n >= 60)
+      quality |= OV_VIDEO_QUALITY_60FPS;
+    else if (fps_n >= 45)
+      quality |= OV_VIDEO_QUALITY_45FPS;
+    else if (fps_n >= 30)
+      quality |= OV_VIDEO_QUALITY_30FPS;
+    else if (fps_n >= 25)
+      quality |= OV_VIDEO_QUALITY_15FPS;
+    else if (fps_n >= 20)
+      quality |= OV_VIDEO_QUALITY_15FPS;
+    else if (fps_n >= 15)
+      quality |= OV_VIDEO_QUALITY_15FPS;
+    else if (fps_n >= 10)
+      quality |= OV_VIDEO_QUALITY_10FPS;
+    else if (fps_n >= 5)
+      quality |= OV_VIDEO_QUALITY_5FPS;
+    /* Not having a framerate is not fatal */
+  }
+
+  return quality;
+}
+
+gchar *
+ov_video_quality_to_string (OvVideoQuality quality)
+{
+  gchar *ret;
+  GString *str;
+  
+  if (quality == OV_VIDEO_QUALITY_INVALID)
+    return g_strdup ("Invalid");
+
+  str = g_string_new ("");
+
+  if ((quality & OV_VIDEO_QUALITY_RESO_RANGE) == OV_VIDEO_QUALITY_1080P)
+    g_string_append (str, "1080p");
+  else if ((quality & OV_VIDEO_QUALITY_RESO_RANGE) == OV_VIDEO_QUALITY_720P)
+    g_string_append (str, "720p");
+  else if ((quality & OV_VIDEO_QUALITY_RESO_RANGE) == OV_VIDEO_QUALITY_480P)
+    g_string_append (str, "480p");
+  else if ((quality & OV_VIDEO_QUALITY_RESO_RANGE) == OV_VIDEO_QUALITY_360P)
+    g_string_append (str, "360p");
+  else if ((quality & OV_VIDEO_QUALITY_RESO_RANGE) == OV_VIDEO_QUALITY_240P)
+    g_string_append (str, "240p");
+  else
+    g_string_append (str, "???p");
+
+  if (quality & OV_VIDEO_QUALITY_5FPS)
+    g_string_append (str, "5/");
+  if (quality & OV_VIDEO_QUALITY_10FPS)
+    g_string_append (str, "10/");
+  if (quality & OV_VIDEO_QUALITY_15FPS)
+    g_string_append (str, "15/");
+  if (quality & OV_VIDEO_QUALITY_20FPS)
+    g_string_append (str, "20/");
+  if (quality & OV_VIDEO_QUALITY_25FPS)
+    g_string_append (str, "25/");
+  if (quality & OV_VIDEO_QUALITY_30FPS)
+    g_string_append (str, "30/");
+  if (quality & OV_VIDEO_QUALITY_45FPS)
+    g_string_append (str, "45/");
+  if (quality & OV_VIDEO_QUALITY_60FPS)
+    g_string_append (str, "60/");
+
+  if (str->str[str->len - 1] == '/')
+    /* Remove trailing ',' */
+    g_string_truncate (str, str->len - 1);
+  else
+    /* No FPS param could be found */
+    g_string_append (str, "??");
+
+  ret = str->str;
+  g_string_free (str, FALSE);
+  return ret;
+}
+
+/* Returns a 0-terminated array of OvVideoQuality enums
+ * The array might have duplicate enums because the mapping from enum to video
+ * caps is not bijective.
+ *
+ * Returns NULL if video caps haven't been negotiated yet */
+OvVideoQuality *
+ov_local_peer_get_negotiated_video_qualities (OvLocalPeer * local)
+{
+  guint ii, len;
+  GstCaps *normalized;
+  OvVideoQuality *qualities;
+  OvLocalPeerPrivate *priv;
+
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->send_vcaps == NULL)
+    return NULL;
+
+  normalized = gst_caps_normalize (gst_caps_copy (priv->send_vcaps));
+
+  len = gst_caps_get_size (normalized);
+  qualities = g_new0 (OvVideoQuality, len + 1);
+
+  for (ii = 0; ii < len; ii++) {
+    GstStructure *s = gst_caps_get_structure (normalized, ii);
+    qualities[ii] = ov_structure_to_video_quality (s);
+    GST_TRACE ("%i: %" GST_PTR_FORMAT ", ", qualities[ii], s);
+  }
+
+  gst_caps_unref (normalized);
+
+  return qualities;
+}
+
+/* Returns OV_VIDEO_QUALITY_INVALID if video caps haven't been negotiated yet */
+OvVideoQuality
+ov_local_peer_get_video_quality (OvLocalPeer * local)
+{
+  GstCaps *caps;
+  OvVideoQuality quality;
+  OvLocalPeerPrivate *priv;
+
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->transmit_vcapsfilter == NULL)
+    return OV_VIDEO_QUALITY_INVALID;
+
+  g_object_get (priv->transmit_vcapsfilter, "caps", &caps, NULL);
+  if (caps == NULL)
+    return OV_VIDEO_QUALITY_INVALID;
+  if (gst_caps_is_any (caps)) {
+    gst_caps_unref (caps);
+    return OV_VIDEO_QUALITY_INVALID;
+  }
+
+  quality = ov_structure_to_video_quality (gst_caps_get_structure (caps, 0));
+  gst_caps_unref (caps);
+
+  return quality;
+}
+
+/* Returns FALSE if video caps haven't been negotiated yet */
+gboolean
+ov_local_peer_set_video_quality (OvLocalPeer * local, OvVideoQuality quality)
+{
+  gint ii, len;
+  GstCaps *matching, *normalized;
+  OvLocalPeerPrivate *priv;
+
+  priv = ov_local_peer_get_private (local);
+
+  if (priv->send_vcaps == NULL)
+    return FALSE;
+
+  if (quality == ov_local_peer_get_video_quality (local))
+    /* Nothing to do */
+    return TRUE;
+
+  normalized = gst_caps_normalize (gst_caps_copy (priv->send_vcaps));
+
+  len = gst_caps_get_size (normalized);
+
+  for (ii = 0; ii < len; ii++) {
+    GstStructure *s;
+    OvVideoQuality nthquality;
+    
+    s = gst_caps_get_structure (normalized, ii);
+    
+    nthquality = ov_structure_to_video_quality (s);
+
+    if (nthquality == quality) {
+      matching = gst_caps_new_full (gst_structure_copy (s), NULL);
+      matching = gst_caps_fixate (matching);
+      ov_local_peer_transmit_set_vcaps (priv, matching);
+      gst_caps_unref (matching);
+      gst_caps_unref (normalized);
+      return TRUE;
+    }
+  }
+  
+  gst_caps_unref (normalized);
+  return FALSE;
 }
 
 static gboolean
@@ -944,6 +1173,7 @@ static gboolean
 ov_local_peer_begin_transmit (OvLocalPeer * local)
 {
   GSocket *socket;
+  GstCaps *fixated;
   GString **clients;
   gchar *local_addr_s, *caps_str;
   GInetSocketAddress *addr;
@@ -985,11 +1215,18 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   g_object_set (priv->vrecv_rtcp_src, "socket", socket, NULL);
   g_object_unref (socket);
 
-  /* Video transmit caps that we either decided to or were told to transmit */
-  g_object_set (priv->transmit_vcapsfilter, "caps", priv->send_vcaps, NULL);
   caps_str = gst_caps_to_string (priv->send_vcaps);
-  GST_DEBUG ("Transmitting send vcaps: %s", caps_str);
+  GST_DEBUG ("Negotiated video caps that can be transmitted: %s", caps_str);
   g_free (caps_str);
+
+  /* If the application hasn't set the caps itself to some arbitrary supported
+   * value, we will set them to the best possible quality */
+  g_object_get (priv->transmit_vcapsfilter, "caps", &fixated, NULL);
+  if (fixated == NULL) {
+    fixated = gst_caps_fixate (gst_caps_copy (priv->send_vcaps));
+    ov_local_peer_transmit_set_vcaps (priv, fixated);
+  }
+  gst_caps_unref (fixated);
 
   ret = gst_element_set_state (priv->transmit, GST_STATE_PLAYING);
   GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
@@ -1072,7 +1309,13 @@ ov_local_peer_start (OvLocalPeer * local)
 
   /*-- Setup various pipelines and resources --*/
 
-  /* Transmit pipeline is setup in set_video_device() */
+  /* Empty capsfilter; we'll set the caps on this later with
+   * ov_local_peer_transmit_set_vcaps(). The rest of the transmit pipeline is
+   * setup in ov_local_peer_call_start() once we have negotiated caps */
+  priv->transmit_vcapsfilter =
+    gst_element_factory_make ("capsfilter", "video-transmit-caps");
+  /* We own a ref to this element */
+  g_object_ref_sink (priv->transmit_vcapsfilter);
 
   /* Setup components of the playback pipeline */
   if (!ov_local_peer_setup_playback_pipeline (local))
@@ -1168,11 +1411,10 @@ ov_local_peer_call_start (OvLocalPeer * local)
     return FALSE;
   }
 
-  if (priv->transmit == NULL) {
-    /* WORKAROUND: We re-setup the transmit pipeline on repeat transmits */
-    res = ov_local_peer_setup_transmit_pipeline (local);
-    g_assert (res);
-  }
+  /* We can only setup the transmit pipeline once we know whether we will be
+   * transmitting H264 or JPEG */
+  res = ov_local_peer_setup_transmit_pipeline (local);
+  g_assert (res);
   res = ov_local_peer_begin_transmit (local);
   g_assert (res);
 
@@ -1207,7 +1449,7 @@ ov_local_peer_call_start (OvLocalPeer * local)
   ov_local_peer_unlock (local);
 
   priv->remotes_timeout_source =
-    g_timeout_source_new_seconds (OV_REMOTE_PEER_TIMEOUT_SECONDS);
+    g_timeout_source_new_seconds (OV_REMOTE_PEER_TIMEOUT_SECONDS/2);
   g_source_set_callback (priv->remotes_timeout_source,
       (GSourceFunc) ov_local_peer_check_timeouts, local, NULL);
   g_source_attach (priv->remotes_timeout_source, NULL);

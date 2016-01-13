@@ -366,6 +366,13 @@ set_call_details (OvLocalPeer * local, OvTcpMsg * msg)
   priv->send_vcaps = gst_caps_from_string (vcaps);
   g_free (acaps); g_free (vcaps);
 
+  /* Set the video format we're sending */
+  priv->send_video_format = ov_caps_to_video_format (priv->send_vcaps);
+  /* If this wasn't already set, that means we're doing passthrough of video
+   * data from the video source device to the payloader */
+  if (priv->device_video_format == OV_VIDEO_FORMAT_UNKNOWN)
+    priv->device_video_format = priv->send_video_format;
+
   while (g_variant_iter_loop (iter, "(sssqqqqqq)", &peer_id, &acaps, &vcaps,
         &ports[0], &ports[1], &ports[2], &ports[3], &ports[4], &ports[5])) {
     OvRemotePeer *remote;
