@@ -424,27 +424,44 @@ gboolean
 ov_tcp_msg_read_body_from_stream (GInputStream * input, OvTcpMsg * msg,
     GCancellable * cancellable, GError ** error)
 {
-  GBytes *bytes;
+  GBytes *read;
+  GByteArray *barray;
   GVariant *variant;
   const gchar *variant_type;
+  gsize size_left = msg->size;
 
   g_return_val_if_fail (msg != NULL, FALSE);
 
-  /* FIXME: Add a timeout that cancels if we don't get the data for a while */
-  bytes = g_input_stream_read_bytes (input, msg->size, cancellable, error);
+  barray = g_byte_array_new ();
 
-  if (g_bytes_get_size (bytes) < msg->size) {
-    g_bytes_unref (bytes);
+  /* FIXME: Add a timeout that cancels if we don't get the data for a while */
+  do {
+    gsize size;
+    guint8 *data;
+
+    read = g_input_stream_read_bytes (input, size_left, cancellable, error);
+    if (g_bytes_get_size (read) == 0)
+      break;
+    data = g_bytes_unref_to_data (read, &size);
+    g_byte_array_append (barray, data, size);
+    g_free (data);
+    size_left -= size;
+  } while (size_left > 0);
+
+  if (size_left > 0) {
+    g_byte_array_free (barray, TRUE);
     GST_ERROR ("Unable to finish reading incoming data due to EOS");
     return FALSE;
   }
 
+  read = g_byte_array_free_to_bytes (barray);
+
   variant_type = ov_tcp_msg_type_to_variant_type (msg->type,
       msg->version);
-  variant = g_variant_new_from_bytes (G_VARIANT_TYPE (variant_type), bytes,
+  variant = g_variant_new_from_bytes (G_VARIANT_TYPE (variant_type), read,
       FALSE);
   g_variant_ref_sink (variant);
-  g_bytes_unref (bytes);
+  g_bytes_unref (read);
 
   /* Network data is always big endian */
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
