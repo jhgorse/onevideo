@@ -366,65 +366,6 @@ clear_reply:
   goto no_reply;
 }
 
-/* FIXME: The caps that we will send are set in
- * ov_aggregate_call_details_for_remotes(). That must either be done in this
- * function or the contents of this function should be in that one. */
-static void
-ov_local_peer_set_call_details (OvLocalPeer * local, GHashTable * in)
-{
-  guint ii;
-  gchar *local_id;
-  const gchar *in_vtype;
-  OvLocalPeerPrivate *local_priv;
-
-  g_object_get (OV_PEER (local), "id", &local_id, NULL);
-  local_priv = ov_local_peer_get_private (local);
-
-  in_vtype = ov_tcp_msg_type_to_variant_type (
-      OV_TCP_MSG_TYPE_REPLY_CAPS, OV_TCP_MAX_VERSION);
-
-  /* For each remote peer, find the ports *we* need to send to */
-  for (ii = 0; ii < local_priv->remote_peers->len; ii++) {
-    GVariant *value;
-    GVariantIter *iter;
-    OvRemotePeer *remote;
-    /* The caps of the data that this remote will send to everyone */
-    gchar *send_acaps, *send_vcaps, *peer_id;
-    guint32 ports[6] = {};
-
-    remote = g_ptr_array_index (local_priv->remote_peers, ii);
-
-    value = g_hash_table_lookup (in, remote);
-    g_variant_get (value, in_vtype, NULL, &ports[2], &ports[5], &send_acaps,
-        &send_vcaps, NULL, NULL, &iter);
-
-    remote->priv->send_ports[2] = ports[2];
-    remote->priv->send_ports[5] = ports[5];
-
-    /* The caps we will receive from this peer are, of course,
-     * the caps it will send to us */
-    remote->priv->recv_acaps = gst_caps_from_string (send_acaps);
-    remote->priv->recv_vcaps = gst_caps_from_string (send_vcaps);
-    g_free (send_acaps); g_free (send_vcaps);
-
-    while (g_variant_iter_loop (iter, "(sqqqq)", &peer_id, &ports[0],
-          &ports[1], &ports[3], &ports[4])) {
-      if (g_strcmp0 (local_id, peer_id) != 0)
-        continue;
-      remote->priv->send_ports[0] = ports[0];
-      remote->priv->send_ports[1] = ports[1];
-      remote->priv->send_ports[3] = ports[3];
-      remote->priv->send_ports[4] = ports[4];
-      GST_DEBUG ("Set remote peer call details: %s, [%u, %u, %u, %u, %u, %u]",
-          peer_id, ports[0], ports[1], ports[2], ports[3], ports[4], ports[5]);
-      g_free (peer_id);
-      break;
-    }
-    g_variant_iter_free (iter);
-  }
-  g_free (local_id);
-}
-
 static void
 _ov_free_negcaps_value (gpointer data)
 {
@@ -594,7 +535,23 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
     }
   }
 
-  /* Aggregate remote_recv_ports for each peer pair into a hash table */
+  /* Now that the caps have been negotiated for all remotes, set the recv_caps
+   * for all of them for our own use */
+  for (ii = 0; ii < remotes->len; ii++) {
+    OvRemotePeer *from;
+    GstCaps **fromcaps;
+
+    from = g_ptr_array_index (remotes, ii);
+    fromcaps = g_hash_table_lookup (negcaps, from);
+
+    /* The caps we will receive from 'from' are its send_caps
+     * (the first two in this structure) */
+    from->priv->recv_acaps = gst_caps_ref (fromcaps[0]);
+    from->priv->recv_vcaps = gst_caps_ref (fromcaps[1]);
+  }
+
+  /* Aggregate remote_recv_ports for each peer pair into a hash table,
+   * and also set ports that we need to send rtp/rtcp to for each remote */
   for (ii = 0; ii < remotes->len; ii++) {
     OvRemotePeer *to;
     GVariant *tov;
@@ -609,11 +566,27 @@ ov_aggregate_call_details_for_remotes (OvLocalPeer * local, GHashTable * in,
     /* These two RR recv_ports have been allocated for all 'from' peers */
     g_variant_get (tov, in_vtype, NULL, &to_recv_ports[2], &to_recv_ports[5],
           NULL, NULL, NULL, NULL, &iter);
+
+    /* While we're aggregating for remotes, let's store for our own use too */
+    to->priv->send_ports[2] = to_recv_ports[2];
+    to->priv->send_ports[5] = to_recv_ports[5];
+
     /* Store a copy of all peer-specific recv_ports that 'to' has allocated */
     while (g_variant_iter_next (iter, "(sqqqq)", &from_id, &to_recv_ports[0],
           &to_recv_ports[1], &to_recv_ports[3], &to_recv_ports[4])) {
       GHashTable *to_ports;
       guint16 *to_recv_portscopy;
+
+      /* While we're aggregating for remotes, let's store for our own use too */
+      if (g_strcmp0 (from_id, local_id) == 0) {
+        to->priv->send_ports[0] = to_recv_ports[0];
+        to->priv->send_ports[1] = to_recv_ports[1];
+        to->priv->send_ports[3] = to_recv_ports[3];
+        to->priv->send_ports[4] = to_recv_ports[4];
+        GST_DEBUG ("Set remote peer call details: %s, [%u, %u, %u, %u, %u, %u]",
+            to_id, to_recv_ports[0], to_recv_ports[1], to_recv_ports[2],
+            to_recv_ports[3], to_recv_ports[4], to_recv_ports[5]);
+      }
 
       if (!(to_ports = g_hash_table_lookup (aggports, from_id))) {
         to_ports =
@@ -955,7 +928,8 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
   ov_local_peer_lock (local);
   if (g_cancellable_is_cancelled (cancellable))
     goto cancelled;
-  /* Transform REPLY_CAPS to CALL_DETAILS */
+  /* Transform REPLY_CAPS to CALL_DETAILS and also set the call details for
+   * each remote peer */
   out = ov_aggregate_call_details_for_remotes (local, in, call_id);
   ov_local_peer_unlock (local);
 
@@ -1012,8 +986,6 @@ ov_local_peer_negotiate_thread (GTask * task, OvLocalPeer * local,
       goto err;
     }
   }
-  /* Set our own call details */
-  ov_local_peer_set_call_details (local, in);
   ov_local_peer_set_state (local, OV_LOCAL_STATE_READY);
   ov_local_peer_set_state_negotiator (local);
 
