@@ -21,23 +21,6 @@ Items marked with a ★ are high priority
    peers can take appropriate corrective action instead of just aborting the
    negotiation process or the call.
 
-* Video format negotiation
- - We pass-through whatever highest-quality format the Webcam outputs to the
-   peers. That can be JPEG or H.264. This makes sense and should not be changed.
- - Raw video caps are useless and will not be added. USB 2 webcams (99% of all
-   consumer webcams) cannot output HD video at 30fps in any raw video format.
-   They output either JPEG or H.264. The exceptions are cards like Decklink.
- - It probably makes sense to transparently add a jpegenc element in case we
-   encounter a webcam that only outputs low quality YUV raw video.
- - Evaluate whether it's worth it to add H.264 support. The highest quality
-   might be given by JPEG, in which case H.264 would be useless. Need to do
-   bitrate and quality comparisons and find out whether it's feasible to have an
-   element that only converts H.264-encoded video outputted by a webcam to
-   keyframe-only H.264 video.
- - Note that we're using keyframe-based video formats to reduce startup latency
-   while avoiding complexity in the peers.
- - Choose send/recv caps based on available CPU/network bandwidth
-
 * General
  - Add the ability for any peer to add other peers to an existing call
  - Test and bugfix removal/timeout of individual remote peers in a multi-party
