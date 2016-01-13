@@ -1358,6 +1358,11 @@ ov_local_peer_check_timeouts (OvLocalPeer * local)
 
   ov_local_peer_lock (local);
 
+  if (ov_local_peer_get_state (local) == OV_LOCAL_STATE_STOPPED) {
+    GST_DEBUG ("Already stopped; skipping timeout check");
+    return G_SOURCE_REMOVE;
+  }
+
   current_time = g_get_monotonic_time ();
   remotes = ov_local_peer_get_remotes (local);
   for (ii = 0; ii < remotes->len; ii++) {
