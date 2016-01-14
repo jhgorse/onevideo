@@ -653,7 +653,7 @@ on_negotiate_incoming (OvLocalPeer * local, OvPeer * incoming,
   return TRUE;
 }
 
-static void
+static gboolean
 ovg_app_window_remove_peer (OvPeer * peer)
 {
   gchar *addr_s;
@@ -677,6 +677,8 @@ ovg_app_window_remove_peer (OvPeer * peer)
 
   g_list_free (children);
   g_free (addr_s);
+
+  return G_SOURCE_REMOVE;
 }
 
 static void
