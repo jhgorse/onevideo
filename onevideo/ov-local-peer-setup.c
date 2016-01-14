@@ -437,15 +437,14 @@ ov_local_peer_setup_comms (OvLocalPeer * local)
   ret = FALSE;
   l = priv->mc_ifaces;
   while (l != NULL) {
-    ret = g_socket_join_multicast_group (mc_socket, mc_group, FALSE, l->data,
-        &error);
-    if (!ret) {
+    if (!g_socket_join_multicast_group (mc_socket, mc_group, FALSE, l->data,
+        &error)) {
       GList *next = l->next;
-      /* Not listening on this interface; remove it from the list */
-      priv->mc_ifaces = g_list_delete_link (priv->mc_ifaces, l);
       GST_WARNING ("Unable to setup a multicast listener on %s: %s",
           (gchar*) l->data, error->message);
       g_clear_error (&error);
+      /* Not listening on this interface; remove it from the list */
+      priv->mc_ifaces = g_list_delete_link (priv->mc_ifaces, l);
       l = next;
     } else {
       GST_DEBUG ("Listening for incoming multicast messages on %s",
