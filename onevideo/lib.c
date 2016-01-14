@@ -114,25 +114,6 @@ set_free_recv_ports (OvLocalPeer * local, guint16 (*recv_ports)[4])
   return TRUE;
 }
 
-static GstCaps *
-ov_local_peer_transmit_get_vcaps (OvLocalPeerPrivate * priv)
-{
-  GstCaps *vcaps;
-
-  g_object_get (priv->transmit_vcapsfilter, "caps", &vcaps, NULL);
-
-  return vcaps;
-}
-
-static void
-ov_local_peer_transmit_set_vcaps (OvLocalPeerPrivate * priv, GstCaps * vcaps)
-{
-  /* Fixated video caps that we're going to transmit or are transmitting */
-  g_object_set (priv->transmit_vcapsfilter, "caps", vcaps, NULL);
-
-  GST_DEBUG ("Transmitting video caps: %" GST_PTR_FORMAT, vcaps);
-}
-
 OvRemotePeer *
 ov_remote_peer_new (OvLocalPeer * local, GInetSocketAddress * addr)
 {
@@ -901,14 +882,8 @@ ov_local_peer_get_video_quality (OvLocalPeer * local)
 {
   GstCaps *caps;
   OvVideoQuality quality;
-  OvLocalPeerPrivate *priv;
 
-  priv = ov_local_peer_get_private (local);
-
-  if (priv->transmit_vcapsfilter == NULL)
-    return OV_VIDEO_QUALITY_INVALID;
-
-  caps = ov_local_peer_transmit_get_vcaps (priv);
+  caps = ov_local_peer_get_transmit_video_caps (local);
   if (caps == NULL)
     return OV_VIDEO_QUALITY_INVALID;
   if (gst_caps_is_any (caps)) {
@@ -954,7 +929,7 @@ ov_local_peer_set_video_quality (OvLocalPeer * local, OvVideoQuality quality)
     if (nthquality == quality) {
       matching = gst_caps_new_full (gst_structure_copy (s), NULL);
       matching = gst_caps_fixate (matching);
-      ov_local_peer_transmit_set_vcaps (priv, matching);
+      ov_local_peer_set_transmit_video_caps (local, matching);
       gst_caps_unref (matching);
       gst_caps_unref (normalized);
       return TRUE;
@@ -1179,7 +1154,6 @@ static gboolean
 ov_local_peer_begin_transmit (OvLocalPeer * local)
 {
   GSocket *socket;
-  GstCaps *fixated;
   GString **clients;
   gchar *local_addr_s;
   GInetSocketAddress *addr;
@@ -1221,21 +1195,12 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
   g_object_set (priv->vrecv_rtcp_src, "socket", socket, NULL);
   g_object_unref (socket);
 
-  GST_DEBUG ("Negotiated video caps that can be transmitted: %" GST_PTR_FORMAT,
-      priv->send_vcaps);
-
-  /* If the application hasn't set the caps itself to some arbitrary supported
-   * value, we will set them to the best possible quality */
-  fixated = ov_local_peer_transmit_get_vcaps (priv);
-  if (fixated == NULL || gst_caps_is_any (fixated)) {
-    fixated = gst_caps_fixate (gst_caps_copy (priv->send_vcaps));
-    ov_local_peer_transmit_set_vcaps (priv, fixated);
-  }
-  g_clear_pointer (&fixated, gst_caps_unref);
-
   ret = gst_element_set_state (priv->transmit, GST_STATE_PLAYING);
-  GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
-      clients[0]->str, clients[2]->str);
+  if (ret == GST_STATE_CHANGE_FAILURE)
+    GST_ERROR ("Unable to begin transmitting; state change failed");
+  else
+    GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
+        clients[0]->str, clients[2]->str);
 
   g_string_free (clients[0], TRUE);
   g_string_free (clients[1], TRUE);
@@ -1315,8 +1280,8 @@ ov_local_peer_start (OvLocalPeer * local)
   /*-- Setup various pipelines and resources --*/
 
   /* Empty capsfilter; we'll set the caps on this later with
-   * ov_local_peer_transmit_set_vcaps(). The rest of the transmit pipeline is
-   * setup in ov_local_peer_call_start() once we have negotiated caps */
+   * ov_local_peer_set_transmit_video_caps(). The rest of the transmit pipeline
+   * is setup in ov_local_peer_call_start() once we have negotiated caps */
   priv->transmit_vcapsfilter =
     gst_element_factory_make ("capsfilter", "video-transmit-caps");
   /* We own a ref to this element */

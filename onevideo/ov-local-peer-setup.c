@@ -185,7 +185,7 @@ gboolean
 ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
-  GstCaps *raw_audio_caps;
+  GstCaps *vcaps, *raw_audio_caps;
   GstElement *asrc, *afilter, *aencode, *apay;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vpay;
@@ -262,8 +262,20 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     g_assert_not_reached ();
   }
 
+  GST_DEBUG ("Negotiated video caps that can be transmitted: %" GST_PTR_FORMAT,
+      priv->send_vcaps);
+
   /* This has already been created in ov_local_peer_init() */
   vfilter = g_object_ref (priv->transmit_vcapsfilter);
+
+  /* If the application hasn't set the caps itself to some arbitrary supported
+   * value, we will set them to the best possible quality */
+  vcaps = ov_local_peer_get_transmit_video_caps (local);
+  if (vcaps == NULL || gst_caps_is_any (vcaps)) {
+    vcaps = gst_caps_fixate (gst_caps_copy (priv->send_vcaps));
+    ov_local_peer_set_transmit_video_caps (local, vcaps);
+  }
+  g_clear_pointer (&vcaps, gst_caps_unref);
 
   if (priv->send_video_format == OV_VIDEO_FORMAT_H264) {
     vpay = gst_element_factory_make ("rtph264pay", NULL);

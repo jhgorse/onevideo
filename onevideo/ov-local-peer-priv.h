@@ -141,6 +141,10 @@ void                  ov_local_peer_set_state_timedout    (OvLocalPeer *self);
 void                  ov_local_peer_set_state_negotiator  (OvLocalPeer *self);
 void                  ov_local_peer_set_state_negotiatee  (OvLocalPeer *self);
 
+GstCaps*              ov_local_peer_get_transmit_video_caps (OvLocalPeer *self);
+gboolean              ov_local_peer_set_transmit_video_caps (OvLocalPeer *self,
+                                                             GstCaps *vcaps);
+
 G_END_DECLS
 
 #endif /* __OV_LOCAL_PEER_PRIV_H__ */

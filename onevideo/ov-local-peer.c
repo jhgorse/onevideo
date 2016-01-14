@@ -500,6 +500,36 @@ ov_local_peer_set_state_negotiatee (OvLocalPeer * self)
   priv->state |= OV_LOCAL_STATE_NEGOTIATEE;
 }
 
+/* Video transmit caps manipulation -- NOT publicly exposed */
+GstCaps *
+ov_local_peer_get_transmit_video_caps (OvLocalPeer * self)
+{
+  GstCaps *vcaps;
+  OvLocalPeerPrivate *priv = ov_local_peer_get_private (self);
+
+  if (priv->transmit_vcapsfilter == NULL)
+    return NULL;
+
+  g_object_get (priv->transmit_vcapsfilter, "caps", &vcaps, NULL);
+
+  return vcaps;
+}
+
+gboolean
+ov_local_peer_set_transmit_video_caps (OvLocalPeer * self, GstCaps * vcaps)
+{
+  OvLocalPeerPrivate *priv = ov_local_peer_get_private (self);
+
+  if (priv->transmit_vcapsfilter == NULL)
+    return FALSE;
+
+  /* Fixated video caps that we're going to transmit or are transmitting */
+  g_object_set (priv->transmit_vcapsfilter, "caps", vcaps, NULL);
+
+  GST_DEBUG ("Set transmit video caps to: %" GST_PTR_FORMAT, vcaps);
+  return TRUE;
+}
+
 /*~~ Negotiation ~~*/
 
 static void
