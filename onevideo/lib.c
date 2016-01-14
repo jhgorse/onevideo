@@ -114,6 +114,16 @@ set_free_recv_ports (OvLocalPeer * local, guint16 (*recv_ports)[4])
   return TRUE;
 }
 
+static GstCaps *
+ov_local_peer_transmit_get_vcaps (OvLocalPeerPrivate * priv)
+{
+  GstCaps *vcaps;
+
+  g_object_get (priv->transmit_vcapsfilter, "caps", &vcaps, NULL);
+
+  return vcaps;
+}
+
 static void
 ov_local_peer_transmit_set_vcaps (OvLocalPeerPrivate * priv, GstCaps * vcaps)
 {
@@ -898,7 +908,7 @@ ov_local_peer_get_video_quality (OvLocalPeer * local)
   if (priv->transmit_vcapsfilter == NULL)
     return OV_VIDEO_QUALITY_INVALID;
 
-  g_object_get (priv->transmit_vcapsfilter, "caps", &caps, NULL);
+  caps = ov_local_peer_transmit_get_vcaps (priv);
   if (caps == NULL)
     return OV_VIDEO_QUALITY_INVALID;
   if (gst_caps_is_any (caps)) {
@@ -1216,12 +1226,12 @@ ov_local_peer_begin_transmit (OvLocalPeer * local)
 
   /* If the application hasn't set the caps itself to some arbitrary supported
    * value, we will set them to the best possible quality */
-  g_object_get (priv->transmit_vcapsfilter, "caps", &fixated, NULL);
-  if (fixated == NULL) {
+  fixated = ov_local_peer_transmit_get_vcaps (priv);
+  if (fixated == NULL || gst_caps_is_any (fixated)) {
     fixated = gst_caps_fixate (gst_caps_copy (priv->send_vcaps));
     ov_local_peer_transmit_set_vcaps (priv, fixated);
   }
-  gst_caps_unref (fixated);
+  g_clear_pointer (&fixated, gst_caps_unref);
 
   ret = gst_element_set_state (priv->transmit, GST_STATE_PLAYING);
   GST_DEBUG ("Transmitting to remote peers. Audio: %s Video: %s",
