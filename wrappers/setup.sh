@@ -38,3 +38,6 @@ else
   return 1
 fi
 unset progname
+
+# Enable audio echo cancellation in Pulseaudio if supported
+export PULSE_PROP='filter.want=echo-cancel'
