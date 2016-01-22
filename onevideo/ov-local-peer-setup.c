@@ -181,6 +181,40 @@ ov_pipeline_get_osxaudiosrcbin (const gchar * name)
 }
 #endif
 
+static GstPadProbeReturn
+ov_replace_buffer_copy_deep (GstPad * srcpad, GstPadProbeInfo * info,
+    gpointer user_data)
+{
+  GstPadProbeType type = GST_PAD_PROBE_INFO_TYPE (info);
+
+  if (type & GST_PAD_PROBE_TYPE_BUFFER) {
+    GstBuffer *in, *out;
+    in = GST_PAD_PROBE_INFO_BUFFER (info);
+    out = gst_buffer_copy_deep (in);
+    GST_PAD_PROBE_INFO_DATA (info) = out;
+    gst_buffer_unref (in);
+  } else if (type & GST_PAD_PROBE_TYPE_BUFFER_LIST) {
+    GstBufferList *in, *out;
+    in = GST_PAD_PROBE_INFO_BUFFER_LIST (info);
+    out = gst_buffer_list_copy_deep (in);
+    GST_PAD_PROBE_INFO_DATA (info) = out;
+    gst_buffer_list_unref (in);
+  }
+
+  return GST_PAD_PROBE_OK;
+}
+
+/* Add a pad probe to the srcpad of this element that copies and chains all
+ * buffers and buffer lists to downstream */
+static gboolean
+ov_srcpad_add_copy_pad_probe (GstPad * srcpad)
+{
+  if (gst_pad_add_probe (srcpad, GST_PAD_PROBE_TYPE_DATA_DOWNSTREAM,
+      ov_replace_buffer_copy_deep, NULL, NULL) == 0)
+    return FALSE;
+  return TRUE;
+}
+
 gboolean
 ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
@@ -243,7 +277,12 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
     vsrc = gst_element_factory_make ("videotestsrc", NULL);
     g_object_set (vsrc, "is-live", TRUE, NULL);
   } else {
+    GstPad *srcpad;
     vsrc = gst_device_create_element (priv->video_device, NULL);
+    srcpad = gst_element_get_static_pad (vsrc, "src");
+    ret = ov_srcpad_add_copy_pad_probe (srcpad);
+    g_object_unref (srcpad);
+    g_assert (ret);
   }
 
   /* XXX: Perhaps make a new element that encodes to JPEG/H264 if necessary
