@@ -107,17 +107,17 @@ on_negotiate_incoming (OvLocalPeer * local, OvPeer * peer, gpointer user_data)
   return TRUE;
 }
 
-static void
-on_negotiate_finished (OvLocalPeer * local, gpointer user_data)
+static gboolean
+set_low_res (OvLocalPeer * local)
 {
   guint ii;
   OvVideoQuality *qualities, selected = 0;
-  gboolean low_res = GPOINTER_TO_INT (user_data);
-
-  if (!low_res)
-    goto start_call;
 
   qualities = ov_local_peer_get_negotiated_video_qualities (local);
+
+  if (qualities == NULL)
+    /* Not negotiated, try again */
+    return G_SOURCE_CONTINUE;
 
   /* Try to select 360p */
   for (ii = 0; qualities[ii] != 0; ii++)
@@ -140,7 +140,17 @@ on_negotiate_finished (OvLocalPeer * local, gpointer user_data)
 
   g_free (qualities);
 
-start_call:
+  return G_SOURCE_REMOVE;
+}
+
+static void
+on_negotiate_finished (OvLocalPeer * local, gpointer user_data)
+{
+  gint low_res = GPOINTER_TO_INT (user_data);
+
+  if (low_res == 0)
+    set_low_res (local);
+
   g_print ("Negotiation finished successfully; starting call\n");
   ov_local_peer_call_start (local);
 }
@@ -357,7 +367,7 @@ main (int   argc,
   GError *error = NULL;
 
   guint exit_after = 0;
-  gboolean low_res = FALSE;
+  gint low_res = -1;
   gboolean auto_exit = FALSE;
   gboolean discover_peers = FALSE;
   guint16 iface_port = 0;
@@ -382,8 +392,9 @@ main (int   argc,
           " we wait for incoming connections.", "PEER:PORT"},
     {"discover", 0, 0, G_OPTION_ARG_NONE, &discover_peers, "Automatically"
           " discover and connect to peers (default: no)", NULL},
-    {"low-res", 0, 0, G_OPTION_ARG_NONE, &low_res, "Send low-resolution video"
-          " for testing purposes (default: no)", NULL},
+    {"low-res", 0, 0, G_OPTION_ARG_INT, &low_res, "Send low-resolution video"
+          " for testing purposes. '-1' means no (default), '0' means at start,"
+          " '1' or higher means after that many seconds.", "WHEN"},
     {NULL}
   };
 
@@ -490,6 +501,8 @@ remotes_done:
   g_unix_signal_add (SIGINT, (GSourceFunc) on_app_exit, local);
   if (exit_after > 0)
     g_timeout_add_seconds (exit_after, (GSourceFunc) on_app_exit, local);
+  if (low_res > 0)
+    g_timeout_add_seconds (low_res, (GSourceFunc) set_low_res, local);
 
   g_main_loop_run (loop);
 
