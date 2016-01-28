@@ -311,11 +311,11 @@ ov_local_peer_init (OvLocalPeer * self)
   OvLocalPeerPrivate *priv = ov_local_peer_get_private (self);
 
   /* Initialize the V4L2 device monitor */
-  /* We only want native formats: JPEG, (and later) YUY2 and H.264 */
-  vcaps = gst_caps_new_empty_simple (VIDEO_FORMAT_JPEG);
-  /*gst_caps_append (vcaps,
-      gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "YUY2"));
-  gst_caps_append (vcaps, gst_caps_new_empty_simple (VIDEO_FORMAT_H264));*/
+  /* We only want native formats: JPEG, YUY2 and H.264
+   * However, YUY2 caps are only chosen if neither JPEG nor H.264 are found */
+  vcaps = ov_video_format_to_caps (OV_VIDEO_FORMAT_JPEG);
+  gst_caps_append (vcaps, ov_video_format_to_caps (OV_VIDEO_FORMAT_YUY2));
+  gst_caps_append (vcaps, ov_video_format_to_caps (OV_VIDEO_FORMAT_H264));
   priv->dm = gst_device_monitor_new ();
   gst_device_monitor_add_filter (priv->dm, "Video/Source", vcaps);
   gst_caps_unref (vcaps);
