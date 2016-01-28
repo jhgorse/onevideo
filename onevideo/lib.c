@@ -733,9 +733,16 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
     priv->device_video_format = OV_VIDEO_FORMAT_TEST;
   }
 
-
   GST_DEBUG ("Supported send vcaps: %" GST_PTR_FORMAT,
       priv->supported_send_vcaps);
+
+  if (priv->supported_send_vcaps == NULL)
+    return FALSE;
+
+  if (gst_caps_is_empty (priv->supported_send_vcaps)) {
+    gst_caps_unref (priv->supported_send_vcaps);
+    return FALSE;
+  }
 
   /* Setup transmit pipeline */
   priv->video_device = device;
