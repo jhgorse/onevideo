@@ -242,6 +242,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   if (priv->video_device == NULL) {
     vsrc = gst_element_factory_make ("videotestsrc", NULL);
     g_object_set (vsrc, "is-live", TRUE, NULL);
+    g_object_set (vsrc, "pattern", 18, NULL); // ball
   } else {
     vsrc = gst_device_create_element (priv->video_device, NULL);
   }
