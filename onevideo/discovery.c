@@ -193,7 +193,7 @@ ov_local_peer_send_info (OvLocalPeer * local, GSocketAddress * addr,
 
   g_object_get (OV_PEER (local), "address", &local_addr, NULL);
   ov_udp_msg_send_to_from (send, addr, local_addr, NULL, NULL);
-  g_object_unref (addr);
+  g_object_unref (local_addr);
 
   ov_udp_msg_free (send);
 }
@@ -246,8 +246,8 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 
 out:
   ov_udp_msg_free (msg);
-  g_object_unref (from);
-  g_object_unref (local_addr);
+  g_clear_object (&from);
+  g_clear_object (&local_addr);
   return G_SOURCE_CONTINUE;
 }
 
@@ -298,13 +298,10 @@ ov_discovery_send_multicast_discover (OvLocalPeer * local,
         ret = TRUE;
     }
   }
+
+  g_object_unref (mc_addr);
   g_object_unref (local_addr);
   ov_udp_msg_free (msg);
-  if (!ret)
-    goto out;
 
-  ret = TRUE;
-out:
-  g_object_unref (mc_addr);
   return ret;
 }
