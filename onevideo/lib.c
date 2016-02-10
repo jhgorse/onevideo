@@ -668,7 +668,9 @@ retry:
 
     /* Remove caps that *only* have framerates less than 15 */
     tmp = gst_structure_copy (s);
-    gst_structure_fixate (tmp);
+    /* We will probably not get valid framerates higher than this */
+    gst_structure_fixate_field_nearest_fraction (tmp, "framerate",
+        30, 1);
     gst_structure_get_fraction (tmp, "framerate", &n1, &n2);
     gst_structure_free (tmp);
     gst_util_fraction_to_double (n1, n2, &dest);
