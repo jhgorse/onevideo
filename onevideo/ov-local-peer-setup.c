@@ -266,7 +266,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
       priv->send_vcaps);
 
   /* This has already been created in ov_local_peer_init() */
-  vfilter = g_object_ref (priv->transmit_vcapsfilter);
+  vfilter = priv->transmit_vcapsfilter;
 
   /* If the application hasn't set the caps itself to some arbitrary supported
    * value, we will set them to the best possible quality */
