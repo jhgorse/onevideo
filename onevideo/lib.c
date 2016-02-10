@@ -523,7 +523,7 @@ ov_remote_peer_free (OvRemotePeer * remote)
   g_clear_object (&remote->priv->vplayback);
   /* Valgrind tells me this results in a double-unref (invalid write)
    * but I'm not sure how that works. Just commenting it out for now. */
-  g_clear_object (&remote->receive);
+  //g_clear_object (&remote->receive);
 
   if (remote->priv->recv_acaps)
     gst_caps_unref (remote->priv->recv_acaps);
@@ -668,7 +668,9 @@ retry:
 
     /* Remove caps that *only* have framerates less than 15 */
     tmp = gst_structure_copy (s);
-    gst_structure_fixate (tmp);
+    /* We will probably not get valid framerates higher than this */
+    gst_structure_fixate_field_nearest_fraction (tmp, "framerate",
+        30, 1);
     gst_structure_get_fraction (tmp, "framerate", &n1, &n2);
     gst_structure_free (tmp);
     gst_util_fraction_to_double (n1, n2, &dest);

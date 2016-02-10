@@ -27,10 +27,12 @@ Items marked with a ★ are high priority
    call
  - Allow peers to gracefully degrade a call; reducing video res or removing it
    altogether
-   + New msg type: CHANGE_CALL_DETAILS
+   + Infrastructure is there (set_video_quality). Need to expose call statistics
+     so applications can know when to use it.
 
 * Audio echo cancellation
- - Set Pulseaudio property, test with speakers and an open mic
+ - Works, but uses an environment variable right now. Should ideally set
+   pulsesrc/sink properties.
    
 * Device probing/monitoring
  - GstDeviceMonitor API does not have a way to query whether a device is under
