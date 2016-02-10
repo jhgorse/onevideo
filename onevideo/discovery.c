@@ -246,6 +246,7 @@ on_incoming_udp_message (GSocket * socket, GIOCondition condition G_GNUC_UNUSED,
 
 out:
   ov_udp_msg_free (msg);
+  g_object_unref (from);
   g_object_unref (local_addr);
   return G_SOURCE_CONTINUE;
 }
