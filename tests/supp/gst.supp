@@ -4022,6 +4022,13 @@
 }
 
 {
+   <glib init ctor; memory allocated in the C constructor>
+   ...
+   fun:glib_init_ctor
+   ...
+}
+
+{
    <ignore mesa>
    Memcheck:Leak
    ...
