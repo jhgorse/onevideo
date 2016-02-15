@@ -743,6 +743,7 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
 
   if (gst_caps_is_empty (priv->supported_send_vcaps)) {
     gst_caps_unref (priv->supported_send_vcaps);
+    priv->supported_send_vcaps = NULL;
     return FALSE;
   }
 
