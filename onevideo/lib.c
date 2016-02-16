@@ -749,7 +749,7 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
   }
 
   /* Setup transmit pipeline */
-  priv->video_device = g_object_ref (device);
+  priv->video_device = device ? g_object_ref (device) : NULL; // testsrc if device == NULL, don't ref it
   return TRUE;
 }
 
