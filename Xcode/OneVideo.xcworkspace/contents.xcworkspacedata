@@ -2,6 +2,6 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "container:Xcode/one-video-cli/one-video-cli.xcodeproj">
+      location = "group:one-video-cli/one-video-cli.xcodeproj">
    </FileRef>
 </Workspace>
