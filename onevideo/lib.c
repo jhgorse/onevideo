@@ -674,7 +674,7 @@ retry:
     gst_structure_get_fraction (tmp, "framerate", &n1, &n2);
     gst_structure_free (tmp);
     gst_util_fraction_to_double (n1, n2, &dest);
-    if ((formats >= OV_VIDEO_FORMAT_JPEG && dest < 30) ||
+    if ((formats >= OV_VIDEO_FORMAT_JPEG && dest < 15) ||
         (formats == OV_VIDEO_FORMAT_YUY2 && dest < 15))
       goto remove;
 
@@ -689,6 +689,7 @@ remove:
     ii--; len--;
   }
 
+  GST_DEBUG ("Supported video output formats %" GST_PTR_FORMAT, retcaps);
   return retcaps;
 }
 
@@ -748,7 +749,7 @@ ov_local_peer_set_video_device (OvLocalPeer * local,
   }
 
   /* Setup transmit pipeline */
-  priv->video_device = device;
+  priv->video_device = g_object_ref (device);
   return TRUE;
 }
 
