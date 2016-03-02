@@ -95,6 +95,9 @@ struct _OvRemotePeerPrivate {
   /* The format that we will receive data in from this peer */
   GstCaps *recv_acaps;
   GstCaps *recv_vcaps;
+  /* Pre-depayloader queues */
+  GstElement *aqueue;
+  GstElement *vqueue;
   /* Depayloaders */
   GstElement *adepay;
   GstElement *vdepay;

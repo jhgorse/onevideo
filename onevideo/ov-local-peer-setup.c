@@ -486,7 +486,7 @@ rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
     OvRemotePeer * remote)
 {
   GstPad *sinkpad;
-  GstElement *depay;
+  GstElement *queue;
   GstPadLinkReturn ret;
   gchar *name = gst_pad_get_name (srcpad);
   guint len = G_N_ELEMENTS ("recv_rtp_src_");
@@ -495,15 +495,15 @@ rtpbin_pad_added (GstElement * rtpbin, GstPad * srcpad,
    * The session number is the first %u in the pad name of the form
    * 'recv_rtp_src_%u_%u_%u' */
   if (name[len-1] == '0')
-    depay = remote->priv->adepay;
+    queue = remote->priv->aqueue;
   else if (name[len-1] == '1')
-    depay = remote->priv->vdepay;
+    queue = remote->priv->vqueue;
   else
     /* We only have two streams with known session numbers */
     g_assert_not_reached ();
   g_free (name);
 
-  sinkpad = gst_element_get_static_pad (depay, "sink");
+  sinkpad = gst_element_get_static_pad (queue, "sink");
   ret = gst_pad_link (srcpad, sinkpad);
   g_assert (ret == GST_PAD_LINK_OK);
   gst_object_unref (sinkpad);
@@ -595,6 +595,14 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   } else {
     g_assert_not_reached ();
   }
+  remote->priv->aqueue = gst_element_factory_make ("queue", "aqueue");
+  remote->priv->vqueue = gst_element_factory_make ("queue", "vqueue");
+  /* Pre-depayloader queues. Ensures decoupling of depayloading/decoding into
+   * threads separate from the jitterbuffer. */
+  g_object_set (remote->priv->aqueue, "max-size-buffers", 0, "max-size-bytes", 0,
+		"max-size-time", 100 * GST_MSECOND, NULL);
+  g_object_set (remote->priv->vqueue, "max-size-buffers", 0, "max-size-bytes", 0,
+		"max-size-time", 100 * GST_MSECOND, NULL);
   socket = ov_get_socket_for_addr (local_addr_s, remote->priv->recv_ports[2]);
   g_object_set (vsrc, "buffer-size", OV_VIDEO_RECV_BUFSIZE, "socket", socket,
       "caps", rtpcaps, NULL);
@@ -618,12 +626,12 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_object_unref (socket);
 
   gst_bin_add_many (GST_BIN (remote->receive), rtpbin,
-      asrc, remote->priv->adepay, adecode, asink, artcpsink, artcpsrc,
-      vsrc, remote->priv->vdepay, vdecode, vsink, vrtcpsink, vrtcpsrc,
+		    asrc, remote->priv->aqueue, remote->priv->adepay, adecode, asink, artcpsink, artcpsrc,
+		    vsrc, remote->priv->vqueue, remote->priv->vdepay, vdecode, vsink, vrtcpsink, vrtcpsrc,
       NULL);
 
   /* Link audio branch via rtpbin */
-  ret = gst_element_link_many (remote->priv->adepay, adecode, asink, NULL);
+  ret = gst_element_link_many (remote->priv->aqueue, remote->priv->adepay, adecode, asink, NULL);
   g_assert (ret);
 
   /* Recv audio RTP and send to rtpbin */
@@ -639,7 +647,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_assert (ret);
 
   /* Link video branch via rtpbin */
-  ret = gst_element_link_many (remote->priv->vdepay, vdecode, vsink, NULL);
+  ret = gst_element_link_many (remote->priv->vqueue, remote->priv->vdepay, vdecode, vsink, NULL);
   g_assert (ret);
 
   /* Recv video RTP and send to rtpbin */
