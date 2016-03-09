@@ -56,8 +56,8 @@ cli_one_video_cli_CFLAGS = \
 	-I$(top_srcdir) \
 	$(GLIB_CFLAGS) $(GST_CFLAGS)
 cli_one_video_cli_LDADD = \
-	$(top_srcdir)/onevideo/libonevideo.la \
-	$(top_srcdir)/gst/proxy/libgstproxy.la \
+	$(top_builddir)/onevideo/libonevideo.la \
+	$(top_builddir)/gst/proxy/libgstproxy.la \
 	$(GLIB_LIBS) $(GST_LIBS)
 
 gui_resource_files = $(shell glib-compile-resources --sourcedir=$(srcdir)/gui --generate-dependencies $(srcdir)/gui/ovg.gresource.xml)
@@ -74,6 +74,6 @@ gui_one_video_gui_CFLAGS = \
 	-I$(top_srcdir) \
 	$(GLIB_CFLAGS) $(GST_CFLAGS) $(GTK_CFLAGS)
 gui_one_video_gui_LDADD = \
-	$(top_srcdir)/onevideo/libonevideo.la \
-	$(top_srcdir)/gst/proxy/libgstproxy.la \
+	$(top_builddir)/onevideo/libonevideo.la \
+	$(top_builddir)/gst/proxy/libgstproxy.la \
 	-lm $(GLIB_LIBS) $(GST_LIBS) $(GTK_LIBS)
