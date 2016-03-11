@@ -68,6 +68,10 @@ struct _OvLocalPeerClass {
                                      gboolean timedout);
   void (*call_all_remotes_gone)     (OvLocalPeer *local);
 
+  /* action signals */
+  GHashTable* (*get_stats)          (OvLocalPeer *local,
+                                     const gchar *media_type);
+
   /* Padding to allow up to 12 new virtual functions without breaking ABI */
   gpointer padding[12];
 };

@@ -65,6 +65,29 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 #define RTP_JPEG_VIDEO_CAPS_STR "application/x-rtp, payload=26, media=video, clock-rate=90000, encoding-name=JPEG"
 #define RTP_H264_VIDEO_CAPS_STR "application/x-rtp, payload=96, media=video, clock-rate=90000, encoding-name=H264"
 
+/* For simplicity, we always use 0 for audio RTP sessions and 1 for video
+ * XXX: These are also used as indices for the ssrc[] arrays on OvLocalPeerPriv
+ * and OvRemotePeerPriv, so keep them within the range */
+#define OV_AUDIO_RTP_SESSION            0
+#define OV_VIDEO_RTP_SESSION            1
+#define OV_AUDIO_RTP_SESSION_STR        STR(OV_AUDIO_RTP_SESSION)
+#define OV_VIDEO_RTP_SESSION_STR        STR(OV_VIDEO_RTP_SESSION)
+#define OV_AUDIO_RTP_SESSION_NAME       "audio"
+#define OV_VIDEO_RTP_SESSION_NAME       "video"
+
+#define OV_RTP_SESSION_IS_VALID(X) \
+  (X == OV_AUDIO_RTP_SESSION ? TRUE : (X == OV_VIDEO_RTP_SESSION ? TRUE : FALSE))
+
+#define OV_RTP_SESSION_TO_NAME(X) \
+  (X == OV_AUDIO_RTP_SESSION ? \
+    OV_AUDIO_RTP_SESSION_NAME : \
+    (X == OV_VIDEO_RTP_SESSION ? OV_VIDEO_RTP_SESSION_NAME : "unknown"))
+
+#define OV_RTP_SESSION_FROM_NAME(X) \
+  (g_strcmp0 (X, OV_AUDIO_RTP_SESSION_NAME) == 0 ? \
+    OV_AUDIO_RTP_SESSION : \
+    (g_strcmp0 (X, OV_VIDEO_RTP_SESSION_NAME) == 0 ? OV_VIDEO_RTP_SESSION : -1))
+
 typedef enum _OvVideoFormat OvVideoFormat;
 
 enum _OvVideoFormat {
@@ -90,6 +113,17 @@ struct _OvRemotePeerPrivate {
    * {audio_rtp, audio_recv_rtcp SRs,
    *  video_rtp, video_recv_rtcp SRs} */
   guint16 recv_ports[4];
+
+  /* When this remote starts sending us data, we store the audio and
+   * video SSRCs here so we can keep track of RTP statistics via the
+   * RTPSource for this SSRC within the RTPSession inside GstRtpBin
+   * GstRtpBin::get-internal-session ->
+   *   RTPSession::get-source-by-ssrc ->
+   *     RTPSource::stats ->
+   *       GstStructure
+   *
+   * {audio_ssrc, video_ssrc} */
+  guint ssrcs[2];
 
   /*-- Receive pipeline --*/
   /* The format that we will receive data in from this peer */

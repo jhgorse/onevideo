@@ -116,6 +116,17 @@ struct _OvLocalPeerPrivate {
    * since we send them all to the same rtpbin */
   guint16 recv_rtcp_ports[2];
 
+  /* When we start sending data, we store the audio and video SSRCs here so we
+   * can keep track of RTP statistics via the RTPSource for this SSRC within the
+   * RTPSession inside GstRtpBin
+   * GstRtpBin::get-internal-session ->
+   *   RTPSession::get-source-by-ssrc ->
+   *     RTPSource::stats ->
+   *       GstStructure
+   *
+   * {audio_ssrc, video_ssrc} */
+  guint ssrcs[2];
+
   /* Array of UDP ports that are either reserved or in use for receiving */
   GArray *used_ports;
   /* Array of OvRemotePeers: peers we are connecting to or are connected to */

@@ -90,6 +90,26 @@ err:
   goto out;
 }
 
+static void
+ov_set_rtpbin_sdes_id (GstElement * rtpbin, OvLocalPeer * local)
+{
+  gchar *id;
+  GstStructure *sdes;
+
+  /* Set the unique ID in the SDES so our RTCP packets can be identified by
+   * receivers of both RTCP RRs and RTCP SRs */
+  g_object_get (rtpbin, "sdes", &sdes, NULL);
+  g_object_get (local, "id", &id, NULL);
+
+  /* XXX: This is where we'd want to set the caller's full name (NAME).
+   * See the section about SDES: https://www.ietf.org/rfc/rfc3550.txt */
+  gst_structure_set (sdes, "onevideo-id", G_TYPE_STRING, id, NULL);
+  g_object_set (rtpbin, "sdes", sdes, NULL);
+
+  gst_structure_free (sdes);
+  g_free (id);
+}
+
 /*-- LOCAL PEER SETUP --*/
 gboolean
 ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
@@ -181,6 +201,88 @@ ov_pipeline_get_osxaudiosrcbin (const gchar * name)
 }
 #endif
 
+static guint
+ov_local_peer_get_ssrc_for_session_internal (OvLocalPeer * local,
+    GstElement * rtpbin, guint session)
+{
+  guint i, ssrc;
+  GValueArray *arr;
+  GObject *rtpsession;
+
+  g_signal_emit_by_name (rtpbin, "get-internal-session", session, &rtpsession);
+  g_object_get (rtpsession, "sources", &arr, NULL);
+  g_object_unref (rtpsession);
+
+  for (i = 0, ssrc = 0; i < arr->n_values; i++) {
+    GstStructure *stats;
+    GObject *rtpsource;
+    gboolean is_internal = FALSE;
+
+    /* GStreamer still uses GValueArray because there is no exactly equivalent
+     * replacement. See: https://bugzilla.gnome.org/show_bug.cgi?id=753522 */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    rtpsource = g_value_get_object (g_value_array_get_nth (arr, i));
+#pragma GCC diagnostic pop
+    g_object_get (rtpsource, "ssrc", &ssrc, "stats", &stats, NULL);
+    gst_structure_get_boolean (stats, "internal", &is_internal);
+    gst_structure_free (stats);
+    if (is_internal)
+      /* Found the internal RTPSource, so we have the SSRC we want */
+      break;
+  }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  g_value_array_free (arr);
+#pragma GCC diagnostic pop
+  return ssrc;
+}
+
+static void
+on_transmit_ssrc_sdes (GstElement * rtpbin, guint session, guint ssrc,
+    OvLocalPeer * local)
+{
+  const gchar *id;
+  GstStructure *sdes;
+  GObject *rtpsession, *rtpsource;
+  OvLocalPeerPrivate *local_priv;
+  OvRemotePeer *remote;
+
+  g_assert (OV_RTP_SESSION_IS_VALID (session));
+
+  local_priv = ov_local_peer_get_private (local);
+
+  /* By the time we get SDES for remote sources, we'll have sent some data out
+   * so we'll have internal session SSRCs allocated and we can set those. */
+  if (local_priv->ssrcs[session] == 0) {
+    local_priv->ssrcs[session] =
+      ov_local_peer_get_ssrc_for_session_internal (local, local_priv->rtpbin,
+          session);
+    GST_DEBUG ("Internal %s session has SSRC: %u\n",
+        OV_RTP_SESSION_TO_NAME (session), local_priv->ssrcs[session]);
+  }
+
+  g_signal_emit_by_name (rtpbin, "get-internal-session", session, &rtpsession);
+  g_signal_emit_by_name (rtpsession, "get-source-by-ssrc", ssrc, &rtpsource);
+  g_object_get (rtpsource, "sdes", &sdes, NULL);
+  
+  id = gst_structure_get_string (sdes, "onevideo-id");
+  remote = ov_local_peer_get_remote_by_id (local, id);
+  if (remote == NULL) {
+    GST_DEBUG ("Couldn't find remote peer for id %s\n", id);
+    goto out;
+  }
+
+  GST_DEBUG ("%s from %s with SSRC %u\n", OV_RTP_SESSION_TO_NAME (session), id,
+      ssrc);
+  remote->priv->ssrcs[session] = ssrc;
+
+out:
+  g_object_unref (rtpsession);
+  g_object_unref (rtpsource);
+}
+
 gboolean
 ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
@@ -208,6 +310,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   priv->transmit = gst_object_ref_sink (gst_pipeline_new ("transmit-pipeline"));
   priv->rtpbin = gst_element_factory_make ("rtpbin", "transmit-rtpbin");
   g_object_set (priv->rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, NULL);
+  ov_set_rtpbin_sdes_id (priv->rtpbin, local);
 
 #ifdef __linux__
   asrc = gst_element_factory_make ("pulsesrc", NULL);
@@ -313,21 +416,22 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   priv->arecv_rtcp_src = artcpsrc;
 
   /* Send RTP data */
-  ret = gst_element_link_pads (apay, "src", priv->rtpbin,
-      "send_rtp_sink_0");
+  ret = gst_element_link_pads (apay, "src", priv->rtpbin, "send_rtp_sink_"
+      OV_AUDIO_RTP_SESSION_STR);
   g_assert (ret);
-  ret = gst_element_link_pads (priv->rtpbin, "send_rtp_src_0", artpqueue,
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtp_src_"
+      OV_AUDIO_RTP_SESSION_STR, artpqueue,
       "sink");
   g_assert (ret);
 
   /* Send RTCP SR */
-  ret = gst_element_link_pads (priv->rtpbin, "send_rtcp_src_0", artcpqueue,
-      "sink");
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtcp_src_"
+      OV_AUDIO_RTP_SESSION_STR, artcpqueue, "sink");
   g_assert (ret);
 
   /* Recv RTCP RR */
-  ret = gst_element_link_pads (artcpsrc, "src", priv->rtpbin,
-        "recv_rtcp_sink_0");
+  ret = gst_element_link_pads (artcpsrc, "src", priv->rtpbin, "recv_rtcp_sink_"
+      OV_AUDIO_RTP_SESSION_STR);
   g_assert (ret);
 
   /* Link video branch */
@@ -342,21 +446,31 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   priv->vrecv_rtcp_src = vrtcpsrc;
 
   /* Send RTP data */
-  ret = gst_element_link_pads (vpay, "src", priv->rtpbin, "send_rtp_sink_1");
+  ret = gst_element_link_pads (vpay, "src", priv->rtpbin, "send_rtp_sink_"
+      OV_VIDEO_RTP_SESSION_STR);
   g_assert (ret);
-  ret = gst_element_link_pads (priv->rtpbin, "send_rtp_src_1", vrtpqueue,
-      "sink");
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtp_src_"
+      OV_VIDEO_RTP_SESSION_STR, vrtpqueue, "sink");
   g_assert (ret);
 
   /* Send RTCP SR */
-  ret = gst_element_link_pads (priv->rtpbin, "send_rtcp_src_1", vrtcpqueue,
-      "sink");
+  ret = gst_element_link_pads (priv->rtpbin, "send_rtcp_src_"
+      OV_VIDEO_RTP_SESSION_STR, vrtcpqueue, "sink");
   g_assert (ret);
 
   /* Recv RTCP RR */
-  ret = gst_element_link_pads (vrtcpsrc, "src", priv->rtpbin,
-      "recv_rtcp_sink_1");
+  ret = gst_element_link_pads (vrtcpsrc, "src", priv->rtpbin, "recv_rtcp_sink_"
+      OV_VIDEO_RTP_SESSION_STR);
   g_assert (ret);
+
+  /* For outgoing data, we want RTP statistics from receivers via the RTCP RRs
+   * that we receive from them on this rtpbin. We wait for the SDES so we can
+   * identify which receiver each SSRC corresponds to. Then in on-ssrc-active
+   * whenever our SSRC comes up, we get the RTPSource for our SSRC from the
+   * RTPSession and get the statistics. We also get the internal source SSRCs
+   * for both audio and video inside this signal handler. */
+  g_signal_connect (priv->rtpbin, "on-ssrc-sdes",
+      G_CALLBACK (on_transmit_ssrc_sdes), local);
 
   /* All done */
 
@@ -510,7 +624,7 @@ static void
 on_receiver_ssrc_active (GstElement * rtpbin, guint session, guint ssrc,
     OvRemotePeer * remote)
 {
-  GST_DEBUG ("ssrc %u, session %u, remote %s active", ssrc, session,
+  GST_TRACE ("ssrc %u, session %u, remote %s active", ssrc, session,
       remote->addr_s);
   remote->last_seen = g_get_monotonic_time ();
 }
@@ -547,6 +661,7 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   rtpbin = gst_element_factory_make ("rtpbin", "recv-rtpbin-%u");
   g_object_set (rtpbin, "latency", RTP_DEFAULT_LATENCY_MS, "drop-on-latency",
       TRUE, NULL);
+  ov_set_rtpbin_sdes_id (rtpbin, local);
 
   /* TODO: Both audio and video should be optional */
 
@@ -633,15 +748,18 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_assert (ret);
 
   /* Recv audio RTP and send to rtpbin */
-  ret = gst_element_link_pads (asrc, "src", rtpbin, "recv_rtp_sink_0");
+  ret = gst_element_link_pads (asrc, "src", rtpbin, "recv_rtp_sink_"
+      OV_AUDIO_RTP_SESSION_STR);
   g_assert (ret);
 
   /* Recv audio RTCP SR etc and send to rtpbin */
-  ret = gst_element_link_pads (artcpsrc, "src", rtpbin, "recv_rtcp_sink_0");
+  ret = gst_element_link_pads (artcpsrc, "src", rtpbin, "recv_rtcp_sink_"
+      OV_AUDIO_RTP_SESSION_STR);
   g_assert (ret);
 
   /* Send audio RTCP RR etc from rtpbin */
-  ret = gst_element_link_pads (rtpbin, "send_rtcp_src_0", artcpsink, "sink");
+  ret = gst_element_link_pads (rtpbin, "send_rtcp_src_"
+      OV_AUDIO_RTP_SESSION_STR, artcpsink, "sink");
   g_assert (ret);
 
   /* Link video branch via rtpbin */
@@ -650,15 +768,18 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
   g_assert (ret);
 
   /* Recv video RTP and send to rtpbin */
-  ret = gst_element_link_pads (vsrc, "src", rtpbin, "recv_rtp_sink_1");
+  ret = gst_element_link_pads (vsrc, "src", rtpbin, "recv_rtp_sink_"
+      OV_VIDEO_RTP_SESSION_STR);
   g_assert (ret);
 
   /* Recv video RTCP SR etc and send to rtpbin */
-  ret = gst_element_link_pads (vrtcpsrc, "src", rtpbin, "recv_rtcp_sink_1");
+  ret = gst_element_link_pads (vrtcpsrc, "src", rtpbin, "recv_rtcp_sink_"
+      OV_VIDEO_RTP_SESSION_STR);
   g_assert (ret);
 
   /* Send video RTCP RR etc from rtpbin */
-  ret = gst_element_link_pads (rtpbin, "send_rtcp_src_1", vrtcpsink, "sink");
+  ret = gst_element_link_pads (rtpbin, "send_rtcp_src_"
+      OV_VIDEO_RTP_SESSION_STR, vrtcpsink, "sink");
   g_assert (ret);
 
   /* When recv_rtp_src_%u_%u_%u pads corresponding to the above recv_rtp_sink_%u
@@ -666,7 +787,13 @@ ov_local_peer_setup_remote_receive (OvLocalPeer * local, OvRemotePeer * remote)
    * and we'll finish linking the pipeline */
   g_signal_connect (rtpbin, "pad-added", G_CALLBACK (rtpbin_pad_added), remote);
 
-  /* The remote is timed out if this isn't invoked for the timeout duration */
+  /* The remote is timed out if this isn't invoked for the timeout duration.
+   *
+   * NOTE: This rtpbin will receive sender reports (SRs) which will be used to
+   * transmit back to the sender statistics about how well we're able to keep up
+   * with the sent data, which it should use to degrade the quality of video
+   * sent to us. This is done automatically, so we don't need to track or expose
+   * RTPSource statistics from here for the application. */
   g_signal_connect (rtpbin, "on-ssrc-active",
       G_CALLBACK (on_receiver_ssrc_active), remote);
 
