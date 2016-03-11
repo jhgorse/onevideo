@@ -80,6 +80,14 @@ ov_local_peer_stop_transmit (OvLocalPeer * local)
 }
 
 static void
+ov_local_peer_clear_playback (OvLocalPeerPrivate * priv)
+{
+  priv->audiosink = NULL;
+  priv->audiomixer = NULL;
+  g_clear_object (&priv->playback);
+}
+
+static void
 ov_local_peer_stop_playback (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
@@ -88,6 +96,7 @@ ov_local_peer_stop_playback (OvLocalPeer * local)
   priv = ov_local_peer_get_private (local);
   ret = gst_element_set_state (priv->playback, GST_STATE_NULL);
   g_assert (ret == GST_STATE_CHANGE_SUCCESS);
+  ov_local_peer_clear_playback (priv);
   GST_DEBUG ("Stopped playback");
 }
 
@@ -1311,10 +1320,6 @@ ov_local_peer_start (OvLocalPeer * local)
   /* We own a ref to this element */
   g_object_ref_sink (priv->transmit_vcapsfilter);
 
-  /* Setup components of the playback pipeline */
-  if (!ov_local_peer_setup_playback_pipeline (local))
-    goto err;
-
   /* Setup negotiation/comms */
   if (!ov_local_peer_setup_comms (local))
     goto err;
@@ -1414,6 +1419,12 @@ ov_local_peer_call_start (OvLocalPeer * local)
    * transmitting H264 or JPEG */
   res = ov_local_peer_setup_transmit_pipeline (local);
   g_assert (res);
+
+  /* Setup the playback pipeline anew to avoid bugs with reuse of elements */
+  res = ov_local_peer_setup_playback_pipeline (local);
+  g_assert (res);
+
+  /* Begin transmission */
   res = ov_local_peer_begin_transmit (local);
   g_assert (res);
 
