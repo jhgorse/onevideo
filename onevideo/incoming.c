@@ -166,7 +166,7 @@ ov_local_peer_handle_cancel_negotiate (OvLocalPeer * local,
   }
   g_variant_get (msg->variant, variant_type, &call_id, NULL);
 
-  if (call_id != priv->negotiate->call_id) {
+  if (priv->negotiate == NULL || call_id != priv->negotiate->call_id) {
     reply = ov_tcp_msg_new_error (msg->id, "Invalid call id");
     goto send_reply;
   }
