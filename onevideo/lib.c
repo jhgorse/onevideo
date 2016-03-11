@@ -48,6 +48,19 @@ static gboolean ov_local_peer_begin_transmit (OvLocalPeer *local);
 #define OV_REMOTE_PEER_TIMEOUT_SECONDS 10
 
 static void
+ov_local_peer_clear_transmit (OvLocalPeerPrivate * priv)
+{
+  priv->rtpbin = NULL;
+  priv->asend_rtp_sink = NULL;
+  priv->asend_rtcp_sink = NULL;
+  priv->arecv_rtcp_src = NULL;
+  priv->vsend_rtp_sink = NULL;
+  priv->vsend_rtcp_sink = NULL;
+  priv->vrecv_rtcp_src = NULL;
+  g_clear_object (&priv->transmit);
+}
+
+static void
 ov_local_peer_stop_transmit (OvLocalPeer * local)
 {
   GstStateChangeReturn ret;
@@ -60,7 +73,7 @@ ov_local_peer_stop_transmit (OvLocalPeer * local)
     g_assert (ret == GST_STATE_CHANGE_SUCCESS);
   }
   /* Each call has a new transmit pipeline */
-  g_clear_object (&priv->transmit);
+  ov_local_peer_clear_transmit (priv);
   /* Clear capsfilter for new pipeline */
   g_object_set (priv->transmit_vcapsfilter, "caps", NULL, NULL);
   GST_DEBUG ("Stopped transmitting");
