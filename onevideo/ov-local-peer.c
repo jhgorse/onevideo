@@ -43,24 +43,36 @@ enum
 
 enum
 {
+  /* Discovery */
   DISCOVERY_SENT,
   PEER_DISCOVERED,
+  /* Negotiation */
   NEGOTIATE_INCOMING,
   NEGOTIATE_STARTED,
   NEGOTIATE_SKIPPED_REMOTE,
   NEGOTIATE_FINISHED,
   NEGOTIATE_ABORTED,
+  /* Call */
   CALL_REMOTE_GONE,
   CALL_ALL_REMOTES_GONE,
-  OV_LOCAL_PEER_N_SIGNALS
+  /* Network quality statistics for all remote peers */
+  /* FIXME: These should be done via "video-stats" and "audio-stats"
+   * props on each OvRemotePeer once that's a GObject like OvLocalPeer */
+  GET_STATS,
+
+  N_SIGNALS
 };
 
-static guint signals[OV_LOCAL_PEER_N_SIGNALS];
+static guint signals[N_SIGNALS];
 
-OvLocalPeerPrivate* ov_local_peer_get_private (OvLocalPeer *self);
 static void ov_local_peer_dispose (GObject *object);
 static void ov_local_peer_finalize (GObject *object);
 static void ov_local_peer_constructed (GObject *object);
+
+static GHashTable* ov_local_peer_get_stats (OvLocalPeer *local,
+    const gchar * media_type);
+
+OvLocalPeerPrivate* ov_local_peer_get_private (OvLocalPeer *self);
 
 static void
 ov_local_peer_set_property (GObject * object, guint prop_id,
@@ -276,10 +288,55 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
         NULL, NULL, NULL,
         G_TYPE_NONE, 0);
 
+  /**
+   * OvLocalPeer::get-stats:
+   * @local: the local peer
+   * @media_type: "audio" or "video"
+   *
+   * Fetch statistics related to network quality as deduced via RTCP
+   * communication between us and remote peers in the call for the requested
+   * media type ("audio" or "video"). The result is a #GHashTable.
+   * 
+   * The hash table has one key for sender statistics: %NULL which has the value
+   * as a #GstStructure named application/x-ov-rtp-sr-stats with the following
+   * fields:
+   *
+   * TODO: Convert jitter values into unitless fractions
+   *
+   * "bitrate"                G_TYPE_UINT64   bitrate in bits per second
+   * "jitter"                 G_TYPE_UINT     estimated jitter (in clock rate units)
+   * "packets-fractionlost"   G_TYPE_UINT     total lost packets as an 8-bit fraction
+   *
+   * The hash table also has one entry each for statistics reported by each
+   * receiver (remote peer). The key is the remote peer's id and the value is
+   * a #GstStructure named application/x-ov-rtp-rr-stats with the following
+   * fields:
+   *
+   * "jitter"                 G_TYPE_UINT     estimated jitter (in clock rate units)
+   * "packets-fractionlost"   G_TYPE_UINT     lost packets as an 8-bit fraction
+   * "round-trip"             G_TYPE_UINT     the round-trip time (in NTP Short Format, 16.16 fixed point)
+   *
+   * Returns: a #GHashTable
+   **/
+  signals[GET_STATS] =
+    g_signal_new ("get-stats", G_OBJECT_CLASS_TYPE (object_class),
+        G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+        G_STRUCT_OFFSET (OvLocalPeerClass, get_stats),
+        NULL, NULL, NULL,
+        G_TYPE_HASH_TABLE, 1, G_TYPE_STRING);
+
+  /**
+   * OvLocalPeer::iface
+   *
+   * The interface provided by the user (if any). Set when the object is
+   * created.
+   */
   g_object_class_install_property (object_class, PROP_IFACE,
       g_param_spec_string ("iface", "Network Interface",
         "User-supplied network interface", NULL, G_PARAM_CONSTRUCT_ONLY |
         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  klass->get_stats = GST_DEBUG_FUNCPTR (ov_local_peer_get_stats);
 }
 
 static gboolean
@@ -637,4 +694,116 @@ ov_local_peer_set_volume (OvLocalPeer * local, gdouble volume)
     converted_volume = volume;
   /* XXX: This assumes that pulsesink is being used */
   g_object_set (priv->audiosink, "volume", converted_volume, NULL);
+}
+
+/*~~ Action Signals ~~*/
+static GstStructure *
+ov_local_peer_get_stats_from_ssrc (GObject * rtpsession, guint ssrc)
+{
+  GObject *rtpsource;
+  GstStructure *stats, *raw_stats;
+  gboolean internal, is_sender, ret;
+
+  g_signal_emit_by_name (rtpsession, "get-source-by-ssrc", ssrc, &rtpsource);
+  if (rtpsource == NULL)
+    return NULL;
+
+  g_object_get (rtpsource, "stats", &raw_stats, NULL);
+  stats = NULL;
+
+  ret = gst_structure_get_boolean (raw_stats, "internal", &internal);
+  g_assert (ret); /* this field is always there */
+  ret = gst_structure_get_boolean (raw_stats, "is-sender", &is_sender);
+  g_assert (ret); /* this field is always there */
+
+  if (internal && is_sender) {
+    guint64 packets_sent;
+    gint packets_lost, fraction;
+
+    stats = gst_structure_new_empty ("application/x-ov-rtp-sr-stats");
+    gst_structure_set_value (stats, "bitrate",
+        gst_structure_get_value (raw_stats, "bitrate"));
+    gst_structure_set_value (stats, "jitter",
+        gst_structure_get_value (raw_stats, "jitter"));
+
+    gst_structure_get_uint64 (raw_stats, "packets-sent", &packets_sent);
+    gst_structure_get_int (raw_stats, "packets-lost", &packets_lost);
+    if (packets_lost < 0)
+      packets_lost = 0;
+    fraction = (guint) ((packets_lost * 256) / packets_sent);
+    gst_structure_set (stats, "packets-fractionlost", G_TYPE_UINT, fraction,
+        NULL);
+    goto out;
+  }
+
+  if (!internal && !is_sender) {
+    gboolean have_rb;
+
+    ret = gst_structure_get_boolean (raw_stats, "have-rb", &have_rb);
+    g_assert (ret); /* this field is always there for non-internal sources */
+
+    stats = gst_structure_new_empty ("application/x-ov-rtp-rr-stats");
+    gst_structure_set_value (stats, "jitter",
+        gst_structure_get_value (raw_stats, "jitter"));
+    gst_structure_set_value (stats, "round-trip",
+        gst_structure_get_value (raw_stats, "rb-round-trip"));
+    gst_structure_set_value (stats, "packets-fractionlost",
+        gst_structure_get_value (raw_stats, "rb-fractionlost"));
+    goto out;
+  }
+
+out:
+  return stats;
+}
+
+static GHashTable *
+ov_local_peer_get_stats (OvLocalPeer * local, const gchar * media_type)
+{
+  guint ii, session;
+  GObject *rtpsession;
+  GstStructure *stats;
+  GHashTable *statistics;
+  OvLocalPeerPrivate *priv;
+  GPtrArray *remotes = ov_local_peer_get_remotes (local);
+
+  session = OV_RTP_SESSION_FROM_NAME (media_type);
+
+  if (!OV_RTP_SESSION_IS_VALID (session)) {
+    GST_ERROR ("Invalid media type: %s", media_type);
+    return NULL;
+  }
+
+  priv = ov_local_peer_get_private (local);
+  
+  if (priv->rtpbin == NULL) {
+    GST_ERROR ("No call ongoing yet");
+    return NULL;
+  }
+
+  g_signal_emit_by_name (priv->rtpbin, "get-internal-session", session,
+      &rtpsession);
+  if (rtpsession == NULL) {
+    GST_ERROR ("No stats for media type '%s': internal session not found",
+        media_type);
+    return NULL;
+  }
+
+  stats = ov_local_peer_get_stats_from_ssrc (rtpsession, priv->ssrcs[session]);
+
+  statistics = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+      (GDestroyNotify) gst_structure_free);
+  g_hash_table_insert (statistics, "", stats);
+
+  for (ii = 0; ii < remotes->len; ii++) {
+    OvRemotePeer *remote = g_ptr_array_index (remotes, ii);
+    gchar *remote_id = g_strdup (remote->id);
+
+    g_assert (g_hash_table_contains (statistics, remote_id) == FALSE);
+
+    stats = ov_local_peer_get_stats_from_ssrc (rtpsession,
+        remote->priv->ssrcs[session]);
+    g_hash_table_insert (statistics, remote_id, stats);
+  }
+
+  return statistics;
 }
