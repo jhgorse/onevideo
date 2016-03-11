@@ -259,7 +259,7 @@ on_transmit_ssrc_sdes (GstElement * rtpbin, guint session, guint ssrc,
     local_priv->ssrcs[session] =
       ov_local_peer_get_ssrc_for_session_internal (local, local_priv->rtpbin,
           session);
-    GST_DEBUG ("Internal %s session has SSRC: %u\n",
+    GST_DEBUG ("Internal %s session has SSRC: %u",
         OV_RTP_SESSION_TO_NAME (session), local_priv->ssrcs[session]);
   }
 
@@ -270,11 +270,11 @@ on_transmit_ssrc_sdes (GstElement * rtpbin, guint session, guint ssrc,
   id = gst_structure_get_string (sdes, "onevideo-id");
   remote = ov_local_peer_get_remote_by_id (local, id);
   if (remote == NULL) {
-    GST_DEBUG ("Couldn't find remote peer for id %s\n", id);
+    GST_DEBUG ("Couldn't find remote peer for id %s", id);
     goto out;
   }
 
-  GST_DEBUG ("%s from %s with SSRC %u\n", OV_RTP_SESSION_TO_NAME (session), id,
+  GST_DEBUG ("%s from %s with SSRC %u", OV_RTP_SESSION_TO_NAME (session), id,
       ssrc);
   remote->priv->ssrcs[session] = ssrc;
 
