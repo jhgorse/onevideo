@@ -120,8 +120,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("discovery-sent", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_FIRST,
         G_STRUCT_OFFSET (OvLocalPeerClass, discovery_sent),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 0);
 
   /**
@@ -138,8 +137,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("peer-discovered", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_FIRST,
         G_STRUCT_OFFSET (OvLocalPeerClass, peer_discovered),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 1,
         OV_TYPE_DISCOVERED_PEER);
 
@@ -159,8 +157,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("negotiate-incoming", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_incoming),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_BOOLEAN, 1,
         OV_TYPE_PEER);
 
@@ -187,8 +184,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("negotiate-started", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_FIRST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_started),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 0);
 
   /**
@@ -206,8 +202,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("negotiate-skipped-remote", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_skipped_remote),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 2,
         OV_TYPE_PEER,
         G_TYPE_ERROR);
@@ -223,8 +218,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("negotiate-finished", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_finished),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 0);
 
   /**
@@ -241,8 +235,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("negotiate-aborted", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, negotiate_aborted),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 1,
         G_TYPE_ERROR);
 
@@ -262,8 +255,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("call-remote-gone", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, call_remote_gone),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 2,
         OV_TYPE_PEER,
         G_TYPE_BOOLEAN);
@@ -281,8 +273,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
     g_signal_new ("call-all-remotes-gone", G_OBJECT_CLASS_TYPE (object_class),
         G_SIGNAL_RUN_LAST,
         G_STRUCT_OFFSET (OvLocalPeerClass, call_all_remotes_gone),
-        NULL, NULL,
-        NULL,
+        NULL, NULL, NULL,
         G_TYPE_NONE, 0);
 
   g_object_class_install_property (object_class, PROP_IFACE,
