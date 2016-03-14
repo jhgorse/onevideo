@@ -61,7 +61,7 @@ print_stats_dict (gchar * peer_id, GstStructure * stats, gpointer user_data)
 }
 
 static gboolean
-print_net_stats (OvLocalPeer * local)
+print_net_stats_type (OvLocalPeer * local, const gchar * media_type)
 {
   guint64 bitrate;
   guint jitter, loss;
@@ -82,13 +82,23 @@ print_net_stats (OvLocalPeer * local)
   gst_structure_get_uint64 (local_stats, "bitrate", &bitrate);
   gst_structure_get_uint (local_stats, "jitter", &jitter);
   gst_structure_get_uint (local_stats, "packets-fractionlost", &loss);
-  g_printerr ("Outgoing video bitrate: %lukbps, jitter: %u, packet loss: %.2f%%\n",
-      bitrate / 1000, jitter, ((float) (loss * 100)) / 256);
+  g_printerr ("Outgoing %s: %lukbps, jitter: %u, packet loss: %.2f%%\n",
+      media_type, bitrate / 1000, jitter, ((float) (loss * 100)) / 256);
 
 local_done:
   g_hash_table_foreach (stats_dict, (GHFunc) print_stats_dict, NULL);
   g_hash_table_unref (stats_dict);
 
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean
+print_net_stats (OvLocalPeer * local)
+{
+  if (print_net_stats_type (local, "video") == G_SOURCE_REMOVE)
+    return G_SOURCE_REMOVE;
+  if (print_net_stats_type (local, "audio") == G_SOURCE_REMOVE)
+    return G_SOURCE_REMOVE;
   return G_SOURCE_CONTINUE;
 }
 
