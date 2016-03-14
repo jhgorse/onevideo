@@ -50,6 +50,8 @@ print_stats_dict (gchar * peer_id, GstStructure * stats, gpointer user_data)
 {
   guint jitter, loss, ping;
 
+  if (stats == NULL)
+    return;
   gst_structure_get_uint (stats, "jitter", &jitter);
   gst_structure_get_uint (stats, "packets-fractionlost", &loss);
   gst_structure_get_uint (stats, "round-trip", &ping);
