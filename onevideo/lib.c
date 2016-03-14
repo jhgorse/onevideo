@@ -57,6 +57,8 @@ ov_local_peer_clear_transmit (OvLocalPeerPrivate * priv)
   priv->vsend_rtp_sink = NULL;
   priv->vsend_rtcp_sink = NULL;
   priv->vrecv_rtcp_src = NULL;
+  priv->ssrcs[OV_VIDEO_RTP_SESSION] = 0;
+  priv->ssrcs[OV_AUDIO_RTP_SESSION] = 0;
   g_clear_object (&priv->transmit);
 }
 
