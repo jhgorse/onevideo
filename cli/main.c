@@ -50,8 +50,9 @@ print_stats_dict (gchar * peer_id, GstStructure * stats, gpointer user_data)
 {
   guint jitter, loss, ping;
 
-  if (stats == NULL)
+  if (stats == NULL || g_strcmp0 (peer_id, "local") == 0)
     return;
+
   gst_structure_get_uint (stats, "jitter", &jitter);
   gst_structure_get_uint (stats, "packets-fractionlost", &loss);
   gst_structure_get_uint (stats, "round-trip", &ping);
@@ -85,7 +86,6 @@ print_net_stats (OvLocalPeer * local)
       bitrate / 1000, jitter, ((float) (loss * 100)) / 256);
 
 local_done:
-  g_hash_table_remove (stats_dict, "local");
   g_hash_table_foreach (stats_dict, (GHFunc) print_stats_dict, NULL);
   g_hash_table_unref (stats_dict);
 
