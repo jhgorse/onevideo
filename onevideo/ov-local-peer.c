@@ -784,14 +784,14 @@ ov_local_peer_get_stats (OvLocalPeer * local, const gchar * media_type)
   priv = ov_local_peer_get_private (local);
   
   if (priv->rtpbin == NULL) {
-    GST_ERROR ("No call ongoing yet");
+    GST_WARNING ("No call ongoing yet");
     return NULL;
   }
 
   g_signal_emit_by_name (priv->rtpbin, "get-internal-session", session,
       &rtpsession);
   if (rtpsession == NULL) {
-    GST_ERROR ("No stats for media type '%s': internal session not found",
+    GST_DEBUG ("No stats (yet) for media type '%s': session not found",
         media_type);
     return NULL;
   }
