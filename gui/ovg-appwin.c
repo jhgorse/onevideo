@@ -81,6 +81,139 @@ static GtkWidget* ovg_app_window_peers_c_row_new (OvgAppWindow *win,
 static GtkWidget* ovg_app_window_peers_c_row_get (OvgAppWindow *win,
     const gchar * label);
 static gboolean ovg_app_window_reset_state (OvgAppWindow *win);
+static gboolean ovg_send_lower_video_quality (OvLocalPeer *local);
+
+static void
+print_stats_dict (gchar * peer_id, GstStructure * stats, gpointer user_data)
+{
+  guint jitter, loss, ping;
+
+  if (stats == NULL || g_strcmp0 (peer_id, "local") == 0)
+    return;
+
+  gst_structure_get_uint (stats, "jitter", &jitter);
+  gst_structure_get_uint (stats, "packets-fractionlost", &loss);
+  gst_structure_get_uint (stats, "round-trip", &ping);
+  g_printerr ("  To %s, jitter: %u, packet loss: %.2f%%, round trip: %ums\n",
+      peer_id, jitter, ((float) (loss * 100)) / 256, ping);
+}
+
+static void
+print_net_stats_dict (GHashTable * stats_dict, GstStructure * local_stats)
+{
+  guint64 bitrate;
+  guint jitter, loss;
+
+  gst_structure_get_uint64 (local_stats, "bitrate", &bitrate);
+  gst_structure_get_uint (local_stats, "jitter", &jitter);
+  gst_structure_get_uint (local_stats, "packets-fractionlost", &loss);
+  g_printerr ("Outgoing video: %lukbps, jitter: %u, packet loss: %.2f%%\n",
+      bitrate / 1000, jitter, ((float) (loss * 100)) / 256);
+
+  g_hash_table_foreach (stats_dict, (GHFunc) print_stats_dict, NULL);
+}
+
+static guint
+get_highest_packet_loss (GHashTable * stats_dict, GstStructure * local_stats)
+{
+  gpointer value;
+  GHashTableIter iter;
+  guint loss, highest_loss = 0;
+
+  g_hash_table_iter_init (&iter, stats_dict);
+  /* Get the greatest packet loss */
+  while (g_hash_table_iter_next (&iter, NULL, &value)) {
+    if (value == NULL)
+      continue;
+    gst_structure_get_uint (GST_STRUCTURE (value), "packets-fractionlost", &loss);
+    if (loss > highest_loss)
+      highest_loss = loss;
+  }
+
+  return highest_loss;
+}
+
+static gboolean
+check_net_stats (OvgAppWindow * win)
+{
+  guint loss;
+  OvLocalPeer *local;
+  GtkApplication *app;
+  OvgAppWindowPrivate *priv;
+  GstStructure *local_stats;
+  GHashTable *stats_dict;
+  OvVideoQuality currentq, lowestq;
+
+  app = gtk_window_get_application (GTK_WINDOW (win));
+  priv = ovg_app_window_get_instance_private (win);
+  local = priv->ovg_local;
+
+  g_signal_emit_by_name (local, "get-stats", "video", &stats_dict);
+  if (stats_dict == NULL)
+    /* No call, call ended, or no video */
+    return G_SOURCE_REMOVE;
+
+  local_stats = GST_STRUCTURE (g_hash_table_lookup (stats_dict, "local"));
+  if (local_stats == NULL)
+    return G_SOURCE_CONTINUE;
+
+  currentq = OV_VIDEO_QUALITY_RESO_RANGE &
+    ov_local_peer_get_video_quality (local);
+  lowestq = OV_VIDEO_QUALITY_RESO_RANGE &
+    ov_local_peer_get_lowest_video_quality (local);
+  loss = get_highest_packet_loss (stats_dict, local_stats);
+
+  /* Packet loss is >= 20% (~50/256), switch to lower quality
+   *
+   * Right now, we just switch to the lowest quality (or 360p, whichever is
+   * higher), but we should perhaps look at the packet loss %age and switch to
+   * an "appropriate" quality. Such as, if packet loss is 50% at 720p, perhaps
+   * switching to 480p will suffice. Realistically, packet loss statistics are
+   * probably too unreliable to do this. */
+  if (currentq > OV_VIDEO_QUALITY_360P && currentq > lowestq && loss > 50) {
+    g_print ("Packet loss is too high! %.2f%%\n", ((float) loss * 100) / 256);
+    ovg_send_lower_video_quality (local);
+  }
+
+  if (ovg_app_get_show_net_stats (OVG_APP (app)))
+    print_net_stats_dict (stats_dict, local_stats);
+
+  g_hash_table_unref (stats_dict);
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean
+ovg_send_lower_video_quality (OvLocalPeer * local)
+{
+  guint ii;
+  gboolean ret;
+  OvVideoQuality *qualities, selected = 0;
+
+  qualities = ov_local_peer_get_negotiated_video_qualities (local);
+
+  /* Try to select 360p */
+  for (ii = 0; qualities[ii] != 0; ii++)
+    if ((qualities[ii] & OV_VIDEO_QUALITY_RESO_RANGE) ==
+        OV_VIDEO_QUALITY_360P) {
+      selected = qualities[ii];
+      break;
+    }
+
+  /* Failing which, select the lowest one possible */
+  if (selected == 0)
+    selected = qualities[ii - 1];
+
+  if (selected != 0)
+    ret = ov_local_peer_set_video_quality (local, selected);
+
+  if (ret)
+    g_print ("Running in low-res mode\n");
+  else
+    g_printerr ("Unable to switch to low-res mode\n");
+
+  g_free (qualities);
+  return ret;
+}
 
 static void
 widget_set_error (GtkWidget * w, gboolean error)
@@ -585,39 +718,15 @@ on_negotiate_started (OvLocalPeer * local, OvgAppWindow * win)
 static void
 on_negotiate_finished (OvLocalPeer * local, OvgAppWindow * win)
 {
-  guint ii;
   GtkApplication *app;
-  OvVideoQuality *qualities, selected = 0;
 
   app = gtk_window_get_application (GTK_WINDOW (win));
 
-  if (!ovg_app_get_low_res (OVG_APP (app)))
-    goto start_call;
+  g_timeout_add_seconds (2, (GSourceFunc) check_net_stats, win);
 
-  qualities = ov_local_peer_get_negotiated_video_qualities (local);
+  if (ovg_app_get_low_res (OVG_APP (app)))
+    ovg_send_lower_video_quality (local);
 
-  /* Try to select 360p */
-  for (ii = 0; qualities[ii] != 0; ii++)
-    if ((qualities[ii] & OV_VIDEO_QUALITY_RESO_RANGE) ==
-        OV_VIDEO_QUALITY_360P) {
-      selected = qualities[ii];
-      break;
-    }
-
-  /* Failing which, select the lowest one possible */
-  if (selected == 0)
-    selected = qualities[ii - 1];
-
-  if (selected == 0) {
-    g_printerr ("Unable to switch to low-res mode\n");
-  } else {
-    g_print ("Running in low-res mode\n");
-    ov_local_peer_set_video_quality (local, selected);
-  }
-
-  g_free (qualities);
-
-start_call:
   g_print ("Negotiation finished, starting call\n");
   /* Ensure gtk+ widget manipulation is only done from the main thread */
   g_main_context_invoke (NULL, (GSourceFunc) wrapper_setup_peers_video, win);
