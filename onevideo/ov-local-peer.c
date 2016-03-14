@@ -314,7 +314,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    *
    * "jitter"                 G_TYPE_UINT     estimated jitter (in clock rate units)
    * "packets-fractionlost"   G_TYPE_UINT     lost packets as an 8-bit fraction
-   * "round-trip"             G_TYPE_UINT     the round-trip time (in NTP Short Format, 16.16 fixed point)
+   * "round-trip"             G_TYPE_UINT     the round-trip time in milliseconds
    *
    * Returns: a #GHashTable
    **/
@@ -737,6 +737,7 @@ ov_local_peer_get_stats_from_ssrc (GObject * rtpsession, guint ssrc)
   }
 
   if (!internal && !is_sender) {
+    guint round_trip;
     gboolean have_rb;
 
     ret = gst_structure_get_boolean (raw_stats, "have-rb", &have_rb);
@@ -745,10 +746,11 @@ ov_local_peer_get_stats_from_ssrc (GObject * rtpsession, guint ssrc)
     stats = gst_structure_new_empty ("application/x-ov-rtp-rr-stats");
     gst_structure_set_value (stats, "jitter",
         gst_structure_get_value (raw_stats, "jitter"));
-    gst_structure_set_value (stats, "round-trip",
-        gst_structure_get_value (raw_stats, "rb-round-trip"));
     gst_structure_set_value (stats, "packets-fractionlost",
         gst_structure_get_value (raw_stats, "rb-fractionlost"));
+    gst_structure_get_uint (raw_stats, "rb-round-trip", &round_trip);
+    gst_structure_set (stats, "round-trip", G_TYPE_UINT,
+        (round_trip * 1000) / 65536, NULL);
     goto out;
   }
 
