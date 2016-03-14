@@ -36,13 +36,63 @@
 static GMainLoop *loop = NULL;
 
 typedef struct {
+  gint low_res;
+  gboolean net_stats;
+} OvCliUserOptions;
+
+typedef struct {
   gchar **remotes;
   OvLocalPeer *local;
-} FindRemotesData;
+} OvCliFindRemotesData;
+
+static void
+print_stats_dict (gchar * peer_id, GstStructure * stats, gpointer user_data)
+{
+  guint jitter, loss, ping;
+
+  gst_structure_get_uint (stats, "jitter", &jitter);
+  gst_structure_get_uint (stats, "packets-fractionlost", &loss);
+  gst_structure_get_uint (stats, "round-trip", &ping);
+  g_printerr ("  To %s, jitter: %u, packet loss: %.2f%%, round trip: %ums\n",
+      peer_id, jitter, ((float) (loss * 100)) / 256, ping);
+}
+
+static gboolean
+print_net_stats (OvLocalPeer * local)
+{
+  guint64 bitrate;
+  guint jitter, loss;
+  GHashTable *stats_dict;
+  GstStructure *local_stats;
+
+  /* Only get stats for video because audio uses very little bandwidth anyway */
+  g_signal_emit_by_name (local, "get-stats", "video", &stats_dict);
+
+  if (stats_dict == NULL)
+    /* No call, call ended, or invalid media type */
+    return G_SOURCE_REMOVE;
+
+  local_stats = GST_STRUCTURE (g_hash_table_lookup (stats_dict, "local"));
+  if (local_stats == NULL)
+    goto local_done;
+  
+  gst_structure_get_uint64 (local_stats, "bitrate", &bitrate);
+  gst_structure_get_uint (local_stats, "jitter", &jitter);
+  gst_structure_get_uint (local_stats, "packets-fractionlost", &loss);
+  g_printerr ("Outgoing video bitrate: %lukbps, jitter: %u, packet loss: %.2f%%\n",
+      bitrate / 1000, jitter, ((float) (loss * 100)) / 256);
+
+local_done:
+  g_hash_table_remove (stats_dict, "local");
+  g_hash_table_foreach (stats_dict, (GHFunc) print_stats_dict, NULL);
+  g_hash_table_unref (stats_dict);
+
+  return G_SOURCE_CONTINUE;
+}
 
 static gboolean
 found_remote_cb (OvLocalPeer * local, OvDiscoveredPeer * d,
-    FindRemotesData * data)
+    OvCliFindRemotesData * data)
 {
   guint len;
   gchar *addr_s;
@@ -146,13 +196,15 @@ set_low_res (OvLocalPeer * local)
 static void
 on_negotiate_finished (OvLocalPeer * local, gpointer user_data)
 {
-  gint low_res = GPOINTER_TO_INT (user_data);
+  OvCliUserOptions *opts = user_data;
 
-  if (low_res == 0)
+  if (opts->low_res == 0)
     set_low_res (local);
 
   g_print ("Negotiation finished successfully; starting call\n");
   ov_local_peer_call_start (local);
+  if (opts->net_stats)
+    g_timeout_add_seconds (2, (GSourceFunc) print_net_stats, local);
 }
 
 static void
@@ -205,7 +257,7 @@ dial_remotes (OvLocalPeer * local, gchar ** remotes)
 static gboolean
 aggregate_and_dial_remotes (gpointer user_data)
 {
-  FindRemotesData *data = user_data;
+  OvCliFindRemotesData *data = user_data;
 
   if (data->remotes == NULL) {
     g_print (" found no remotes. Exiting.\n");
@@ -364,12 +416,14 @@ main (int   argc,
   GOptionContext *optctx;
   GHashTable *missing;
   GList *devices;
+  OvCliUserOptions *opts;
   GError *error = NULL;
 
   guint exit_after = 0;
   gint low_res = -1;
   gboolean auto_exit = FALSE;
   gboolean discover_peers = FALSE;
+  gboolean net_stats = FALSE;
   guint16 iface_port = 0;
   gchar *iface_name = NULL;
   gchar *device_path = NULL;
@@ -395,6 +449,8 @@ main (int   argc,
     {"low-res", 0, 0, G_OPTION_ARG_INT, &low_res, "Send low-resolution video"
           " for testing purposes. '-1' means no (default), '0' means at start,"
           " '1' or higher means after that many seconds.", "WHEN"},
+    {"net-stats", 0, 0, G_OPTION_ARG_NONE, &net_stats, "Show network statistics"
+          " as calculated via RTCP (default: no)", NULL},
     {NULL}
   };
 
@@ -423,6 +479,10 @@ main (int   argc,
     return -1;
   }
 
+  opts = g_new0 (OvCliUserOptions, 1);
+  opts->low_res = low_res;
+  opts->net_stats = net_stats;
+
   loop = g_main_loop_new (NULL, FALSE);
 
   if (iface_name == NULL)
@@ -446,7 +506,7 @@ main (int   argc,
 
   /* Common for incoming and outgoing calls */
   g_signal_connect (local, "negotiate-finished",
-      G_CALLBACK (on_negotiate_finished), GINT_TO_POINTER (low_res));
+      G_CALLBACK (on_negotiate_finished), opts);
 
   if (remotes == NULL && !discover_peers) {
       g_print ("No remotes specified; listening for incoming connections\n");
@@ -464,10 +524,10 @@ main (int   argc,
       G_CALLBACK (on_outgoing_negotiate_aborted), NULL);
 
   if (remotes == NULL) {
-    FindRemotesData *data;
+    OvCliFindRemotesData *data;
     GError *error = NULL;
 
-    data = g_new0 (FindRemotesData, 1);
+    data = g_new0 (OvCliFindRemotesData, 1);
     data->local = local;
 
     g_print ("Discovering remote peers using multicast discovery...");
@@ -512,6 +572,7 @@ out:
   g_strfreev (remotes);
   g_free (device_path);
   g_free (iface_name);
+  g_free (opts);
 
   return 0;
 }
