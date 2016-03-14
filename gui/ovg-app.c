@@ -59,6 +59,7 @@ static gchar *device_path = NULL;
 static gchar *iface_name = NULL;
 static guint16 iface_port = 0;
 static gboolean low_res = FALSE;
+static gboolean net_stats = FALSE;
 
 static GOptionEntry app_options[] =
 {
@@ -72,6 +73,8 @@ static GOptionEntry app_options[] =
         " listen on for incoming connections", "PORT"},
   {"low-res", 0, 0, G_OPTION_ARG_NONE, &low_res, "Send low-resolution video"
         " for testing purposes (default: no)", NULL},
+  {"net-stats", 0, 0, G_OPTION_ARG_NONE, &net_stats, "Show network statistics "
+        " as calculated via RTCP (default: no)", NULL},
   {NULL}
 };
 
@@ -294,4 +297,10 @@ gboolean
 ovg_app_get_low_res (OvgApp * app)
 {
   return low_res;
+}
+
+gboolean
+ovg_app_get_show_net_stats (OvgApp * app)
+{
+  return net_stats;
 }

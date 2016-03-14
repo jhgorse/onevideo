@@ -875,9 +875,9 @@ ov_video_quality_to_string (OvVideoQuality quality)
   return ret;
 }
 
-/* Returns a 0-terminated array of OvVideoQuality enums
- * The array might have duplicate enums because the mapping from enum to video
- * caps is not bijective.
+/* Returns a 0-terminated array of OvVideoQuality enums ordered from best to
+ * worst. The array might have duplicate enums because the mapping from enum
+ * to video caps is not bijective.
  *
  * Returns NULL if video caps haven't been negotiated yet */
 OvVideoQuality *
@@ -885,8 +885,8 @@ ov_local_peer_get_negotiated_video_qualities (OvLocalPeer * local)
 {
   guint ii, len;
   GstCaps *normalized;
-  OvVideoQuality *qualities;
   OvLocalPeerPrivate *priv;
+  OvVideoQuality *qualities = NULL;
 
   priv = ov_local_peer_get_private (local);
 
@@ -896,6 +896,9 @@ ov_local_peer_get_negotiated_video_qualities (OvLocalPeer * local)
   normalized = gst_caps_normalize (gst_caps_copy (priv->send_vcaps));
 
   len = gst_caps_get_size (normalized);
+  if (len == 0)
+      goto out;
+
   qualities = g_new0 (OvVideoQuality, len + 1);
 
   for (ii = 0; ii < len; ii++) {
@@ -904,8 +907,8 @@ ov_local_peer_get_negotiated_video_qualities (OvLocalPeer * local)
     GST_TRACE ("%i: %" GST_PTR_FORMAT ", ", qualities[ii], s);
   }
 
+out:
   gst_caps_unref (normalized);
-
   return qualities;
 }
 
@@ -917,17 +920,35 @@ ov_local_peer_get_video_quality (OvLocalPeer * local)
   OvVideoQuality quality;
 
   caps = ov_local_peer_get_transmit_video_caps (local);
-  if (caps == NULL)
-    return OV_VIDEO_QUALITY_INVALID;
-  if (gst_caps_is_any (caps)) {
-    gst_caps_unref (caps);
-    return OV_VIDEO_QUALITY_INVALID;
-  }
 
-  quality = ov_structure_to_video_quality (gst_caps_get_structure (caps, 0));
+  if (caps == NULL || gst_caps_is_any (caps))
+    quality = OV_VIDEO_QUALITY_INVALID;
+  else
+    quality = ov_structure_to_video_quality (gst_caps_get_structure (caps, 0));
+
   gst_caps_unref (caps);
-
   return quality;
+}
+
+/* Returns OV_VIDEO_QUALITY_INVALID if video caps haven't been negotiated yet */
+OvVideoQuality
+ov_local_peer_get_lowest_video_quality (OvLocalPeer * local)
+{
+  guint ii = 0;
+  OvVideoQuality *qualities, lowestq;
+
+  qualities = ov_local_peer_get_negotiated_video_qualities (local);
+  if (qualities == NULL)
+    return OV_VIDEO_QUALITY_INVALID;
+
+  /* Find the index of the last element, which is the lowest quality */
+  while (qualities[ii] != 0)
+    ii++;
+
+  lowestq = qualities[ii - 1];
+  g_free (qualities);
+
+  return lowestq;
 }
 
 /* Returns FALSE if video caps haven't been negotiated yet */

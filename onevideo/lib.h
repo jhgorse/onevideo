@@ -102,6 +102,7 @@ gboolean            ov_local_peer_set_video_device  (OvLocalPeer *local,
 /* Video quality settings (only after negotiation and during a call) */
 OvVideoQuality*     ov_local_peer_get_negotiated_video_qualities  (OvLocalPeer *local);
 OvVideoQuality      ov_local_peer_get_video_quality               (OvLocalPeer *local);
+OvVideoQuality      ov_local_peer_get_lowest_video_quality        (OvLocalPeer *local);
 gboolean            ov_local_peer_set_video_quality               (OvLocalPeer *local,
                                                                    OvVideoQuality quality);
 gchar*              ov_video_quality_to_string                    (OvVideoQuality quality);
