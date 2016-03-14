@@ -297,7 +297,7 @@ ov_local_peer_class_init (OvLocalPeerClass * klass)
    * communication between us and remote peers in the call for the requested
    * media type ("audio" or "video"). The result is a #GHashTable.
    * 
-   * The hash table has one key for sender statistics: %NULL which has the value
+   * The hash table has one key for sender statistics: "local" which has the value
    * as a #GstStructure named application/x-ov-rtp-sr-stats with the following
    * fields:
    *
@@ -756,6 +756,14 @@ out:
   return stats;
 }
 
+static void
+ov_gst_structure_free (GstStructure * s)
+{
+  if (s == NULL)
+    return;
+  gst_structure_free (s);
+}
+
 static GHashTable *
 ov_local_peer_get_stats (OvLocalPeer * local, const gchar * media_type)
 {
@@ -791,8 +799,8 @@ ov_local_peer_get_stats (OvLocalPeer * local, const gchar * media_type)
   stats = ov_local_peer_get_stats_from_ssrc (rtpsession, priv->ssrcs[session]);
 
   statistics = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-      (GDestroyNotify) gst_structure_free);
-  g_hash_table_insert (statistics, "", stats);
+      (GDestroyNotify) ov_gst_structure_free);
+  g_hash_table_insert (statistics, g_strdup ("local"), stats);
 
   for (ii = 0; ii < remotes->len; ii++) {
     OvRemotePeer *remote = g_ptr_array_index (remotes, ii);
