@@ -3,7 +3,6 @@ Items marked with a ★ are high priority
 * Network communication
  ★ Timeout quickly on unimportant messages
  ★ One-way messages (such as END_CALL) should be sent asynchronously
- ★ Pause/resume calls correctly
  - Retry sending of important messages
 
 * Asynchronous
@@ -20,15 +19,15 @@ Items marked with a ★ are high priority
  - Need ERROR types in the network protocol itself so the negotiator and/or
    peers can take appropriate corrective action instead of just aborting the
    negotiation process or the call.
+ ★ Need to end the call when playback or transmit pipelines throw errors
+ ★ Need to drop remotes when remote receive pipelines throw errors
 
 * General
  - Add the ability for any peer to add other peers to an existing call
  - Test and bugfix removal/timeout of individual remote peers in a multi-party
    call
- - Allow peers to gracefully degrade a call; reducing video res or removing it
-   altogether
-   + Infrastructure is there (set_video_quality). Need to expose call statistics
-     so applications can know when to use it.
+ ★ Add the ability to switch off video (transmit nothing)
+ ★ Add muting of audio (transmit silence)
 
 * Audio echo cancellation
  - Works, but uses an environment variable right now. Should ideally set
