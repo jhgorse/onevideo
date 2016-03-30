@@ -30,3 +30,4 @@ Makefile.in
 /cli/one-video-cli
 /gui/one-video-gui
 xcuserdata
+docs
