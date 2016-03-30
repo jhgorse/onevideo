@@ -1,0 +1,648 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F18DD50D1C59D08B006CA62A /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD50C1C59D08B006CA62A /* main.c */; };
+		F18DD5221C59D137006CA62A /* ovg-app.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5191C59D137006CA62A /* ovg-app.c */; };
+		F18DD5231C59D137006CA62A /* ovg-appwin.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD51C1C59D137006CA62A /* ovg-appwin.c */; };
+		F18DD5241C59D137006CA62A /* ovg-main.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD51E1C59D137006CA62A /* ovg-main.c */; };
+		F18DD5251C59D137006CA62A /* ovg-resources.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD51F1C59D137006CA62A /* ovg-resources.c */; };
+		F18DD5871C59D4AF006CA62A /* libgstproxy.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F18DD55B1C59D32A006CA62A /* libgstproxy.a */; };
+		F18DD5881C59D4B1006CA62A /* libonevideo.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = F18DD5831C59D41F006CA62A /* libonevideo.dylib */; };
+		F18DD5891C59D4B8006CA62A /* libgstproxy.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F18DD55B1C59D32A006CA62A /* libgstproxy.a */; };
+		F18DD58A1C59D4B8006CA62A /* libonevideo.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = F18DD5831C59D41F006CA62A /* libonevideo.dylib */; };
+		F18DD5AA1C59D4DD006CA62A /* gstproxy.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD59D1C59D4DD006CA62A /* gstproxy.c */; };
+		F18DD5AB1C59D4DD006CA62A /* gstproxysink-priv.h in Headers */ = {isa = PBXBuildFile; fileRef = F18DD59E1C59D4DD006CA62A /* gstproxysink-priv.h */; };
+		F18DD5AC1C59D4DD006CA62A /* gstproxysink.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD59F1C59D4DD006CA62A /* gstproxysink.c */; };
+		F18DD5AD1C59D4DD006CA62A /* gstproxysink.h in Headers */ = {isa = PBXBuildFile; fileRef = F18DD5A01C59D4DD006CA62A /* gstproxysink.h */; };
+		F18DD5AE1C59D4DD006CA62A /* gstproxysrc-priv.h in Headers */ = {isa = PBXBuildFile; fileRef = F18DD5A11C59D4DD006CA62A /* gstproxysrc-priv.h */; };
+		F18DD5AF1C59D4DD006CA62A /* gstproxysrc.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5A21C59D4DD006CA62A /* gstproxysrc.c */; };
+		F18DD5B01C59D4DD006CA62A /* gstproxysrc.h in Headers */ = {isa = PBXBuildFile; fileRef = F18DD5A31C59D4DD006CA62A /* gstproxysrc.h */; };
+		F18DD5B11C59D52C006CA62A /* comms.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5271C59D22B006CA62A /* comms.c */; };
+		F18DD5B21C59D52C006CA62A /* comms.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5281C59D22B006CA62A /* comms.h */; };
+		F18DD5B31C59D52C006CA62A /* discovery.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5291C59D22B006CA62A /* discovery.c */; };
+		F18DD5B41C59D52C006CA62A /* discovery.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD52A1C59D22B006CA62A /* discovery.h */; };
+		F18DD5B51C59D52C006CA62A /* incoming.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD52B1C59D22B006CA62A /* incoming.c */; };
+		F18DD5B61C59D52C006CA62A /* incoming.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD52C1C59D22B006CA62A /* incoming.h */; };
+		F18DD5B71C59D52C006CA62A /* lib-priv.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD52D1C59D22B006CA62A /* lib-priv.h */; };
+		F18DD5B81C59D52C006CA62A /* lib.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD52E1C59D22B006CA62A /* lib.c */; };
+		F18DD5B91C59D52C006CA62A /* lib.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD52F1C59D22B006CA62A /* lib.h */; };
+		F18DD5BA1C59D52C006CA62A /* outgoing.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5301C59D22B006CA62A /* outgoing.c */; };
+		F18DD5BB1C59D52C006CA62A /* outgoing.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5311C59D22B006CA62A /* outgoing.h */; };
+		F18DD5BC1C59D52C006CA62A /* ov-discovered-peer.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5321C59D22B006CA62A /* ov-discovered-peer.c */; };
+		F18DD5BD1C59D52C006CA62A /* ov-discovered-peer.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5331C59D22B006CA62A /* ov-discovered-peer.h */; };
+		F18DD5BE1C59D52C006CA62A /* ov-local-peer-priv.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5341C59D22B006CA62A /* ov-local-peer-priv.h */; };
+		F18DD5BF1C59D52C006CA62A /* ov-local-peer-setup.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5351C59D22B006CA62A /* ov-local-peer-setup.c */; };
+		F18DD5C01C59D52C006CA62A /* ov-local-peer-setup.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5361C59D22B006CA62A /* ov-local-peer-setup.h */; };
+		F18DD5C11C59D52C006CA62A /* ov-local-peer.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5371C59D22B006CA62A /* ov-local-peer.c */; };
+		F18DD5C21C59D52C006CA62A /* ov-local-peer.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5381C59D22B006CA62A /* ov-local-peer.h */; };
+		F18DD5C31C59D52C006CA62A /* ov-peer.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD5391C59D22B006CA62A /* ov-peer.c */; };
+		F18DD5C41C59D52C006CA62A /* ov-peer.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD53A1C59D22B006CA62A /* ov-peer.h */; };
+		F18DD5C51C59D52C006CA62A /* ov-remote-peer.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD53B1C59D22B006CA62A /* ov-remote-peer.h */; };
+		F18DD5C61C59D52C006CA62A /* utils.c in Sources */ = {isa = PBXBuildFile; fileRef = F18DD53C1C59D22B006CA62A /* utils.c */; };
+		F18DD5C71C59D52C006CA62A /* utils.h in Sources */ = {isa = PBXBuildFile; fileRef = F18DD53D1C59D22B006CA62A /* utils.h */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F18DD4F81C59CFBA006CA62A /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		F18DD5101C59D0FD006CA62A /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		F18DD4FA1C59CFBA006CA62A /* one-video-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "one-video-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F18DD50C1C59D08B006CA62A /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = main.c; path = ../../../cli/main.c; sourceTree = "<group>"; };
+		F18DD5121C59D0FD006CA62A /* one-video-gui */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "one-video-gui"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F18DD5191C59D137006CA62A /* ovg-app.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ovg-app.c"; path = "../../../gui/ovg-app.c"; sourceTree = "<group>"; };
+		F18DD51A1C59D137006CA62A /* ovg-app.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ovg-app.h"; path = "../../../gui/ovg-app.h"; sourceTree = "<group>"; };
+		F18DD51B1C59D137006CA62A /* ovg-appmenu.ui */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = "ovg-appmenu.ui"; path = "../../../gui/ovg-appmenu.ui"; sourceTree = "<group>"; };
+		F18DD51C1C59D137006CA62A /* ovg-appwin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ovg-appwin.c"; path = "../../../gui/ovg-appwin.c"; sourceTree = "<group>"; };
+		F18DD51D1C59D137006CA62A /* ovg-appwin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ovg-appwin.h"; path = "../../../gui/ovg-appwin.h"; sourceTree = "<group>"; };
+		F18DD51E1C59D137006CA62A /* ovg-main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ovg-main.c"; path = "../../../gui/ovg-main.c"; sourceTree = "<group>"; };
+		F18DD51F1C59D137006CA62A /* ovg-resources.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ovg-resources.c"; path = "../../../gui/ovg-resources.c"; sourceTree = "<group>"; };
+		F18DD5201C59D137006CA62A /* ovg-window.ui */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = "ovg-window.ui"; path = "../../../gui/ovg-window.ui"; sourceTree = "<group>"; };
+		F18DD5211C59D137006CA62A /* ovg.gresource.xml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = ovg.gresource.xml; path = ../../../gui/ovg.gresource.xml; sourceTree = "<group>"; };
+		F18DD5271C59D22B006CA62A /* comms.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = comms.c; path = ../../onevideo/comms.c; sourceTree = "<group>"; };
+		F18DD5281C59D22B006CA62A /* comms.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = comms.h; path = ../../onevideo/comms.h; sourceTree = "<group>"; };
+		F18DD5291C59D22B006CA62A /* discovery.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = discovery.c; path = ../../onevideo/discovery.c; sourceTree = "<group>"; };
+		F18DD52A1C59D22B006CA62A /* discovery.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = discovery.h; path = ../../onevideo/discovery.h; sourceTree = "<group>"; };
+		F18DD52B1C59D22B006CA62A /* incoming.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = incoming.c; path = ../../onevideo/incoming.c; sourceTree = "<group>"; };
+		F18DD52C1C59D22B006CA62A /* incoming.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = incoming.h; path = ../../onevideo/incoming.h; sourceTree = "<group>"; };
+		F18DD52D1C59D22B006CA62A /* lib-priv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "lib-priv.h"; path = "../../onevideo/lib-priv.h"; sourceTree = "<group>"; };
+		F18DD52E1C59D22B006CA62A /* lib.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = lib.c; path = ../../onevideo/lib.c; sourceTree = "<group>"; };
+		F18DD52F1C59D22B006CA62A /* lib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = lib.h; path = ../../onevideo/lib.h; sourceTree = "<group>"; };
+		F18DD5301C59D22B006CA62A /* outgoing.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = outgoing.c; path = ../../onevideo/outgoing.c; sourceTree = "<group>"; };
+		F18DD5311C59D22B006CA62A /* outgoing.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = outgoing.h; path = ../../onevideo/outgoing.h; sourceTree = "<group>"; };
+		F18DD5321C59D22B006CA62A /* ov-discovered-peer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ov-discovered-peer.c"; path = "../../onevideo/ov-discovered-peer.c"; sourceTree = "<group>"; };
+		F18DD5331C59D22B006CA62A /* ov-discovered-peer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ov-discovered-peer.h"; path = "../../onevideo/ov-discovered-peer.h"; sourceTree = "<group>"; };
+		F18DD5341C59D22B006CA62A /* ov-local-peer-priv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ov-local-peer-priv.h"; path = "../../onevideo/ov-local-peer-priv.h"; sourceTree = "<group>"; };
+		F18DD5351C59D22B006CA62A /* ov-local-peer-setup.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ov-local-peer-setup.c"; path = "../../onevideo/ov-local-peer-setup.c"; sourceTree = "<group>"; };
+		F18DD5361C59D22B006CA62A /* ov-local-peer-setup.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ov-local-peer-setup.h"; path = "../../onevideo/ov-local-peer-setup.h"; sourceTree = "<group>"; };
+		F18DD5371C59D22B006CA62A /* ov-local-peer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ov-local-peer.c"; path = "../../onevideo/ov-local-peer.c"; sourceTree = "<group>"; };
+		F18DD5381C59D22B006CA62A /* ov-local-peer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ov-local-peer.h"; path = "../../onevideo/ov-local-peer.h"; sourceTree = "<group>"; };
+		F18DD5391C59D22B006CA62A /* ov-peer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ov-peer.c"; path = "../../onevideo/ov-peer.c"; sourceTree = "<group>"; };
+		F18DD53A1C59D22B006CA62A /* ov-peer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ov-peer.h"; path = "../../onevideo/ov-peer.h"; sourceTree = "<group>"; };
+		F18DD53B1C59D22B006CA62A /* ov-remote-peer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ov-remote-peer.h"; path = "../../onevideo/ov-remote-peer.h"; sourceTree = "<group>"; };
+		F18DD53C1C59D22B006CA62A /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = utils.c; path = ../../onevideo/utils.c; sourceTree = "<group>"; };
+		F18DD53D1C59D22B006CA62A /* utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = utils.h; path = ../../onevideo/utils.h; sourceTree = "<group>"; };
+		F18DD5551C59D260006CA62A /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = config.h; path = ../../config.h; sourceTree = "<group>"; };
+		F18DD55B1C59D32A006CA62A /* libgstproxy.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libgstproxy.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		F18DD5831C59D41F006CA62A /* libonevideo.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libonevideo.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		F18DD59D1C59D4DD006CA62A /* gstproxy.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = gstproxy.c; sourceTree = "<group>"; };
+		F18DD59E1C59D4DD006CA62A /* gstproxysink-priv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "gstproxysink-priv.h"; sourceTree = "<group>"; };
+		F18DD59F1C59D4DD006CA62A /* gstproxysink.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = gstproxysink.c; sourceTree = "<group>"; };
+		F18DD5A01C59D4DD006CA62A /* gstproxysink.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = gstproxysink.h; sourceTree = "<group>"; };
+		F18DD5A11C59D4DD006CA62A /* gstproxysrc-priv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "gstproxysrc-priv.h"; sourceTree = "<group>"; };
+		F18DD5A21C59D4DD006CA62A /* gstproxysrc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = gstproxysrc.c; sourceTree = "<group>"; };
+		F18DD5A31C59D4DD006CA62A /* gstproxysrc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = gstproxysrc.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F18DD4F71C59CFBA006CA62A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD5891C59D4B8006CA62A /* libgstproxy.a in Frameworks */,
+				F18DD58A1C59D4B8006CA62A /* libonevideo.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD50F1C59D0FD006CA62A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD5881C59D4B1006CA62A /* libonevideo.dylib in Frameworks */,
+				F18DD5871C59D4AF006CA62A /* libgstproxy.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD5581C59D32A006CA62A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD5801C59D41F006CA62A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		F18DD4F11C59CFBA006CA62A = {
+			isa = PBXGroup;
+			children = (
+				F18DD5551C59D260006CA62A /* config.h */,
+				F18DD4FC1C59CFBA006CA62A /* one-video-cli */,
+				F18DD5131C59D0FD006CA62A /* one-video-gui */,
+				F18DD5261C59D13F006CA62A /* onevideo */,
+				F18DD58B1C59D4DD006CA62A /* proxy */,
+				F18DD4FB1C59CFBA006CA62A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F18DD4FB1C59CFBA006CA62A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F18DD4FA1C59CFBA006CA62A /* one-video-cli */,
+				F18DD5121C59D0FD006CA62A /* one-video-gui */,
+				F18DD55B1C59D32A006CA62A /* libgstproxy.a */,
+				F18DD5831C59D41F006CA62A /* libonevideo.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F18DD4FC1C59CFBA006CA62A /* one-video-cli */ = {
+			isa = PBXGroup;
+			children = (
+				F18DD50C1C59D08B006CA62A /* main.c */,
+			);
+			path = "one-video-cli";
+			sourceTree = "<group>";
+		};
+		F18DD5131C59D0FD006CA62A /* one-video-gui */ = {
+			isa = PBXGroup;
+			children = (
+				F18DD5191C59D137006CA62A /* ovg-app.c */,
+				F18DD51A1C59D137006CA62A /* ovg-app.h */,
+				F18DD51B1C59D137006CA62A /* ovg-appmenu.ui */,
+				F18DD51C1C59D137006CA62A /* ovg-appwin.c */,
+				F18DD51D1C59D137006CA62A /* ovg-appwin.h */,
+				F18DD51E1C59D137006CA62A /* ovg-main.c */,
+				F18DD51F1C59D137006CA62A /* ovg-resources.c */,
+				F18DD5201C59D137006CA62A /* ovg-window.ui */,
+				F18DD5211C59D137006CA62A /* ovg.gresource.xml */,
+			);
+			path = "one-video-gui";
+			sourceTree = "<group>";
+		};
+		F18DD5261C59D13F006CA62A /* onevideo */ = {
+			isa = PBXGroup;
+			children = (
+				F18DD5271C59D22B006CA62A /* comms.c */,
+				F18DD5281C59D22B006CA62A /* comms.h */,
+				F18DD5291C59D22B006CA62A /* discovery.c */,
+				F18DD52A1C59D22B006CA62A /* discovery.h */,
+				F18DD52B1C59D22B006CA62A /* incoming.c */,
+				F18DD52C1C59D22B006CA62A /* incoming.h */,
+				F18DD52D1C59D22B006CA62A /* lib-priv.h */,
+				F18DD52E1C59D22B006CA62A /* lib.c */,
+				F18DD52F1C59D22B006CA62A /* lib.h */,
+				F18DD5301C59D22B006CA62A /* outgoing.c */,
+				F18DD5311C59D22B006CA62A /* outgoing.h */,
+				F18DD5321C59D22B006CA62A /* ov-discovered-peer.c */,
+				F18DD5331C59D22B006CA62A /* ov-discovered-peer.h */,
+				F18DD5341C59D22B006CA62A /* ov-local-peer-priv.h */,
+				F18DD5351C59D22B006CA62A /* ov-local-peer-setup.c */,
+				F18DD5361C59D22B006CA62A /* ov-local-peer-setup.h */,
+				F18DD5371C59D22B006CA62A /* ov-local-peer.c */,
+				F18DD5381C59D22B006CA62A /* ov-local-peer.h */,
+				F18DD5391C59D22B006CA62A /* ov-peer.c */,
+				F18DD53A1C59D22B006CA62A /* ov-peer.h */,
+				F18DD53B1C59D22B006CA62A /* ov-remote-peer.h */,
+				F18DD53C1C59D22B006CA62A /* utils.c */,
+				F18DD53D1C59D22B006CA62A /* utils.h */,
+			);
+			name = onevideo;
+			sourceTree = "<group>";
+		};
+		F18DD58B1C59D4DD006CA62A /* proxy */ = {
+			isa = PBXGroup;
+			children = (
+				F18DD59D1C59D4DD006CA62A /* gstproxy.c */,
+				F18DD59E1C59D4DD006CA62A /* gstproxysink-priv.h */,
+				F18DD59F1C59D4DD006CA62A /* gstproxysink.c */,
+				F18DD5A01C59D4DD006CA62A /* gstproxysink.h */,
+				F18DD5A11C59D4DD006CA62A /* gstproxysrc-priv.h */,
+				F18DD5A21C59D4DD006CA62A /* gstproxysrc.c */,
+				F18DD5A31C59D4DD006CA62A /* gstproxysrc.h */,
+			);
+			name = proxy;
+			path = ../../gst/proxy;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		F18DD5591C59D32A006CA62A /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD5AE1C59D4DD006CA62A /* gstproxysrc-priv.h in Headers */,
+				F18DD5AB1C59D4DD006CA62A /* gstproxysink-priv.h in Headers */,
+				F18DD5AD1C59D4DD006CA62A /* gstproxysink.h in Headers */,
+				F18DD5B01C59D4DD006CA62A /* gstproxysrc.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD5811C59D41F006CA62A /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		F18DD4F91C59CFBA006CA62A /* one-video-cli */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F18DD5011C59CFBA006CA62A /* Build configuration list for PBXNativeTarget "one-video-cli" */;
+			buildPhases = (
+				F18DD4F61C59CFBA006CA62A /* Sources */,
+				F18DD4F71C59CFBA006CA62A /* Frameworks */,
+				F18DD4F81C59CFBA006CA62A /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "one-video-cli";
+			productName = "one-video-cli";
+			productReference = F18DD4FA1C59CFBA006CA62A /* one-video-cli */;
+			productType = "com.apple.product-type.tool";
+		};
+		F18DD5111C59D0FD006CA62A /* one-video-gui */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F18DD5161C59D0FD006CA62A /* Build configuration list for PBXNativeTarget "one-video-gui" */;
+			buildPhases = (
+				F18DD50E1C59D0FD006CA62A /* Sources */,
+				F18DD50F1C59D0FD006CA62A /* Frameworks */,
+				F18DD5101C59D0FD006CA62A /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "one-video-gui";
+			productName = "one-video-gui";
+			productReference = F18DD5121C59D0FD006CA62A /* one-video-gui */;
+			productType = "com.apple.product-type.tool";
+		};
+		F18DD55A1C59D32A006CA62A /* gstproxy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F18DD55C1C59D32A006CA62A /* Build configuration list for PBXNativeTarget "gstproxy" */;
+			buildPhases = (
+				F18DD5571C59D32A006CA62A /* Sources */,
+				F18DD5581C59D32A006CA62A /* Frameworks */,
+				F18DD5591C59D32A006CA62A /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = gstproxy;
+			productName = gstproxy;
+			productReference = F18DD55B1C59D32A006CA62A /* libgstproxy.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		F18DD5821C59D41F006CA62A /* onevideo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F18DD5841C59D420006CA62A /* Build configuration list for PBXNativeTarget "onevideo" */;
+			buildPhases = (
+				F18DD57F1C59D41F006CA62A /* Sources */,
+				F18DD5801C59D41F006CA62A /* Frameworks */,
+				F18DD5811C59D41F006CA62A /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = onevideo;
+			productName = onevideo;
+			productReference = F18DD5831C59D41F006CA62A /* libonevideo.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F18DD4F21C59CFBA006CA62A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0720;
+				ORGANIZATIONNAME = OneCommunity;
+				TargetAttributes = {
+					F18DD4F91C59CFBA006CA62A = {
+						CreatedOnToolsVersion = 7.2;
+					};
+					F18DD5111C59D0FD006CA62A = {
+						CreatedOnToolsVersion = 7.2;
+					};
+					F18DD55A1C59D32A006CA62A = {
+						CreatedOnToolsVersion = 7.2;
+					};
+					F18DD5821C59D41F006CA62A = {
+						CreatedOnToolsVersion = 7.2;
+					};
+				};
+			};
+			buildConfigurationList = F18DD4F51C59CFBA006CA62A /* Build configuration list for PBXProject "one-video-cli" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = F18DD4F11C59CFBA006CA62A;
+			productRefGroup = F18DD4FB1C59CFBA006CA62A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F18DD4F91C59CFBA006CA62A /* one-video-cli */,
+				F18DD5111C59D0FD006CA62A /* one-video-gui */,
+				F18DD55A1C59D32A006CA62A /* gstproxy */,
+				F18DD5821C59D41F006CA62A /* onevideo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F18DD4F61C59CFBA006CA62A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD50D1C59D08B006CA62A /* main.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD50E1C59D0FD006CA62A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD5251C59D137006CA62A /* ovg-resources.c in Sources */,
+				F18DD5221C59D137006CA62A /* ovg-app.c in Sources */,
+				F18DD5241C59D137006CA62A /* ovg-main.c in Sources */,
+				F18DD5231C59D137006CA62A /* ovg-appwin.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD5571C59D32A006CA62A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD5AC1C59D4DD006CA62A /* gstproxysink.c in Sources */,
+				F18DD5AA1C59D4DD006CA62A /* gstproxy.c in Sources */,
+				F18DD5AF1C59D4DD006CA62A /* gstproxysrc.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F18DD57F1C59D41F006CA62A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F18DD5B11C59D52C006CA62A /* comms.c in Sources */,
+				F18DD5B21C59D52C006CA62A /* comms.h in Sources */,
+				F18DD5B31C59D52C006CA62A /* discovery.c in Sources */,
+				F18DD5B41C59D52C006CA62A /* discovery.h in Sources */,
+				F18DD5B51C59D52C006CA62A /* incoming.c in Sources */,
+				F18DD5B61C59D52C006CA62A /* incoming.h in Sources */,
+				F18DD5B71C59D52C006CA62A /* lib-priv.h in Sources */,
+				F18DD5B81C59D52C006CA62A /* lib.c in Sources */,
+				F18DD5B91C59D52C006CA62A /* lib.h in Sources */,
+				F18DD5BA1C59D52C006CA62A /* outgoing.c in Sources */,
+				F18DD5BB1C59D52C006CA62A /* outgoing.h in Sources */,
+				F18DD5BC1C59D52C006CA62A /* ov-discovered-peer.c in Sources */,
+				F18DD5BD1C59D52C006CA62A /* ov-discovered-peer.h in Sources */,
+				F18DD5BE1C59D52C006CA62A /* ov-local-peer-priv.h in Sources */,
+				F18DD5BF1C59D52C006CA62A /* ov-local-peer-setup.c in Sources */,
+				F18DD5C01C59D52C006CA62A /* ov-local-peer-setup.h in Sources */,
+				F18DD5C11C59D52C006CA62A /* ov-local-peer.c in Sources */,
+				F18DD5C21C59D52C006CA62A /* ov-local-peer.h in Sources */,
+				F18DD5C31C59D52C006CA62A /* ov-peer.c in Sources */,
+				F18DD5C41C59D52C006CA62A /* ov-peer.h in Sources */,
+				F18DD5C51C59D52C006CA62A /* ov-remote-peer.h in Sources */,
+				F18DD5C61C59D52C006CA62A /* utils.c in Sources */,
+				F18DD5C71C59D52C006CA62A /* utils.h in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F18DD4FF1C59CFBA006CA62A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_STATIC_ANALYZER_MODE = deep;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DYLD_LIBRARY_PATH = "/Developer/NVIDIA/CUDA-7.5/lib:/Users/jhg/gst/master/gstreamer-sharp/gstreamer-sharp/glue/.libs:/Users/jhg/gst/master/totem-pl-parser/plparse/.libs:/Users/jhg/gst/master/clutter-gst/clutter-gst/.libs:/Users/jhg/gst/master/gstreamer/gst/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/net/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/controller/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/check/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/base/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/base/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/video/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/mpegts/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/interfaces/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/insertbin/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/gl/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/egl/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/uridownloader/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/codecparsers/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/basecamerabinsrc/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/adaptivedemux/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/video/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/utils/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/tag/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/sdp/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/rtsp/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/rtp/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/riff/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/pbutils/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/fft/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/audio/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/app/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/allocators/.libs:/Users/jhg/gst/master/gstreamer-vaapi/gst-libs/gst/vaapi/.libs:/Users/jhg/gst/master/gst-editing-services/ges/.libs:/Users/jhg/gst/master/gst-rtsp-server/gst/rtsp-server/.libs:/Users/jhg/gst/master/orc/orc/.libs:/Users/jhg/gst/master/orc/orc-test/.libs:/Users/jhg/gst/master/prefix/lib:/Developer/NVIDIA/CUDA-7.5/lib";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				New_Setting1 = "";
+				ONLY_ACTIVE_ARCH = YES;
+				RUN_CLANG_STATIC_ANALYZER = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		F18DD5001C59CFBA006CA62A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_STATIC_ANALYZER_MODE = deep;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DYLD_LIBRARY_PATH = "/Developer/NVIDIA/CUDA-7.5/lib:/Users/jhg/gst/master/gstreamer-sharp/gstreamer-sharp/glue/.libs:/Users/jhg/gst/master/totem-pl-parser/plparse/.libs:/Users/jhg/gst/master/clutter-gst/clutter-gst/.libs:/Users/jhg/gst/master/gstreamer/gst/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/net/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/controller/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/check/.libs:/Users/jhg/gst/master/gstreamer/libs/gst/base/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/base/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/video/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/mpegts/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/interfaces/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/insertbin/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/gl/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/egl/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/uridownloader/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/codecparsers/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/basecamerabinsrc/.libs:/Users/jhg/gst/master/gst-plugins-bad/gst-libs/gst/adaptivedemux/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/video/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/utils/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/tag/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/sdp/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/rtsp/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/rtp/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/riff/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/pbutils/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/fft/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/audio/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/app/.libs:/Users/jhg/gst/master/gst-plugins-base/gst-libs/gst/allocators/.libs:/Users/jhg/gst/master/gstreamer-vaapi/gst-libs/gst/vaapi/.libs:/Users/jhg/gst/master/gst-editing-services/ges/.libs:/Users/jhg/gst/master/gst-rtsp-server/gst/rtsp-server/.libs:/Users/jhg/gst/master/orc/orc/.libs:/Users/jhg/gst/master/orc/orc-test/.libs:/Users/jhg/gst/master/prefix/lib:/Developer/NVIDIA/CUDA-7.5/lib";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				New_Setting1 = "";
+				RUN_CLANG_STATIC_ANALYZER = YES;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		F18DD5021C59CFBA006CA62A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		F18DD5031C59CFBA006CA62A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		F18DD5171C59D0FD006CA62A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		F18DD5181C59D0FD006CA62A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		F18DD55D1C59D32A006CA62A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		F18DD55E1C59D32A006CA62A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		F18DD5851C59D420006CA62A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		F18DD5861C59D420006CA62A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F18DD4F51C59CFBA006CA62A /* Build configuration list for PBXProject "one-video-cli" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F18DD4FF1C59CFBA006CA62A /* Debug */,
+				F18DD5001C59CFBA006CA62A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F18DD5011C59CFBA006CA62A /* Build configuration list for PBXNativeTarget "one-video-cli" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F18DD5021C59CFBA006CA62A /* Debug */,
+				F18DD5031C59CFBA006CA62A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F18DD5161C59D0FD006CA62A /* Build configuration list for PBXNativeTarget "one-video-gui" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F18DD5171C59D0FD006CA62A /* Debug */,
+				F18DD5181C59D0FD006CA62A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F18DD55C1C59D32A006CA62A /* Build configuration list for PBXNativeTarget "gstproxy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F18DD55D1C59D32A006CA62A /* Debug */,
+				F18DD55E1C59D32A006CA62A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F18DD5841C59D420006CA62A /* Build configuration list for PBXNativeTarget "onevideo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F18DD5851C59D420006CA62A /* Debug */,
+				F18DD5861C59D420006CA62A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F18DD4F21C59CFBA006CA62A /* Project object */;
+}

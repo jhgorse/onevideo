@@ -12,10 +12,10 @@ case "$(uname -s)" in
   Darwin)
     DEBUGGER="lldb --";;
   Linux)
-    DEBUGGER="gdb --args";;
+    DEBUGGER="gdb -q --args";;
   *)
     # Fall back to gdb on other platforms too...
-    DEBUGGER="gdb --args";;
+    DEBUGGER="gdb -q --args";;
 esac
 
 # Most of the time, the default libtool is what we want

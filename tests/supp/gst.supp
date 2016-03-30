@@ -4022,7 +4022,8 @@
 }
 
 {
-   <glib init ctor; memory allocated in the C constructor>
+   <glib init ctor memory allocated in the C constructor>
+   Memcheck:Leak
    ...
    fun:glib_init_ctor
    ...

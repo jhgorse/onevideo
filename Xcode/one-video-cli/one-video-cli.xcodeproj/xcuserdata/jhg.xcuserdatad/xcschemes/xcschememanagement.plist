@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SchemeUserState</key>
+	<dict>
+		<key>gstproxy.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>3</integer>
+		</dict>
+		<key>one-video-cli.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>0</integer>
+		</dict>
+		<key>one-video-gui.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>2</integer>
+		</dict>
+		<key>onevideo.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>5</integer>
+		</dict>
+	</dict>
+	<key>SuppressBuildableAutocreation</key>
+	<dict>
+		<key>F18DD4F91C59CFBA006CA62A</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>F18DD5071C59CFE9006CA62A</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>F18DD5111C59D0FD006CA62A</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>F18DD55A1C59D32A006CA62A</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>F18DD55F1C59D3A1006CA62A</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>F18DD5821C59D41F006CA62A</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+	</dict>
+</dict>
+</plist>
