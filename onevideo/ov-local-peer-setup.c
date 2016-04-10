@@ -153,6 +153,10 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
   ret = gst_element_link_many (priv->audiomixer, priv->audiosink, NULL);
   g_assert (ret);
 
+  /* AEC tap into output */
+  gst_pad_add_probe (gst_element_get_static_pad (priv->audiosink, "sink"),
+      GST_PAD_PROBE_TYPE_BUFFER, ov_asink_input_cb, NULL, NULL);
+
   /* Video bits are setup by each local */
 
   /* Use the system clock and explicitly reset the base/start times to ensure
@@ -399,6 +403,10 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   g_object_set (vrtcpsink, "sync", FALSE, "async", FALSE, NULL);
   /* Recv RTCP RR for video (same port for all peers) */
   vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src");
+
+  /* AEC data probe */
+  gst_pad_add_probe (gst_element_get_static_pad (asrc, "src"),
+    GST_PAD_PROBE_TYPE_BUFFER, ov_asrc_input_cb, NULL, NULL);
 
   gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc,
       afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
