@@ -156,6 +156,7 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
   g_assert (ret);
 
   /* AEC tap into output */
+  /* TODO: add a deinit() callback for cleaning up sockets */
   gst_pad_add_probe (gst_element_get_static_pad (priv->audiosink, "sink"),
       GST_PAD_PROBE_TYPE_BUFFER, ov_asink_input_cb, NULL, NULL);
 
@@ -272,7 +273,7 @@ on_transmit_ssrc_sdes (GstElement * rtpbin, guint session, guint ssrc,
   g_signal_emit_by_name (rtpbin, "get-internal-session", session, &rtpsession);
   g_signal_emit_by_name (rtpsession, "get-source-by-ssrc", ssrc, &rtpsource);
   g_object_get (rtpsource, "sdes", &sdes, NULL);
-  
+
   id = gst_structure_get_string (sdes, "onevideo-id");
   remote = ov_local_peer_get_remote_by_id (local, id);
   if (remote == NULL) {
