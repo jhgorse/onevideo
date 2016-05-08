@@ -76,9 +76,10 @@ FILTER_TYPE_DATA fir_filter (FILTER_TYPE_DATA new_value, FIR_FILTER *fir) {
 
 static void
 ov_zmq_init (void) {
+  GST_DEBUG("ZMQ Init");
   ov_zmq_context = zmq_ctx_new ();
   ov_zmq_publisher = zmq_socket (ov_zmq_context, ZMQ_PUB);
-  int rc = zmq_bind (ov_zmq_publisher, "tcp://*:5556");
+  int rc = zmq_bind (ov_zmq_publisher, "tcp://*:5566");
   assert (rc == 0);
 }
 
@@ -92,6 +93,7 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   double rms_power = 0;
   int i = 0;
   char audio_buffer[960];
+  char str_buffer[128];
   int16_t audio_point = 0;
 
   // Filter init
@@ -188,6 +190,13 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
       error->message, written);
     }
 
+    sprintf (str_buffer, "ov_asink %" OV_GST_TIME_FORMAT " pts %lu dts %lu duration %lu offset %lu offset_end %lu",
+      OV_GST_TIME_ARGS(gst_util_get_timestamp()), buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end);
+    s_send (ov_zmq_publisher, str_buffer);
+    // "%" GST_TIME_FORMAT " ", GST_TIME_ARGS (elapsed)
+    // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
+    // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
+
     gst_buffer_unmap (buffer, &map);
   } else {
     GST_DEBUG ("Failed to map buffer.");
@@ -209,6 +218,7 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   double rms_power = 0;
   int i = 0;
   char audio_buffer[960];
+  char str_buffer[128];
   int16_t audio_point = 0;
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
@@ -244,6 +254,10 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
     rms_power = sqrt(rms_power/i); // i = N
     GST_DEBUG (" rms_power %f audio_point %d",
                 rms_power, audio_point);
+
+    sprintf (str_buffer, "ov_asrc %" OV_GST_TIME_FORMAT " pts %lu dts %lu duration %lu offset %lu offset_end %lu",
+      OV_GST_TIME_ARGS(gst_util_get_timestamp()), buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end);
+    s_send (ov_zmq_publisher, str_buffer);
 
     gst_buffer_unmap (buffer, &map);
   } else {

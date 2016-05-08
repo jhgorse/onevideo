@@ -40,5 +40,13 @@
 //   size_t           ix;     // Iterator
 // } FIR_FILTER;
 
+// GST_TIME_FORMAT/ARGS for OV
+#define OV_GST_TIME_FORMAT "02u.%09u"
+#define OV_GST_TIME_ARGS(t) \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) ((((GstClockTime)(t)) / GST_SECOND) % 60) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) (((GstClockTime)(t)) % GST_SECOND) : 999999999
+
 GstPadProbeReturn ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
 GstPadProbeReturn ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
