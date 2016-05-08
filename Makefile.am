@@ -28,9 +28,9 @@ onevideo_libonevideo_la_SOURCES = \
 	onevideo/incoming.c onevideo/incoming.h \
 	onevideo/utils.c onevideo/utils.h \
 	onevideo/discovery.c onevideo/discovery.h \
-	onevideo/comms.c onevideo/comms.h
-onevideo_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS)
-onevideo_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS)
+	onevideo/comms.c onevideo/comms.h onevideo/zhelpers.h 
+onevideo_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I/usr/local/Cellar/czmq/3.0.2_3/include -I/usr/local/Cellar/zeromq/4.1.4/include
+onevideo_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS) onevideo/libffts.a -lm -L/usr/local/Cellar/czmq/3.0.2_3/lib -L/usr/local/Cellar/zeromq/4.1.4/lib -lczmq -lzmq
 onevideo_libonevideo_la_LDFLAGS = $(ONE_VIDEO_LT_LDFLAGS) -no-undefined
 onevideo_libonevideo_la_LIBTOOLFLAGS = --tag=disable-static
 
