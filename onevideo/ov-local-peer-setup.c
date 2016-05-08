@@ -32,6 +32,7 @@
 #include "discovery.h"
 #include "ov-local-peer-priv.h"
 #include "ov-local-peer-setup.h"
+#include "ov-local-peer-audio.h"
 
 #include <string.h>
 
@@ -111,170 +112,6 @@ ov_set_rtpbin_sdes_id (GstElement * rtpbin, OvLocalPeer * local)
 }
 
 /*-- LOCAL PEER SETUP --*/
-#include <stdio.h>
-#include <math.h>
-
-typedef double fir_type_t;
-/* Bring your own coefficients and data history buffers. */
-typedef struct {
-  // char name[32];      // Just in case you use these things
-  size_t      taps;   // How many taps we have
-  fir_type_t  *coef;  // Pointer to array of coefficients, taps long
-  fir_type_t  *x;     // History of inputs, taps long
-  size_t      ix;     // Iterator
-} fir_filter_t;
-
-/* Give it a new value, get one in return. */
-fir_type_t fir_filter (fir_type_t new_value, fir_filter_t *fir) {
-  fir_type_t sum = 0;
-  fir->x[fir->ix] = new_value;
-  fir->ix = (fir->ix + 1) % fir->taps;  // Never exceed taps for index
-
-  for (int i=0;i<fir->taps;i++)
-    sum += fir->x[(fir->ix + i) % fir->taps] * fir->coef[i];
-  return sum;
-}
-
-static GstPadProbeReturn
-ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
-  static GSocketAddress *sock_addr = NULL;
-  static GSocket *socket = NULL;
-  GError *error = NULL;
-  gssize written;
-
-  double rms_power = 0;
-  int i = 0;
-  char audio_buffer[960];
-  int16_t audio_point = 0;
-
-  // Filter init
-  // This is the wrong filter. 8 kHz 12 order FIR
-  const fir_type_t fir_filter_coef[] = { -0.043183226, -0.046636667, -0.049576525,
-       -0.051936015, -0.053661242, -0.054712527,  0.82598513,  -0.054712527,
-       -0.053661242, -0.051936015, -0.049576525, -0.046636667, -0.043183226 }; // 13
-  static fir_type_t fir_history[]     = { 0,0,0, 0,0,0,0,0, 0,0,0,0,0 };
-  static fir_filter_t a;
-  if (a.taps < 2) {
-    a.taps = sizeof(fir_filter_coef)/sizeof(fir_type_t);
-    a.x    = fir_history;
-    a.coef = fir_filter_coef;
-    a.ix = 0;
-  }
-
-  if (!sock_addr) {
-    sock_addr = g_inet_socket_address_new_from_string ("127.0.0.1", 1234);
-  }
-  if (!socket) {
-  socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
-      G_SOCKET_PROTOCOL_UDP, &error);
-      if (!socket) {
-        GST_ERROR ("Unable to create new socket: %s", error->message);
-        goto err;
-      }
-  }
-
-  /*  */
-  GstMapInfo map;
-  GstBuffer *buffer;
-
-  buffer = GST_PAD_PROBE_INFO_BUFFER (info);
-
-  // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
-  // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
-
-  //buffer = gst_buffer_make_writable (buffer);
-  // if (buffer == NULL)
-  //   return GST_PAD_PROBE_OK;
-
-  /* Mapping a buffer can fail (non-writable) */
-  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {
-    // GST_DEBUG("gst_buffer_map size %lu maxsize %lu", map.size, map.maxsize);
-    for(i=0;i<map.size/4;i++) {
-      audio_point = (short)(map.data[4*i+1] << 8 | map.data[4*i]); // Little endian
-      rms_power += audio_point*audio_point;
-      audio_buffer[2*i]   = map.data[4*i]; // Skip two bytes
-      audio_buffer[2*i+1] = map.data[4*i+1];
-      // printf("%02x", map.data[i]);
-      // if (i % 4 == 0)
-      //   printf(" ");
-      // if (i % 8 == 0)
-      //   printf(" ");
-      // if (i % 16 == 0)
-      //   printf("\n");
-    }
-    rms_power = sqrt(rms_power/i); // i = N
-    GST_DEBUG ("rms_power %f audio_point %d",
-                rms_power, audio_point);
-
-    written = g_socket_send_to (socket, sock_addr, (const gchar *)audio_buffer,
-                                sizeof(audio_buffer), NULL, &error);
-    if (written < sizeof(audio_buffer)) {
-      GST_ERROR ("Unable to g_socket_send_to: %s \nwritten: %ld",
-      error->message, written);
-    }
-
-    gst_buffer_unmap (buffer, &map);
-  } else {
-    GST_DEBUG ("Failed to map buffer.");
-  }
-
-  // GST_PAD_PROBE_INFO_DATA (info) = buffer;
-err:
-  return GST_PAD_PROBE_OK;
-}
-
-static GstPadProbeReturn
-ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
-//  GST_DEBUG ("ov_asrc_input_cb entered.");
-  // gint x, y;
-  GstMapInfo map;
-  // guint16 *ptr, t;
-  GstBuffer *buffer;
-
-  double rms_power = 0;
-  int i = 0;
-  char audio_buffer[960];
-  int16_t audio_point = 0;
-
-  buffer = GST_PAD_PROBE_INFO_BUFFER (info);
-///
-  // GST_DEBUG("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
-  // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
-
-  //buffer = gst_buffer_make_writable (buffer);
-  // if (buffer == NULL)
-  //   return GST_PAD_PROBE_OK;
-
-  /* Mapping a buffer can fail (non-writable) */
-  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {
-    // GST_DEBUG(" gst_buffer_map size %lu maxsize %lu", map.size, map.maxsize);
-    for(i=0;i<map.size/4;i++) {
-      audio_point = (short)(map.data[4*i+1] << 8 | map.data[4*i]); // Little endian
-      // audio_point = (int16_t)(map.data[4*i] << 8 | map.data[4*i+1]); // Big endian
-      rms_power += audio_point*audio_point;
-      audio_buffer[2*i]   = map.data[4*i]; // Skip two bytes
-      audio_buffer[2*i+1] = map.data[4*i+1];
-      // printf("%02x", map.data[i]);
-      // if (i % 4 == 0)
-      //   printf(" ");
-      // if (i % 8 == 0)
-      //   printf(" ");
-      // if (i % 16 == 0)
-      //   printf("\n");
-    }
-    rms_power = sqrt(rms_power/i); // i = N
-    GST_DEBUG (" rms_power %f audio_point %d",
-                rms_power, audio_point);
-
-    gst_buffer_unmap (buffer, &map);
-  } else {
-    GST_DEBUG("Failed to map buffer.");
-  }
-
-  // GST_PAD_PROBE_INFO_DATA (info) = buffer;
-
-  return GST_PAD_PROBE_OK;
-}
 
 gboolean
 ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
@@ -510,9 +347,11 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src");
 
   if (priv->video_device == NULL) {
-    vsrc = gst_element_factory_make ("videotestsrc", NULL);
-    g_object_set (vsrc, "is-live", TRUE, NULL);
-    g_object_set (vsrc, "pattern", 18, NULL); // ball
+    vsrc = gst_element_factory_make("avfvideosrc", NULL);
+    g_object_set (vsrc, "device-index", 0, NULL);
+//    vsrc = gst_element_factory_make ("videotestsrc", NULL);
+//    g_object_set (vsrc, "is-live", TRUE, NULL);
+//    g_object_set (vsrc, "pattern", 18, NULL); // ball
   } else {
     vsrc = gst_device_create_element (priv->video_device, NULL);
   }

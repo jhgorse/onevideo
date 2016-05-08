@@ -20,6 +20,7 @@ onevideo_libonevideo_la_SOURCES = \
 	onevideo/ov-peer.c onevideo/ov-peer.h \
 	onevideo/ov-local-peer.c onevideo/ov-local-peer.h \
 	onevideo/ov-local-peer-setup.c onevideo/ov-local-peer-setup.h \
+	onevideo/ov-local-peer-audio.c onevideo/ov-local-peer-audio.h \
 	onevideo/ov-local-peer-priv.h onevideo/ov-remote-peer.h \
 	onevideo/ov-discovered-peer.c onevideo/ov-discovered-peer.h \
 	onevideo/lib.c onevideo/lib-priv.h onevideo/lib.h \
