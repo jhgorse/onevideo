@@ -93,7 +93,7 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   double rms_power = 0;
   int i = 0;
   char audio_buffer[960];
-  char str_buffer[128];
+  static char str_buffer[128];
   int16_t audio_point = 0;
 
   // Filter init
@@ -216,7 +216,7 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   double rms_power = 0;
   int i = 0;
   char audio_buffer[960];
-  char str_buffer[128];
+  static char str_buffer[128];
   int16_t audio_point = 0;
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
