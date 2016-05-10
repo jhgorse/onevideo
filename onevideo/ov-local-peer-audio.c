@@ -116,6 +116,8 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   //   a.ix = 0;
   // }
 
+// Recording this stream to 1 column of text
+// nc -ulk 1234 | pv -cN binary | od -t d2 -An -v | tr -su ' ' '\n' | pv -cN recording > live.txt
   if (!sock_addr) {
     sock_addr = g_inet_socket_address_new_from_string ("127.0.0.1", 1234);
   }
