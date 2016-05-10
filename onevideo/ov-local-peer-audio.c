@@ -155,12 +155,14 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
 
       asink_input[2*i]    = audio_point;
 
-      audio_point = fir_filter (audio_point, &a);
-      map.data[4*i+1] = (char)(audio_point >> 8);
-      map.data[4*i]   = (char)(audio_point);
-      map.data[4*i+3] = map.data[4*i+1]; // Both channels need it
-      map.data[4*i+2] = map.data[4*i];
+// Filtered output
+      // audio_point = fir_filter (audio_point, &a);
+      // map.data[4*i+1] = (char)(audio_point >> 8);
+      // map.data[4*i]   = (char)(audio_point);
+      // map.data[4*i+3] = map.data[4*i+1]; // Both channels need it
+      // map.data[4*i+2] = map.data[4*i];
 
+// No output
       // map.data[4*i+1] = 0; // Complete attenuation
       // map.data[4*i]   = 0;
       // map.data[4*i+2] = 0; // Complete attenuation
@@ -209,6 +211,11 @@ err:
 
 GstPadProbeReturn
 ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
+  static GSocketAddress *sock_addr = NULL;
+  static GSocket *socket = NULL;
+  GError *error = NULL;
+  gssize written;
+
   //  GST_DEBUG ("ov_asrc_input_cb entered.");
   // gint x, y;
   GstMapInfo map;
@@ -226,6 +233,19 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   if (!ov_zmq_context) {
     ov_zmq_init();
   }
+
+  if (!sock_addr) {
+    sock_addr = g_inet_socket_address_new_from_string ("127.0.0.1", 1235);
+  }
+  if (!socket) {
+  socket = g_socket_new (G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
+      G_SOCKET_PROTOCOL_UDP, &error);
+      if (!socket) {
+        GST_ERROR ("Unable to create new socket: %s", error->message);
+        goto err;
+      }
+  }
+
   ///
   // GST_DEBUG("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
   // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
@@ -243,17 +263,17 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
       rms_power += audio_point*audio_point;
       audio_buffer[2*i]   = map.data[4*i]; // Skip two bytes
       audio_buffer[2*i+1] = map.data[4*i+1];
-      // printf("%02x", map.data[i]);
-      // if (i % 4 == 0)
-      //   printf(" ");
-      // if (i % 8 == 0)
-      //   printf(" ");
-      // if (i % 16 == 0)
-      //   printf("\n");
     }
-    rms_power = sqrt(rms_power/i); // i = N
-    GST_DEBUG (" rms_power %f audio_point %d",
-                rms_power, audio_point);
+    // rms_power = sqrt(rms_power/i); // i = N
+    // GST_DEBUG (" rms_power %f audio_point %d",
+                // rms_power, audio_point);
+
+    written = g_socket_send_to (socket, sock_addr, (const gchar *)audio_buffer,
+                                map.size/2, NULL, &error);
+    if (written < map.size/2) {
+      GST_ERROR ("Unable to g_socket_send_to: %s \nwritten: %ld",
+      error->message, written);
+    }
 
     OV_ZMQ_STRBUF("ov_asrc "); // Format str_buffer
     // s_send (ov_zmq_publisher, str_buffer);
@@ -267,6 +287,6 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   }
 
   // GST_PAD_PROBE_INFO_DATA (info) = buffer;
-
+err:
   return GST_PAD_PROBE_OK;
 }
