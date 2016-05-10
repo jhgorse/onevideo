@@ -186,8 +186,8 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
                 rms_power, audio_point);
 
     written = g_socket_send_to (socket, sock_addr, (const gchar *)audio_buffer,
-                                sizeof(audio_buffer), NULL, &error);
-    if (written < sizeof(audio_buffer)) {
+                                map.size/2, NULL, &error);
+    if (written < map.size/2) {
       GST_ERROR ("Unable to g_socket_send_to: %s \nwritten: %ld",
       error->message, written);
     }
