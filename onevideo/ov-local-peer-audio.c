@@ -190,12 +190,10 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
       error->message, written);
     }
 
-    sprintf (str_buffer, "ov_asink %" OV_GST_TIME_FORMAT " pts %lu dts %lu duration %lu offset %lu offset_end %lu",
-      OV_GST_TIME_ARGS(gst_util_get_timestamp()), buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end);
+    OV_ZMQ_STRBUF("ov_asink");
+    // sprintf (str_buffer, "ov_asink %" OV_GST_TIME_FORMAT " duration %lu offset %lu offset_end %lu",
+    //   OV_GST_TIME_ARGS(gst_util_get_timestamp()), buffer->duration, buffer->offset, buffer->offset_end);
     s_send (ov_zmq_publisher, str_buffer);
-    // "%" GST_TIME_FORMAT " ", GST_TIME_ARGS (elapsed)
-    // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
-    // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
 
     gst_buffer_unmap (buffer, &map);
   } else {
@@ -255,9 +253,11 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
     GST_DEBUG (" rms_power %f audio_point %d",
                 rms_power, audio_point);
 
-    sprintf (str_buffer, "ov_asrc %" OV_GST_TIME_FORMAT " pts %lu dts %lu duration %lu offset %lu offset_end %lu",
-      OV_GST_TIME_ARGS(gst_util_get_timestamp()), buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end);
-    s_send (ov_zmq_publisher, str_buffer);
+    OV_ZMQ_STRBUF("ov_asrc "); // Format str_buffer
+    // s_send (ov_zmq_publisher, str_buffer);
+    zmq_send (ov_zmq_publisher, str_buffer, strlen (str_buffer), 0);
+    // zmq_send (ov_zmq_publisher, str_buffer, strlen (str_buffer), ZMQ_SNDMORE);
+//    zmq_send (ov_zmq_publisher, audio_buffer, map.size/2, 0);
 
     gst_buffer_unmap (buffer, &map);
   } else {

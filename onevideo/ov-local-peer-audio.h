@@ -48,5 +48,9 @@
         GST_CLOCK_TIME_IS_VALID (t) ? \
         (guint) (((GstClockTime)(t)) % GST_SECOND) : 999999999
 
+#define OV_ZMQ_STRBUF(STUFF)        sprintf (str_buffer, STUFF " %" OV_GST_TIME_FORMAT " duration %lu offset %lu offset_end %lu offset_delta %lu %lu", \
+          OV_GST_TIME_ARGS(gst_util_get_timestamp()), buffer->duration, buffer->offset, buffer->offset_end, buffer->offset_end - buffer->offset, map.size );
+
+
 GstPadProbeReturn ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
 GstPadProbeReturn ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
