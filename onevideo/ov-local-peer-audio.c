@@ -60,7 +60,8 @@ typedef struct {
 } FIR_FILTER;
 
 /* Give it a new value, get one in return. */
-FILTER_TYPE_DATA fir_filter (FILTER_TYPE_DATA new_value, FIR_FILTER *fir) {
+FILTER_TYPE_DATA
+fir_filter (FILTER_TYPE_DATA new_value, FIR_FILTER *fir) {
   FILTER_TYPE_DATA sum = 0;
   fir->x[fir->ix] = new_value;
   fir->ix = (fir->ix + 1) % fir->taps;  // Never exceed taps for index
