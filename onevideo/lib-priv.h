@@ -51,6 +51,7 @@ GST_DEBUG_CATEGORY_EXTERN (onevideo_debug);
 
 /* We force the same raw audio format everywhere */
 #define AUDIO_CAPS_STR "format=S16LE, channels=2, rate=48000, layout=interleaved"
+#define AUDIO_RATE 48000
 /* This is only used for the test video source since we need both width and
  * height in the capsfilter for it */
 #define TEST_VIDEO_CAPS_720P_STR "width=1280, height=720, framerate={ 30/1, 15/1, 5/1 }"
