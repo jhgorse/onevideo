@@ -97,15 +97,16 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
 
-  // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
-  // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
+  // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
+  // 	buffer->pts, buffer->dts, buffer->duration, buffer->offset,
+	// 	buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
 
   buffer = gst_buffer_make_writable (buffer);
   if (buffer == NULL)
     return GST_PAD_PROBE_OK;
 
   /* Mapping a buffer can fail (non-writable) */
-  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {  // GST_MAP_WRITE ?
+  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {
     // GST_DEBUG("gst_buffer_map size %lu maxsize %lu", map.size, map.maxsize);
 
     for(i=0;i<map.size/4;i++) {
@@ -169,16 +170,16 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
 
-  ///
-  // GST_DEBUG("pts %lu dts %lu duration %lu offset %lu offset_end %lu flags %u",
-  // buffer->pts, buffer->dts, buffer->duration, buffer->offset, buffer->offset_end, GST_BUFFER_FLAGS(buffer));
+	GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
+  	buffer->pts, buffer->dts, buffer->duration, buffer->offset,
+		buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
 
-  //buffer = gst_buffer_make_writable (buffer);
-  // if (buffer == NULL)
-  //   return GST_PAD_PROBE_OK;
+  buffer = gst_buffer_make_writable (buffer);
+  if (buffer == NULL)
+    return GST_PAD_PROBE_OK;
 
   /* Mapping a buffer can fail (non-writable) */
-  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {  // GST_MAP_WRITE ?
+  if (gst_buffer_map (buffer, &map, GST_MAP_WRITE)) {  // GST_MAP_WRITE ? was GST_MAP_READ
     // GST_DEBUG(" gst_buffer_map size %lu maxsize %lu", map.size, map.maxsize);
     for(i=0;i<map.size/4;i++) {
       audio_point = (short)(map.data[4*i+1] << 8 | map.data[4*i]); // Little endian
@@ -202,6 +203,6 @@ ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
     GST_DEBUG("Failed to map buffer.");
   }
 
-  // GST_PAD_PROBE_INFO_DATA (info) = buffer;
+  GST_PAD_PROBE_INFO_DATA (info) = buffer;
   return GST_PAD_PROBE_OK;
 }

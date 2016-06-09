@@ -18,6 +18,7 @@ GTK_REQ=3.10
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_CXX
 LT_INIT([dlopen win32-dll disable-static])
 
 # Check for options

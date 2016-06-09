@@ -29,6 +29,9 @@
 #define ov_local_peer_audio_processing_h
 
 #include "ov-local-peer-priv.h" //AUDIO_RATE
+#include <unistd.h>
+
+#define AUDIO_RATE 48000
 
 extern "C" {
 

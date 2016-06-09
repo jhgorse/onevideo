@@ -34,6 +34,9 @@
 #include <assert.h>
 #include <string.h>
 
+#include <gst/gst.h>
+#include <gio/gio.h>
+
 #include "webrtc/modules/audio_processing/include/audio_processing.h"
 #include "webrtc/modules/audio_processing/aec/include/echo_cancellation.h"
 #include "webrtc/modules/interface/module_common_types.h"
@@ -47,8 +50,8 @@ static float *far_buffer[2]; // Max num channels
 static float *near_buffer[2];
 static int samples_per_frame; // Also the length of each buffer
 
-static void
-deinterleave_pcm_to_float(const char *src_data, **float buf, size_t size) {
+extern "C" void
+deinterleave_pcm_to_float(const char *src_data, float **dst, size_t size) {
   int i,j;
   size_t update_length = size / sizeof(int16_t) / 2;
 
@@ -56,26 +59,26 @@ deinterleave_pcm_to_float(const char *src_data, **float buf, size_t size) {
     j = update_length-samples_per_frame;
     // Take the last samples_per_frame of update for the buffer
     for (i=j;i<update_length;i++) { // Start at offset
-      buf[0][i-j] = webrtc::S16ToFloat((short)(data[4*i+1] << 8 | data[4*i])); // Little endian
-      buf[1][i-j] = webrtc::S16ToFloat((short)(data[4*i+3] << 8 | data[4*i+2])); // Little endian
+      dst[0][i-j] = webrtc::S16ToFloat((short)(src_data[4*i+1] << 8 | src_data[4*i])); // Little endian
+      dst[1][i-j] = webrtc::S16ToFloat((short)(src_data[4*i+3] << 8 | src_data[4*i+2])); // Little endian
     }
   } else {
     // Shift buffer by update_length
     for(i=update_length;i<samples_per_frame;i++) {
-      buf[0][i-update_length] = buf[0][i];
-      buf[1][i-update_length] = buf[1][i];
+      dst[0][i-update_length] = dst[0][i];
+      dst[1][i-update_length] = dst[1][i];
     }
     // Copy new data into the end of the old buffer data
     for(i=i+1;i<samples_per_frame;i++) {
-      buf[0][i] = webrtc::S16ToFloat((short)(data[4*i+1] << 8 | data[4*i])); // Little endian
-      buf[1][i] = webrtc::S16ToFloat((short)(data[4*i+3] << 8 | data[4*i+2])); // Little endian
+      dst[0][i] = webrtc::S16ToFloat((short)(src_data[4*i+1] << 8 | src_data[4*i])); // Little endian
+      dst[1][i] = webrtc::S16ToFloat((short)(src_data[4*i+3] << 8 | src_data[4*i+2])); // Little endian
     }
   }
 }
 
 // Update the last size worth of floats
-static void
-interleave_pcm_to_float(const float **src_data, *char buf, size_t size) {
+extern "C" void
+interleave_float_to_pcm(float **src_data, char *dst, size_t size) {
   int i,j;
   int16_t audio_point;
   size_t update_length = size / sizeof(int16_t) / 2;
@@ -83,12 +86,12 @@ interleave_pcm_to_float(const float **src_data, *char buf, size_t size) {
 
   for(i=0;i<samples_per_frame;i++) {
     audio_point = webrtc::FloatToS16(src_data[0][i+j]);
-    buf[4*i] = (char)(0xff & audio_point);
-    buf[4*i+1] = (char)(0xff & (audio_point >> 8));
+    dst[4*i] = (char)(0xff & audio_point);
+    dst[4*i+1] = (char)(0xff & (audio_point >> 8));
 
     audio_point = webrtc::FloatToS16(src_data[1][i+j]);
-    buf[4*i+2] = (char)(0xff & audio_point);
-    buf[4*i+3] = (char)(0xff & (audio_point >> 8));
+    dst[4*i+2] = (char)(0xff & audio_point);
+    dst[4*i+3] = (char)(0xff & (audio_point >> 8));
   }
 }
 
@@ -126,18 +129,21 @@ ov_local_peer_audio_processing_near_speech_update(char *data, size_t size) {
 //   2x10 ms buffers
 //   4x configs: sample rates, channels. (in/out for each node)
 //   Library options
-extern "C" int
+extern "C" void
 ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels) {
   webrtc::ProcessingConfig processing_config;
   webrtc::Config config;
   webrtc::StreamConfig stream_config(sample_rate_hz, num_channels, false);
   samples_per_frame = sample_rate_hz * 10 / 1000; // 10 ms frame
 
-  size_t buffer_size = samples_per_frame * num_channels * sizeof(float);
-  far_buffer = (float **)malloc( buffer_size );
-  near_buffer = (float **)malloc( buffer_size );
-  memset(far_buffer, 0, buffer_size);
-  memset(near_buffer, 0, buffer_size);
+  size_t ch_buffer_size = samples_per_frame * sizeof(float);
+  for (int i=0;i<num_channels;i++) {
+    far_buffer[i]  = (float *)malloc( ch_buffer_size );
+    near_buffer[i] = (float *)malloc( ch_buffer_size );
+    memset(far_buffer[i],  0, ch_buffer_size);
+    memset(near_buffer[i], 0, ch_buffer_size);
+  }
+
 
   analog_level = 0;
 
@@ -201,16 +207,17 @@ ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels) {
 
   apm->voice_detection()->Enable(true);
 
-   return 0;
+   return;
 fail:
   GST_ERROR("Something failed");
-  return -1;
+  return;
 }
 
-ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels) {
+extern "C" void
+ov_local_peer_audio_processing_deinit() {
   if (apm) {
       delete apm;
       apm = NULL;
   }
-  return 0;
+  return;
 }

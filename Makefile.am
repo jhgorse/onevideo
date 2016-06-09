@@ -28,11 +28,15 @@ onevideo_libonevideo_la_SOURCES = \
 	onevideo/incoming.c onevideo/incoming.h \
 	onevideo/utils.c onevideo/utils.h \
 	onevideo/discovery.c onevideo/discovery.h \
-	onevideo/comms.c onevideo/comms.h onevideo/zhelpers.h 
+	onevideo/comms.c onevideo/comms.h onevideo/zhelpers.h \
+	onevideo/ov-local-peer-audio-processing.cc onevideo/ov-local-peer-audio-processing.h
 onevideo_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I/usr/local/Cellar/czmq/3.0.2_3/include -I/usr/local/Cellar/zeromq/4.1.4/include
-onevideo_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS) onevideo/libffts.a -lm -L/usr/local/Cellar/czmq/3.0.2_3/lib -L/usr/local/Cellar/zeromq/4.1.4/lib -lczmq -lzmq
-onevideo_libonevideo_la_LDFLAGS = $(ONE_VIDEO_LT_LDFLAGS) -no-undefined
+onevideo_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS) onevideo/libffts.a -lm
+onevideo_libonevideo_la_LDFLAGS = $(ONE_VIDEO_LT_LDFLAGS) -no-undefined -Wl,-headerpad_max_install_names \
+	-headerpad_max_install_names /Users/jhg/gst/master/webrtc-audio-processing/build/lib/libwebrtc_audio_processing.a
 onevideo_libonevideo_la_LIBTOOLFLAGS = --tag=disable-static
+WEBRTC_TRUNK_DIR = /Users/jhg/gst/master/webrtc-audio-processing
+onevideo_libonevideo_la_CXXFLAGS = -O0 -g3 -std=c++11 -DWEBRTC_POSIX -DWEBRTC_AUDIO_PROCESSING_ONLY_BUILD -c -Wall -I$(WEBRTC_TRUNK_DIR) -I$(WEBRTC_TRUNK_DIR)/build/include/webrtc_audio_processing $(GST_CFLAGS)
 
 gst_proxy_libgstproxy_la_SOURCES = \
 	gst/proxy/gstproxy.c \
