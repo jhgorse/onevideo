@@ -146,6 +146,7 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 #else
 #error "Unsupported operating system"
 #endif
+g_object_set (priv->audiosink, "blocksize", 2*2*48000*10/1000, NULL); // 10 ms
 
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
@@ -183,12 +184,14 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 static GstElement *
 ov_pipeline_get_osxaudiosrcbin (const gchar * name)
 {
+  GST_DEBUG ("Setup osx audio src bin");
   GstElement *src, *conv, *bin;
   GstPad *ghostpad, *srcpad;
 
   src = gst_element_factory_make ("osxaudiosrc", NULL);
   /* latency-time to 5 ms, we use the system clock */
   g_object_set (src, "latency-time", 5000, "provide-clock", FALSE, NULL);
+  g_object_set (src, "blocksize", 2*2*48000*10/1000, NULL); // 10 ms, 1920 bytes, 960 stereo samples
 
   conv = gst_element_factory_make ("audioresample", NULL);
 
