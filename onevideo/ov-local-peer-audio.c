@@ -25,18 +25,25 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stdio.h>
-#include <math.h>
-#include <sys/stat.h>
 
 #define HAVE_SSE 1
 
 #ifdef HAVE_SSE
-	#include <xmmintrin.h>
+  #include <xmmintrin.h>
 #endif
 
 #include "ffts.h"
 #include "ov-local-peer-audio.h"
+#include "ov-local-peer-audio-processing.h"
+
+#include <stdio.h>
+#include <math.h>
+#include <sys/stat.h>
+#include <gst/base/gstadapter.h>
+
+#define AUDIO_RATE 48000
+gsize const frame_buffer_size = AUDIO_RATE * 10 * 2 * 2 / 1000; // 48 khz, 10 ms, 2 channels, 2 byte sample
+static gint audioprocessing_init = FALSE;
 
 typedef float FFT_TYPE_DATA;
 typedef double FILTER_TYPE_DATA;
@@ -71,138 +78,96 @@ fir_filter (FILTER_TYPE_DATA new_value, FIR_FILTER *fir) {
   return sum;
 }
 
+
 GstPadProbeReturn
 ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
-  double rms_power = 0;
-  int i = 0;
-  char audio_buffer[960];
-  int16_t audio_point = 0;
-
-  // asink_ascii_s16le.txt
-  // ov_asink_timeline.txt
-  static FILE *fd_asink_time;
-  static FILE *fd_asink_audio;
-  if (!fd_asink_time) {
-    fd_asink_time = fopen ("/Users/jhg/gst/master/onevideo/audio_dir/ov_asink_timeline.txt", "w");
-		rewind (fd_asink_time);
-	}
-  if (!fd_asink_audio) {
-    fd_asink_audio = fopen ("/Users/jhg/gst/master/onevideo/audio_dir/asink_ascii_s16le.txt", "w");
-		rewind (fd_asink_audio);
-	}
-
-  /*  */
-  GstMapInfo map;
   GstBuffer *buffer;
-
+  static GstAdapter *adapter;
+	gsize buffer_size;
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
 
-  // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
-  // 	buffer->pts, buffer->dts, buffer->duration, buffer->offset,
-	// 	buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
+  if (!adapter) {
+    adapter = gst_adapter_new ();
+  }
+	if (!audioprocessing_init) {
+		audioprocessing_init = TRUE;
+		ov_local_peer_audio_processing_init (AUDIO_RATE, 2);
+	}
 
-  buffer = gst_buffer_make_writable (buffer);
+  buffer = GST_PAD_PROBE_INFO_BUFFER (info);
+	buffer_size = gst_buffer_get_size (buffer);
+
+  // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
+  //   buffer->pts, buffer->dts, buffer->duration, buffer->offset,
+  //   buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
+
+  buffer = gst_buffer_ref (buffer);
   if (buffer == NULL)
     return GST_PAD_PROBE_OK;
 
-  /* Mapping a buffer can fail (non-writable) */
-  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {
-    // GST_DEBUG("gst_buffer_map size %lu maxsize %lu", map.size, map.maxsize);
+  gst_adapter_push (adapter, buffer);
 
-    for(i=0;i<map.size/4;i++) {
-      audio_point = (short)(map.data[4*i+1] << 8 | map.data[4*i]); // Little endian
-      fprintf (fd_asink_audio, "%d\n", audio_point);
-
-      audio_buffer[2*i]   = map.data[4*i]; // Skip two bytes
-      audio_buffer[2*i+1] = map.data[4*i+1];
-      asink_input[2*i]    = audio_point;
-
-      rms_power += audio_point*audio_point;
-
-    }
-    ffts_plan_t *p = ffts_init_1d(asink_N, 1);
-    ffts_execute (p, asink_input, asink_output);
-
-    rms_power = sqrt (rms_power/i); // i = N
-    // GST_DEBUG ("rms_power %f audio_point %d",
-    //             rms_power, audio_point);
-
-    fprintf (fd_asink_time, OV_LP_STRBUF ("ov_asink"));
-		fflush (fd_asink_time);
-		fflush (fd_asink_audio);
-
-    gst_buffer_unmap (buffer, &map);
-  } else {
-    GST_DEBUG ("Failed to map buffer.");
+  // if we can read out frame_buffer_size bytes, process them
+  if (gst_adapter_available (adapter) >= frame_buffer_size ) {
+    const guint8 *data = gst_adapter_map (adapter, frame_buffer_size);
+    ov_local_peer_audio_processing_far_speech_update(data, frame_buffer_size);
+    gst_adapter_unmap (adapter);
+    //gst_adapter_flush (adapter, frame_buffer_size);
   }
 
-  GST_PAD_PROBE_INFO_DATA (info) = buffer;
-
+  GST_PAD_PROBE_INFO_DATA (info) = gst_adapter_take_buffer (adapter, buffer_size);
+  // gst_buffer_unref (buffer);
   return GST_PAD_PROBE_OK;
 }
 
 GstPadProbeReturn
 ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
-  //  GST_DEBUG ("ov_asrc_input_cb entered.");
-  // gint x, y;
+  GstBuffer *buffer, *data_buf;
+  static GstAdapter *adapter;
   GstMapInfo map;
-  // guint16 *ptr, t;
-  GstBuffer *buffer;
+  gsize buffer_size;
 
-  double rms_power = 0;
-  int i = 0;
-  char audio_buffer[960];
-  int16_t audio_point = 0;
+  if (!adapter) {
+    adapter = gst_adapter_new ();
+  }
 
-  // asrc_ascii_s16le.txt
-  // ov_asrc_timeline.txt
-  static FILE *fd_asrc_time;
-  static FILE *fd_asrc_audio;
-
-  if (!fd_asrc_time) {
-		fd_asrc_time = fopen ("/Users/jhg/gst/master/onevideo/audio_dir/ov_asrc_timeline.txt", "w");
-		rewind (fd_asrc_time);
-	}
-  if (!fd_asrc_audio) {
-		fd_asrc_audio = fopen ("/Users/jhg/gst/master/onevideo/audio_dir/asrc_ascii_s16le.txt", "w");
-		rewind (fd_asrc_audio);
+	if (!audioprocessing_init) {
+		audioprocessing_init = TRUE;
+		ov_local_peer_audio_processing_init (AUDIO_RATE, 2);
 	}
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
+//  buffer_size = gst_buffer_get_size (buffer);
 
-	GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
-  	buffer->pts, buffer->dts, buffer->duration, buffer->offset,
-		buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
+  // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
+  //   buffer->pts, buffer->dts, buffer->duration, buffer->offset,
+  //   buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
 
-  buffer = gst_buffer_make_writable (buffer);
+  // buffer = gst_buffer_ref (buffer);
+
+  // buffer = gst_buffer_make_writable (buffer);
   if (buffer == NULL)
     return GST_PAD_PROBE_OK;
 
-  /* Mapping a buffer can fail (non-writable) */
-  if (gst_buffer_map (buffer, &map, GST_MAP_WRITE)) {  // GST_MAP_WRITE ? was GST_MAP_READ
-    // GST_DEBUG(" gst_buffer_map size %lu maxsize %lu", map.size, map.maxsize);
-    for(i=0;i<map.size/4;i++) {
-      audio_point = (short)(map.data[4*i+1] << 8 | map.data[4*i]); // Little endian
-      // audio_point = (int16_t)(map.data[4*i] << 8 | map.data[4*i+1]); // Big endian
-      fprintf (fd_asrc_audio, "%d\n", audio_point);
+  gst_adapter_push (adapter, buffer);
 
-      rms_power += audio_point*audio_point;
-      audio_buffer[2*i]   = map.data[4*i]; // Skip two bytes
-      audio_buffer[2*i+1] = map.data[4*i+1];
-    }
-    // rms_power = sqrt(rms_power/i); // i = N
-    // GST_DEBUG (" rms_power %f audio_point %d",
-                // rms_power, audio_point);
+  // if we can read out frame_buffer_size bytes, process them
+  if (gst_adapter_available (adapter) >= frame_buffer_size ) {
+    // guint8 *data = gst_adapter_map (adapter, frame_buffer_size);
+		//guint8 *data = gst_adapter_take (adapter, frame_buffer_size);
+		data_buf = gst_adapter_get_buffer (adapter, frame_buffer_size);
+		//data_buf = gst_buffer_ref (data_buf);
+		data_buf = gst_buffer_make_writable (data_buf);
+	  if (gst_buffer_map (data_buf, &map, GST_MAP_WRITE)) {
+			ov_local_peer_audio_processing_near_speech_update(map.data, map.size);
+    	gst_buffer_unmap (buffer, &map);
+		} else {
+			GST_DEBUG ("Failed to map data_buf");
+		}
+		// gst_buffer_unref (data_buf);
+	}
 
-    fprintf (fd_asrc_time, OV_LP_STRBUF("ov_asrc"));
-		fflush (fd_asrc_time);
-		fflush (fd_asrc_audio);
-
-    gst_buffer_unmap (buffer, &map);
-  } else {
-    GST_DEBUG("Failed to map buffer.");
-  }
-
-  GST_PAD_PROBE_INFO_DATA (info) = buffer;
+  GST_PAD_PROBE_INFO_DATA (info) = data_buf; //gst_adapter_take_buffer (adapter, frame_buffer_size);
+  // gst_buffer_unref (buffer);
   return GST_PAD_PROBE_OK;
 }
