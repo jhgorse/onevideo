@@ -50,47 +50,27 @@ static float *far_buffer[2]; // Max num channels
 static float *near_buffer[2];
 static int samples_per_frame; // Also the length of each buffer
 
+// Update the floats from nt16 pcm
 extern "C" void
 deinterleave_pcm_to_float(const char *src_data, float **dst, size_t size) {
-  int i,j;
-  size_t update_length = size / sizeof(int16_t) / 2;
-
-  if (update_length >= samples_per_frame) {
-    j = update_length-samples_per_frame;
-    // Take the last samples_per_frame of update for the buffer
-    for (i=j;i<update_length;i++) { // Start at offset
-      dst[0][i-j] = webrtc::S16ToFloat((short)(src_data[4*i+1] << 8 | src_data[4*i])); // Little endian
-      dst[1][i-j] = webrtc::S16ToFloat((short)(src_data[4*i+3] << 8 | src_data[4*i+2])); // Little endian
-    }
-  } else {
-    // Shift buffer by update_length
-    for(i=update_length;i<samples_per_frame;i++) {
-      dst[0][i-update_length] = dst[0][i];
-      dst[1][i-update_length] = dst[1][i];
-    }
-    // Copy new data into the end of the old buffer data
-    for(i=i+1;i<samples_per_frame;i++) {
-      dst[0][i] = webrtc::S16ToFloat((short)(src_data[4*i+1] << 8 | src_data[4*i])); // Little endian
-      dst[1][i] = webrtc::S16ToFloat((short)(src_data[4*i+3] << 8 | src_data[4*i+2])); // Little endian
-    }
+  for (int i=0;i<size/4;i++) { // Start at offset
+    dst[0][i] = webrtc::S16ToFloat((short)(src_data[4*i+1] << 8 | src_data[4*i])); // Little endian
+    dst[1][i] = webrtc::S16ToFloat((short)(src_data[4*i+3] << 8 | src_data[4*i+2])); // Little endian
   }
 }
 
-// Update the last size worth of floats
+// Update the int16 pcm from floats
 extern "C" void
 interleave_float_to_pcm(float **src_data, char *dst, size_t size) {
-  int i,j;
   int16_t audio_point;
-  size_t update_length = size / sizeof(int16_t) / 2;
-  j = samples_per_frame - update_length;
 
-  for(i=0;i<samples_per_frame;i++) {
-    audio_point = webrtc::FloatToS16(src_data[0][i+j]);
-    dst[4*i] = (char)(0xff & audio_point);
+  for(int i=0;i<size/4;i++) {
+    audio_point = webrtc::FloatToS16(src_data[0][i]);
+    dst[4*i] = (char)(0xff & (audio_point >> 0));
     dst[4*i+1] = (char)(0xff & (audio_point >> 8));
 
-    audio_point = webrtc::FloatToS16(src_data[1][i+j]);
-    dst[4*i+2] = (char)(0xff & audio_point);
+    audio_point = webrtc::FloatToS16(src_data[1][i]);
+    dst[4*i+2] = (char)(0xff & (audio_point >> 0));
     dst[4*i+3] = (char)(0xff & (audio_point >> 8));
   }
 }
