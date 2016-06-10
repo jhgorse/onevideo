@@ -55,7 +55,12 @@ gst_proxy_libgstproxy_la_LIBTOOLFLAGS = --tag=disable-static
 onevideoincludedir = $(includedir)/onevideo/
 onevideoinclude_HEADERS = onevideo/lib.h
 
-bin_PROGRAMS = cli/one-video-cli gui/one-video-gui
+bin_PROGRAMS = cli/one-video-cli gui/one-video-gui tests/audio-processing-test
+
+tests_audio_processing_test_SOURCES = tests/audio-processing-test.c onevideo/ov-local-peer-audio-processing.h
+tests_audio_processing_test_CFLAGS = -I$(top_builddir)/onevideo
+tests_audio_processing_test_LDADD = $(top_builddir)/onevideo/libonevideo.la -lm
+tests_audio_processing_test_LDFLAGS = 
 
 cli_one_video_cli_SOURCES = cli/main.c
 cli_one_video_cli_CFLAGS = \
