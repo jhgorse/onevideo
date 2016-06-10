@@ -81,15 +81,18 @@ fir_filter (FILTER_TYPE_DATA new_value, FIR_FILTER *fir) {
 
 GstPadProbeReturn
 ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
+  // return GST_PAD_PROBE_OK;
   GstBuffer *buffer;
   static GstAdapter *adapter;
 	gsize buffer_size;
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
 
   if (!adapter) {
+		GST_DEBUG ("Inited adapter askin");
     adapter = gst_adapter_new ();
   }
 	if (!audioprocessing_init) {
+		GST_DEBUG ("Inited audioprocessing unit");
 		audioprocessing_init = TRUE;
 		ov_local_peer_audio_processing_init (AUDIO_RATE, 2);
 	}
@@ -102,8 +105,6 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
   //   buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
 
   buffer = gst_buffer_ref (buffer);
-  if (buffer == NULL)
-    return GST_PAD_PROBE_OK;
 
   gst_adapter_push (adapter, buffer);
 
@@ -112,16 +113,16 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
     const guint8 *data = gst_adapter_map (adapter, frame_buffer_size);
     ov_local_peer_audio_processing_far_speech_update(data, frame_buffer_size);
     gst_adapter_unmap (adapter);
-    //gst_adapter_flush (adapter, frame_buffer_size);
+    gst_adapter_flush (adapter, frame_buffer_size);
   }
 
-  GST_PAD_PROBE_INFO_DATA (info) = gst_adapter_take_buffer (adapter, buffer_size);
-  // gst_buffer_unref (buffer);
+  GST_PAD_PROBE_INFO_DATA (info) = buffer;
   return GST_PAD_PROBE_OK;
 }
 
 GstPadProbeReturn
 ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
+  return GST_PAD_PROBE_OK;
   GstBuffer *buffer, *data_buf;
   static GstAdapter *adapter;
   GstMapInfo map;
