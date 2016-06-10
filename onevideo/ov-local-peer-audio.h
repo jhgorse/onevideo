@@ -26,8 +26,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
- #include "lib.h"
- #include "ov-local-peer.h"
+#include "lib.h"
+#include "ov-local-peer.h"
 
 // typedef double FILTER_TYPE_DATA;
 //
@@ -53,5 +53,7 @@
 
 #define OV_ZMQ_STRBUF(STUFF) sprintf (str_buffer, OV_LP_STRBUF(STUFF) );
 
-GstPadProbeReturn ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
-GstPadProbeReturn ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
+GstPadProbeReturn ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info,
+    gpointer user_data);
+GstPadProbeReturn ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info,
+    gpointer user_data);
