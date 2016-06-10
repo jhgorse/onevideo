@@ -81,19 +81,22 @@ fir_filter (FILTER_TYPE_DATA new_value, FIR_FILTER *fir) {
 
 GstPadProbeReturn
 ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
+	// GST_WARNING ("asink cb");
   // return GST_PAD_PROBE_OK;
-  GstBuffer *buffer;
-  static GstAdapter *adapter;
+  GstBuffer *buffer, *data_buf;
+  static GstAdapter *in_adapter, *out_adapter;
+  GstMapInfo map;
 	gsize buffer_size;
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
 
-  if (!adapter) {
-		GST_DEBUG ("Inited adapter askin");
-    adapter = gst_adapter_new ();
+  if (!in_adapter) {
+		GST_WARNING ("Inited adapter asink");
+    in_adapter = gst_adapter_new ();
+    out_adapter = gst_adapter_new ();
   }
 	if (!audioprocessing_init) {
-		GST_DEBUG ("Inited audioprocessing unit");
 		audioprocessing_init = TRUE;
+		GST_WARNING ("Inited audioprocessing unit");
 		ov_local_peer_audio_processing_init (AUDIO_RATE, 2);
 	}
 
@@ -106,69 +109,65 @@ ov_asink_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
 
   buffer = gst_buffer_ref (buffer);
 
-  gst_adapter_push (adapter, buffer);
+  gst_adapter_push (in_adapter, buffer);
 
   // if we can read out frame_buffer_size bytes, process them
-  if (gst_adapter_available (adapter) >= frame_buffer_size ) {
-    const guint8 *data = gst_adapter_map (adapter, frame_buffer_size);
-    ov_local_peer_audio_processing_far_speech_update(data, frame_buffer_size);
-    gst_adapter_unmap (adapter);
-    gst_adapter_flush (adapter, frame_buffer_size);
-  }
+  while (gst_adapter_available (in_adapter) >= frame_buffer_size ) {
+		data_buf = gst_adapter_take_buffer (in_adapter, frame_buffer_size);
+		data_buf = gst_buffer_make_writable (data_buf);
+	  if (gst_buffer_map (data_buf, &map, GST_MAP_WRITE)) {
+			ov_local_peer_audio_processing_far_speech_update(map.data, map.size);
+    	gst_buffer_unmap (buffer, &map);
+      gst_adapter_push (out_adapter, data_buf);
+		} else {
+			GST_DEBUG ("Failed to map data_buf");
+		}
+	}
 
-  GST_PAD_PROBE_INFO_DATA (info) = buffer;
+  GST_PAD_PROBE_INFO_DATA (info) = gst_adapter_take_buffer (out_adapter, gst_adapter_available (out_adapter));
   return GST_PAD_PROBE_OK;
 }
 
 GstPadProbeReturn
 ov_asrc_input_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
-  return GST_PAD_PROBE_OK;
   GstBuffer *buffer, *data_buf;
-  static GstAdapter *adapter;
+  static GstAdapter *in_adapter, *out_adapter;
   GstMapInfo map;
-  gsize buffer_size;
 
-  if (!adapter) {
-    adapter = gst_adapter_new ();
+  data_buf = NULL;
+
+  if (!in_adapter) {
+		GST_WARNING ("Inited adapter asrc");
+    in_adapter = gst_adapter_new ();
+    out_adapter = gst_adapter_new ();
   }
-
 	if (!audioprocessing_init) {
 		audioprocessing_init = TRUE;
+		GST_WARNING ("Inited audioprocessing unit");
 		ov_local_peer_audio_processing_init (AUDIO_RATE, 2);
 	}
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
-//  buffer_size = gst_buffer_get_size (buffer);
 
   // GST_DEBUG ("pts %lu dts %lu duration %lu offset %lu offset_delta %lu flags %u",
   //   buffer->pts, buffer->dts, buffer->duration, buffer->offset,
   //   buffer->offset_end - buffer->offset, GST_BUFFER_FLAGS(buffer));
 
-  // buffer = gst_buffer_ref (buffer);
-
-  // buffer = gst_buffer_make_writable (buffer);
-  if (buffer == NULL)
-    return GST_PAD_PROBE_OK;
-
-  gst_adapter_push (adapter, buffer);
+  gst_adapter_push (in_adapter, buffer);
 
   // if we can read out frame_buffer_size bytes, process them
-  if (gst_adapter_available (adapter) >= frame_buffer_size ) {
-    // guint8 *data = gst_adapter_map (adapter, frame_buffer_size);
-		//guint8 *data = gst_adapter_take (adapter, frame_buffer_size);
-		data_buf = gst_adapter_get_buffer (adapter, frame_buffer_size);
-		//data_buf = gst_buffer_ref (data_buf);
+  while (gst_adapter_available (in_adapter) >= frame_buffer_size ) {
+		data_buf = gst_adapter_take_buffer (in_adapter, frame_buffer_size);
 		data_buf = gst_buffer_make_writable (data_buf);
 	  if (gst_buffer_map (data_buf, &map, GST_MAP_WRITE)) {
 			ov_local_peer_audio_processing_near_speech_update(map.data, map.size);
     	gst_buffer_unmap (buffer, &map);
+      gst_adapter_push (out_adapter, data_buf);
 		} else {
 			GST_DEBUG ("Failed to map data_buf");
 		}
-		// gst_buffer_unref (data_buf);
 	}
 
-  GST_PAD_PROBE_INFO_DATA (info) = data_buf; //gst_adapter_take_buffer (adapter, frame_buffer_size);
-  // gst_buffer_unref (buffer);
+  GST_PAD_PROBE_INFO_DATA (info) = gst_adapter_take_buffer (out_adapter, gst_adapter_available (out_adapter));
   return GST_PAD_PROBE_OK;
 }
