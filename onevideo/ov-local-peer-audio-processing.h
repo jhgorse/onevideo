@@ -28,17 +28,18 @@
 #ifndef ov_local_peer_audio_processing_h
 #define ov_local_peer_audio_processing_h
 
-#include "ov-local-peer-priv.h" //AUDIO_RATE
 #include <unistd.h>
 
 #define AUDIO_RATE 48000
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
   // Initialize and configure the AudioProcessing unit
   //   4x configs: sample rates, channels. (in/out for each node)
   //   Library options
-  void ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels = 0);
+  void ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels);
   void ov_local_peer_audio_processing_deinit();
 
   // Pass a 10 ms asink audio buffer mem(addr,size) to ProcessReverseStream()
@@ -51,6 +52,9 @@ extern "C" {
   //   access the AudioProcessing buffers...
   //   make our own...
 //  ov_local_peer_audio_processing_far_to_near_speech_delay()
+
+#ifdef __cplusplus
 }
+#endif
 
 #endif /* ov_local_peer_audio_processing_h */
