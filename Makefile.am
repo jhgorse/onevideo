@@ -33,7 +33,7 @@ onevideo_libonevideo_la_SOURCES = \
 onevideo_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I/usr/local/Cellar/czmq/3.0.2_3/include -I/usr/local/Cellar/zeromq/4.1.4/include
 onevideo_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS) onevideo/libffts.la -lm
 onevideo_libonevideo_la_LDFLAGS = $(ONE_VIDEO_LT_LDFLAGS) -no-undefined -Wl,-headerpad_max_install_names \
-	-headerpad_max_install_names $(top_builddir)/../webrtc-audio-processing/build/lib/libwebrtc_audio_processing.la \
+	-headerpad_max_install_names $(top_builddir)/../webrtc-audio-processing/webrtc/modules/audio_processing/.libs/libwebrtc_audio_processing.la \
 	$(top_builddir)/../gstreamer/libs/gst/base/.libs/libgstbase-1.0.la
 onevideo_libonevideo_la_LIBTOOLFLAGS = --tag=disable-static
 WEBRTC_TRUNK_DIR = $(top_builddir)/../webrtc-audio-processing
