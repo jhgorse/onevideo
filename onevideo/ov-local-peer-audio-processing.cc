@@ -194,6 +194,32 @@ fail:
 }
 
 extern "C" void
+ov_local_peer_audio_processing_set (ap_option option, int value) {
+  switch (option) {
+    case khigh_pass_filter:
+      apm->high_pass_filter()->Enable(value);
+      break;
+    case kecho_cancellation:
+      apm->echo_cancellation()->Enable(value);
+      break;
+    case kset_stream_delay_ms:
+      apm->set_stream_delay_ms(value);
+      break;
+    case knoise_suppression:
+      apm->noise_suppression()->Enable(value);
+      break;
+    case kadaptive_gain_control:
+      apm->gain_control()->Enable(value);
+      break;
+    case kvoice_detection:
+      apm->voice_detection()->Enable(value);
+      break;
+    default:
+      break;
+  }
+}
+
+extern "C" void
 ov_local_peer_audio_processing_deinit() {
   if (apm) {
       delete apm;

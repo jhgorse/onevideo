@@ -36,11 +36,21 @@
 extern "C" {
 #endif
 
+  enum ap_option {
+    khigh_pass_filter,
+    kecho_cancellation,
+    kset_stream_delay_ms,
+    knoise_suppression,
+    kadaptive_gain_control,
+    kvoice_detection,
+  };
+
   // Initialize and configure the AudioProcessing unit
   //   4x configs: sample rates, channels. (in/out for each node)
   //   Library options
   void ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels);
   void ov_local_peer_audio_processing_deinit();
+  void ov_local_peer_audio_processing_set (enum ap_option, int value);
 
   // Pass a 10 ms asink audio buffer mem(addr,size) to ProcessReverseStream()
   //   Assumes PCM: interleaved 16 bit LE signed int
