@@ -62,9 +62,14 @@ main (int argc, char *argv[])
       break;
     }
     for (int i = 0; i < samples_per_frame; i++) {
-      far_buffer[4 * i + 0] = (char) file_buffer[2 * i];        // Left channel duplicated to stereo far end
+      far_buffer[4 * i + 0] = (char) file_buffer[2 * i];        // Left channel to stereo far end
       far_buffer[4 * i + 1] = (char) file_buffer[2 * i] >> 8;
-      near_buffer[4 * i + 2] = (char) file_buffer[2 * i + 1];   // Right channel duplicated to stereo near end
+      far_buffer[4 * i + 2] = (char) file_buffer[2 * i];        // duplicated 
+      far_buffer[4 * i + 3] = (char) file_buffer[2 * i] >> 8;
+
+      near_buffer[4 * i + 0] = (char) file_buffer[2 * i + 1];   // Right channel to stereo near end
+      near_buffer[4 * i + 1] = (char) file_buffer[2 * i + 1] >> 8;
+      near_buffer[4 * i + 2] = (char) file_buffer[2 * i + 1];   // duplicated
       near_buffer[4 * i + 3] = (char) file_buffer[2 * i + 1] >> 8;
     }
 
