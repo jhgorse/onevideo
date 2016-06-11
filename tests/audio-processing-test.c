@@ -51,6 +51,11 @@ main (int argc, char *argv[])
   fprintf (stderr, "usage: audio-processing-test <in.pcm >out.pcm\n");
 
   ov_local_peer_audio_processing_init (AUDIO_RATE, 2);
+  // ov_local_peer_audio_processing_set (kset_stream_delay_ms, 80);
+  ov_local_peer_audio_processing_set (kadaptive_gain_control, 0);
+  ov_local_peer_audio_processing_set (khigh_pass_filter, 0);
+  ov_local_peer_audio_processing_set (knoise_suppression, 1);
+  ov_local_peer_audio_processing_set (kvoice_detection, 0);
 
   int read_size, total_size = 0;
   while (1) {
@@ -62,21 +67,25 @@ main (int argc, char *argv[])
       break;
     }
     for (int i = 0; i < samples_per_frame; i++) {
-      far_buffer[4 * i + 0] = (char) file_buffer[2 * i];        // Left channel to stereo far end
-      far_buffer[4 * i + 1] = (char) file_buffer[2 * i] >> 8;
-      far_buffer[4 * i + 2] = (char) file_buffer[2 * i];        // duplicated 
-      far_buffer[4 * i + 3] = (char) file_buffer[2 * i] >> 8;
+      far_buffer[4 * i + 0] = (char) (0xff & file_buffer[2 * i]);       // Left channel to stereo far end
+      far_buffer[4 * i + 1] = (char) (0xff & file_buffer[2 * i] >> 8);
+      far_buffer[4 * i + 2] = (char) (0xff & file_buffer[2 * i]);       // duplicated
+      far_buffer[4 * i + 3] = (char) (0xff & file_buffer[2 * i] >> 8);
 
-      near_buffer[4 * i + 0] = (char) file_buffer[2 * i + 1];   // Right channel to stereo near end
-      near_buffer[4 * i + 1] = (char) file_buffer[2 * i + 1] >> 8;
-      near_buffer[4 * i + 2] = (char) file_buffer[2 * i + 1];   // duplicated
-      near_buffer[4 * i + 3] = (char) file_buffer[2 * i + 1] >> 8;
+      near_buffer[4 * i + 0] = (char) (0xff & file_buffer[2 * i + 1]);  // Right channel to stereo near end
+      near_buffer[4 * i + 1] = (char) (0xff & file_buffer[2 * i + 1] >> 8);
+      near_buffer[4 * i + 2] = (char) (0xff & file_buffer[2 * i + 1]);  // duplicated
+      near_buffer[4 * i + 3] = (char) (0xff & file_buffer[2 * i + 1] >> 8);
+
+      // fprintf (stderr, "i1 %d ch1 %02x %02x  \n", file_buffer[2 * i + 1], (uint8_t)near_buffer[4 * i + 1], (uint8_t)near_buffer[4 * i + 0]);
     }
 
     ov_local_peer_audio_processing_far_speech_update (far_buffer,
         frame_buffer_size);
     ov_local_peer_audio_processing_near_speech_update (near_buffer,
         frame_buffer_size);
+
+    // fprintf (stderr, "f1 %f i1 %d ch1 %02x %02x  ", src_data[0][i], audio_point, (uint8_t)dst[4*i], (uint8_t)dst[4*i+1]);
 
     fwrite (near_buffer, sizeof (int16_t), 2 * samples_per_frame, stdout);
   }
