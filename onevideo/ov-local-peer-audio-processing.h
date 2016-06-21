@@ -48,16 +48,17 @@ extern "C" {
   // Initialize and configure the AudioProcessing unit
   //   4x configs: sample rates, channels. (in/out for each node)
   //   Library options
-  void ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels);
-  void ov_local_peer_audio_processing_deinit();
+  void ov_local_peer_audio_processing_init (int sample_rate_hz, int num_channels);
+  void ov_local_peer_audio_processing_deinit ();
+
   void ov_local_peer_audio_processing_set (enum ap_option, int value);
 
   // Pass a 10 ms asink audio buffer mem(addr,size) to ProcessReverseStream()
   //   Assumes PCM: interleaved 16 bit LE signed int
-  void ov_local_peer_audio_processing_far_speech_update(char *data, size_t size);
+  void ov_local_peer_audio_processing_far_speech_update (char *data, size_t size);
 
   // Pass a 10 ms asrc audio buffer mem(addr,size) to ProcessStream()
-  void ov_local_peer_audio_processing_near_speech_update(char *data, size_t size);
+  void ov_local_peer_audio_processing_near_speech_update (char *data, size_t size);
   // Update delay_from_asink_to_asrc if level > threshold
   //   access the AudioProcessing buffers...
   //   make our own...
