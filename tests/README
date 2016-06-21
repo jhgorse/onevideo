@@ -1,0 +1,7 @@
+Usage:
+tests/
+  audio-processing-test < infile.pcm > outfile.pcm
+
+where infile.pcm is 16 bit integer LE interleaved stereo.
+* Left channel is far speech (speaker signal)
+* Right channel is near speech (mic signal, to echo cancel)
