@@ -30,7 +30,7 @@ onevideo_libonevideo_la_SOURCES = \
 	onevideo/discovery.c onevideo/discovery.h \
 	onevideo/comms.c onevideo/comms.h onevideo/zhelpers.h \
 	onevideo/ov-local-peer-audio-processing.cc onevideo/ov-local-peer-audio-processing.h
-onevideo_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -I/usr/local/Cellar/czmq/3.0.2_3/include -I/usr/local/Cellar/zeromq/4.1.4/include
+onevideo_libonevideo_la_CFLAGS = $(GLIB_CFLAGS) $(GST_CFLAGS) -arch x86_64
 onevideo_libonevideo_la_LIBADD = $(GLIB_LIBS) $(GST_LIBS) onevideo/libffts.la -lm
 onevideo_libonevideo_la_LDFLAGS = $(ONE_VIDEO_LT_LDFLAGS) -no-undefined -Wl,-headerpad_max_install_names \
 	-headerpad_max_install_names $(top_builddir)/../webrtc-audio-processing/webrtc/modules/audio_processing/.libs/libwebrtc_audio_processing.la \
@@ -58,7 +58,7 @@ onevideoinclude_HEADERS = onevideo/lib.h
 bin_PROGRAMS = cli/one-video-cli gui/one-video-gui tests/audio-processing-test
 
 tests_audio_processing_test_SOURCES = tests/audio-processing-test.c onevideo/ov-local-peer-audio-processing.h
-tests_audio_processing_test_CFLAGS = -I$(top_builddir)/onevideo
+tests_audio_processing_test_CFLAGS = -I$(top_builddir)/onevideo -O0 -g3 -arch x86_64
 tests_audio_processing_test_LDADD = $(top_builddir)/onevideo/libonevideo.la -lm
 tests_audio_processing_test_LDFLAGS =
 

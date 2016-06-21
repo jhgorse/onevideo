@@ -33,6 +33,8 @@ if [[ ${progname} =~ cli\.sh ]]; then
   progtype="cli"
 elif [[ ${progname} =~ gui\.sh ]]; then
   progtype="gui"
+elif [[ ${progname} =~ test\.sh ]]; then
+  progtype="test"
 else
   echo "Unknown program type, exiting"
   return 1
