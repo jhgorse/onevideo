@@ -44,6 +44,9 @@
 #include "webrtc/common_audio/include/audio_util.h"
 #include "webrtc/typedefs.h"
 
+#undef GST_ERROR
+#define GST_ERROR(...) fprintf(stderr, __VA_ARGS__)
+
 static webrtc::AudioProcessing* apm;
 static int analog_level;
 static float *far_buffer[2]; // Max num channels
@@ -197,22 +200,28 @@ extern "C" void
 ov_local_peer_audio_processing_set (ap_option option, int value) {
   switch (option) {
     case khigh_pass_filter:
-      apm->high_pass_filter()->Enable(value);
+      if (apm->high_pass_filter()->Enable(value) != webrtc::AudioProcessing::kNoError)
+        GST_ERROR("high_pass_filter error");
       break;
     case kecho_cancellation:
-      apm->echo_cancellation()->Enable(value);
+      if (apm->echo_cancellation()->Enable(value) != webrtc::AudioProcessing::kNoError)
+        GST_ERROR("echo_cancellation error");
       break;
     case kset_stream_delay_ms:
-      apm->set_stream_delay_ms(value);
+      if (apm->set_stream_delay_ms(value) != webrtc::AudioProcessing::kNoError)
+        GST_ERROR("set_stream_delay_ms error");
       break;
     case knoise_suppression:
-      apm->noise_suppression()->Enable(value);
+      if (apm->noise_suppression()->Enable(value) != webrtc::AudioProcessing::kNoError)
+        GST_ERROR("noise_suppression error");
       break;
     case kadaptive_gain_control:
-      apm->gain_control()->Enable(value);
+      if (apm->gain_control()->Enable(value) != webrtc::AudioProcessing::kNoError)
+        GST_ERROR("gain_control error");
       break;
     case kvoice_detection:
-      apm->voice_detection()->Enable(value);
+      if (apm->voice_detection()->Enable(value) != webrtc::AudioProcessing::kNoError)
+        GST_ERROR("voice_detection error");
       break;
     default:
       break;
