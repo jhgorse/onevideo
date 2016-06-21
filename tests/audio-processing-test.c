@@ -92,5 +92,6 @@ main (int argc, char *argv[])
 
   fprintf (stderr, "Done\n");
   fflush (NULL);
+  ov_local_peer_audio_processing_deinit ();
   return 0;
 }
