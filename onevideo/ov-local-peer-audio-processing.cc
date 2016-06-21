@@ -130,8 +130,9 @@ ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels) {
 
   analog_level = 0;
 
-  config.Set<webrtc::ExtendedFilter>(new webrtc::ExtendedFilter(true));
-  config.Set<webrtc::ExperimentalAgc>(new webrtc::ExperimentalAgc(true, 85));  // Start volume 85
+  // config.Set<webrtc::ExtendedFilter>(new webrtc::ExtendedFilter(true));
+  // config.Set<webrtc::ExperimentalAgc>(new webrtc::ExperimentalAgc(true, 85));  // Start volume 85
+
   //DelayAgnostic
   //ExperimentalNs
   //Intelligibility
@@ -149,46 +150,57 @@ ov_local_peer_audio_processing_init(int sample_rate_hz, int num_channels) {
     GST_ERROR("Error initialising audio processing module");
     goto fail;
   }
-   apm->high_pass_filter()->Enable(true);
 
-   #if 1
-     apm->echo_cancellation()->enable_drift_compensation(false);
-     apm->echo_cancellation()->Enable(true);
-   #else
-     apm->echo_control_mobile()->set_routing_mode(static_cast<webrtc::EchoControlMobile::RoutingMode>(rm));
-     apm->echo_control_mobile()->enable_comfort_noise(cn);
-     apm->echo_control_mobile()->Enable(true);
-   #endif
+  if (apm->high_pass_filter()->Enable(false) != webrtc::AudioProcessing::kNoError)
+    GST_ERROR("high_pass_filter error");
 
-   apm->set_stream_delay_ms(-80); // Initial delay
+  #if 1
+  if (apm->echo_cancellation()->enable_drift_compensation(false) != webrtc::AudioProcessing::kNoError)
+    GST_ERROR("enable_drift_compensation error");
+  if (apm->echo_cancellation()->Enable(true) != webrtc::AudioProcessing::kNoError)
+    GST_ERROR("echo_cancellation error");
+  #else
+    apm->echo_control_mobile()->set_routing_mode(static_cast<webrtc::EchoControlMobile::RoutingMode>(rm));
+    apm->echo_control_mobile()->enable_comfort_noise(cn);
+    apm->echo_control_mobile()->Enable(true);
+  #endif
 
-   apm->noise_suppression()->set_level(webrtc::NoiseSuppression::kHigh);
-   apm->noise_suppression()->Enable(true);
+  g_assert (apm->set_stream_delay_ms(70) == webrtc::AudioProcessing::kNoError); // Initial delay
+
+  g_assert (apm->noise_suppression()->set_level(webrtc::NoiseSuppression::kHigh) == webrtc::AudioProcessing::kNoError);
+  g_assert (apm->noise_suppression()->Enable(false) == webrtc::AudioProcessing::kNoError);
 
    // Adaptive gain control
   //  if (agc || dgc)
   #if 0
-     if (mobile && rm <= webrtc::EchoControlMobile::kEarpiece) {
-       /* Maybe this should be a knob, but we've got a lot of knobs already */
-       apm->gain_control()->set_mode(webrtc::GainControl::kFixedDigital);
-       ec->params.webrtc.agc = false;
-     } else if (dgc) {
-       apm->gain_control()->set_mode(webrtc::GainControl::kAdaptiveDigital);
-       ec->params.webrtc.agc = false;
-     } else {
-       apm->gain_control()->set_mode(webrtc::GainControl::kAdaptiveAnalog);
-       if (apm->gain_control()->set_analog_level_limits(0, 255) !=
-           webrtc::AudioProcessing::kNoError) {
-         pa_log("Failed to initialise AGC");
-         goto fail;
-       }
-       ec->params.webrtc.agc = true;
+   if (mobile && rm <= webrtc::EchoControlMobile::kEarpiece) {
+     /* Maybe this should be a knob, but we've got a lot of knobs already */
+     apm->gain_control()->set_mode(webrtc::GainControl::kFixedDigital);
+     ec->params.webrtc.agc = false;
+   } else if (dgc) {
+     apm->gain_control()->set_mode(webrtc::GainControl::kAdaptiveDigital);
+     ec->params.webrtc.agc = false;
+   } else {
+     apm->gain_control()->set_mode(webrtc::GainControl::kAdaptiveAnalog);
+     if (apm->gain_control()->set_analog_level_limits(0, 255) !=
+         webrtc::AudioProcessing::kNoError) {
+       pa_log("Failed to initialise AGC");
+       goto fail;
      }
-
-     apm->gain_control()->Enable(true);
+     ec->params.webrtc.agc = true;
+   }
+   apm->gain_control()->Enable(true);
+  #endif
+  #if 1
+  g_assert (apm->gain_control()->set_mode(webrtc::GainControl::kAdaptiveDigital) == webrtc::AudioProcessing::kNoError);
+  // if (apm->gain_control()->set_analog_level_limits(0, 255) !=
+  //    webrtc::AudioProcessing::kNoError) {
+  //  printf ("Failed to initialize AGC\n");
+  // }
+  g_assert (apm->gain_control()->Enable(false) == webrtc::AudioProcessing::kNoError);
   #endif
 
-  apm->voice_detection()->Enable(true);
+  g_assert (apm->voice_detection()->Enable(false) == webrtc::AudioProcessing::kNoError);
 
    return;
 fail:
