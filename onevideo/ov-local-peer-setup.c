@@ -136,17 +136,17 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
   /* These values give the lowest audio latency with the least chance of audio
    * artefacting with Pulseaudio on my machine. Setting buffer-time less than
    * 50ms gives audio artefacts. */
-  g_object_set (priv->audiosink, "buffer-time", 50000, NULL);
+  g_object_set (priv->audiosink, "buffer-time", 60000, NULL);
 #elif defined(__APPLE__) && defined(TARGET_OS_MAC)
   priv->audiosink = gst_element_factory_make ("osxaudiosink", NULL);
   /* These values give the lowest audio latency with the least chance of audio
    * artefacting with Pulseaudio on my machine. Setting buffer-time less than
    * 30ms gives audio artefacts. */
-  g_object_set (priv->audiosink, "buffer-time", 30000, NULL);
+  g_object_set (priv->audiosink, "buffer-time", 60000, NULL);
 #else
 #error "Unsupported operating system"
 #endif
-  g_object_set (priv->audiosink, "blocksize", 2 * 2 * 48000 * 10 / 1000, NULL); // 10 ms
+  //g_object_set (priv->audiosink, "blocksize", 2 * 2 * 48000 * 10 / 1000, NULL); // 10 ms
 
   adspprobe = gst_element_factory_make ("webrtcechoprobe", "webrtcechoprobe0");
   /* FIXME: If there's no audio, this pipeline will mess up while going from
@@ -160,8 +160,8 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 
   /* AEC tap into output */
   /* TODO: add a deinit() callback for cleaning up sockets */
-  gst_pad_add_probe (gst_element_get_static_pad (priv->audiosink, "sink"),
-      GST_PAD_PROBE_TYPE_BUFFER, ov_asink_input_cb, NULL, NULL);
+//  gst_pad_add_probe (gst_element_get_static_pad (priv->audiosink, "sink"),
+//      GST_PAD_PROBE_TYPE_BUFFER, ov_asink_input_cb, NULL, NULL);
 
   /* Video bits are setup by each local */
 
@@ -192,8 +192,8 @@ ov_pipeline_get_osxaudiosrcbin (const gchar * name)
 
   src = gst_element_factory_make ("osxaudiosrc", NULL);
   /* latency-time to 5 ms, we use the system clock */
-  g_object_set (src, "latency-time", 5000, "provide-clock", FALSE, NULL);
-  g_object_set (src, "blocksize", 2 * 2 * 48000 * 10 / 1000, NULL);     // 10 ms, 1920 bytes, 960 stereo samples
+  g_object_set (src, "latency-time", 10000, "provide-clock", FALSE, NULL);
+  //g_object_set (src, "blocksize", 2 * 2 * 48000 * 10 / 1000, NULL);     // 10 ms, 1920 bytes, 960 stereo samples
 
   conv = gst_element_factory_make ("audioresample", NULL);
 
@@ -300,7 +300,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
   GstCaps *vcaps, *raw_audio_caps;
-  GstElement *asrc, *adsp, *afilter, *aencode, *apay;
+  GstElement *asrc, *adspqueue, *adsp, *afilter, *aencode, *apay;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vpay;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
@@ -327,7 +327,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 #ifdef __linux__
   asrc = gst_element_factory_make ("pulsesrc", NULL);
   /* latency-time to 5 ms, we use the system clock */
-  g_object_set (asrc, "latency-time", 5000, "provide-clock", FALSE, NULL);
+  g_object_set (asrc, "latency-time", 10000, "provide-clock", FALSE, NULL);
 #elif defined(__APPLE__) && defined(TARGET_OS_MAC)
   asrc = ov_pipeline_get_osxaudiosrcbin (NULL);
   /* same properties as above already set on the source element */
@@ -415,17 +415,20 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   vrtcpsrc = gst_element_factory_make ("udpsrc", "vrecv_rtcp_src");
 
   /* AEC data probe */
-  gst_pad_add_probe (gst_element_get_static_pad (asrc, "src"),
-      GST_PAD_PROBE_TYPE_BUFFER, ov_asrc_input_cb, NULL, NULL);
+//  gst_pad_add_probe (gst_element_get_static_pad (asrc, "src"),
+//      GST_PAD_PROBE_TYPE_BUFFER, ov_asrc_input_cb, NULL, NULL);
+  adspqueue = gst_element_factory_make ("queue", "adspqueue");
   adsp = gst_element_factory_make ("webrtcdsp", "adsp");
 
-  gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc, adsp,
-      afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
-      vsrc, vqueue, vfilter, vpay, vrtpqueue, vsink, vrtcpqueue, vrtcpsink,
-      vrtcpsrc, NULL);
+  gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc, adspqueue,
+      adsp, afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink,
+      artcpsrc, vsrc, vqueue, vfilter, vpay, vrtpqueue, vsink, vrtcpqueue,
+      vrtcpsink, vrtcpsrc, NULL);
 
   /* Link audio branch */
-  ret = gst_element_link_many (asrc, adsp, afilter, aencode, apay, NULL);
+  ret =
+      gst_element_link_many (asrc, adspqueue, adsp, afilter, aencode, apay,
+      NULL);
   g_assert (ret);
   ret = gst_element_link (artcpqueue, artcpsink);
   g_assert (ret);
