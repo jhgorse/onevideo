@@ -116,6 +116,7 @@ gboolean
 ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
+  GstElement *adspprobe;
   gboolean ret;
   OvLocalPeerPrivate *priv;
 
@@ -147,12 +148,14 @@ ov_local_peer_setup_playback_pipeline (OvLocalPeer * local)
 #endif
   g_object_set (priv->audiosink, "blocksize", 2 * 2 * 48000 * 10 / 1000, NULL); // 10 ms
 
+  adspprobe = gst_element_factory_make ("webrtcechoprobe", "webrtcechoprobe0");
   /* FIXME: If there's no audio, this pipeline will mess up while going from
    * NULL -> PLAYING -> NULL -> PLAYING because of async state change bugs in
    * basesink. Fix this by only plugging a sink if audio is present. */
   gst_bin_add_many (GST_BIN (priv->playback), priv->audiomixer,
+      adspprobe, priv->audiosink, NULL);
+  ret = gst_element_link_many (priv->audiomixer, adspprobe,
       priv->audiosink, NULL);
-  ret = gst_element_link_many (priv->audiomixer, priv->audiosink, NULL);
   g_assert (ret);
 
   /* AEC tap into output */
@@ -297,7 +300,7 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
 {
   GstBus *bus;
   GstCaps *vcaps, *raw_audio_caps;
-  GstElement *asrc, *afilter, *aencode, *apay;
+  GstElement *asrc, *adsp, *afilter, *aencode, *apay;
   GstElement *artpqueue, *asink, *artcpqueue, *artcpsink, *artcpsrc;
   GstElement *vsrc, *vfilter, *vqueue, *vpay;
   GstElement *vrtpqueue, *vsink, *vrtcpqueue, *vrtcpsink, *vrtcpsrc;
@@ -414,14 +417,15 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   /* AEC data probe */
   gst_pad_add_probe (gst_element_get_static_pad (asrc, "src"),
       GST_PAD_PROBE_TYPE_BUFFER, ov_asrc_input_cb, NULL, NULL);
+  adsp = gst_element_factory_make ("webrtcdsp", "adsp");
 
-  gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc,
+  gst_bin_add_many (GST_BIN (priv->transmit), priv->rtpbin, asrc, adsp,
       afilter, aencode, apay, artpqueue, asink, artcpqueue, artcpsink, artcpsrc,
       vsrc, vqueue, vfilter, vpay, vrtpqueue, vsink, vrtcpqueue, vrtcpsink,
       vrtcpsrc, NULL);
 
   /* Link audio branch */
-  ret = gst_element_link_many (asrc, afilter, aencode, apay, NULL);
+  ret = gst_element_link_many (asrc, adsp, afilter, aencode, apay, NULL);
   g_assert (ret);
   ret = gst_element_link (artcpqueue, artcpsink);
   g_assert (ret);
