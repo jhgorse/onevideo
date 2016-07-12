@@ -353,11 +353,9 @@ ov_local_peer_setup_transmit_pipeline (OvLocalPeer * local)
   artcpsrc = gst_element_factory_make ("udpsrc", "arecv_rtcp_src");
 
   if (priv->video_device == NULL) {
-    vsrc = gst_element_factory_make ("avfvideosrc", NULL);
-    g_object_set (vsrc, "device-index", 0, NULL);
-//    vsrc = gst_element_factory_make ("videotestsrc", NULL);
-//    g_object_set (vsrc, "is-live", TRUE, NULL);
-//    g_object_set (vsrc, "pattern", 18, NULL); // ball
+    vsrc = gst_element_factory_make ("videotestsrc", NULL);
+    g_object_set (vsrc, "is-live", TRUE, NULL);
+    g_object_set (vsrc, "pattern", 18, NULL); // ball
   } else {
     vsrc = gst_device_create_element (priv->video_device, NULL);
   }

@@ -42,4 +42,6 @@ fi
 unset progname
 
 # Enable audio echo cancellation in Pulseaudio if supported
-export PULSE_PROP='filter.want=echo-cancel'
+# Disabled while testing webrtcdsp
+#export PULSE_PROP='filter.want=echo-cancel'
+
